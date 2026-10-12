@@ -4,40 +4,91 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Révisions · Luc Jules</title>
-<link rel="stylesheet" href="assets/style.css">
+<style>
+  :root{
+    color-scheme: light dark;
+    --bg:#f6f7f9; --surface:#fff; --border:#e4e7ec;
+    --text:#14171c; --muted:#667085; --accent:#3b6fe0;
+    --radius:16px;
+    --shadow:0 1px 2px rgba(16,24,40,.06), 0 8px 24px rgba(16,24,40,.07);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0e1014; --surface:#171a20; --border:#262b34;
+      --text:#e7e9ee; --muted:#98a2b3; --accent:#6d94f7;
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; background:var(--bg); color:var(--text);
+    font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    display:flex; flex-direction:column; justify-content:center;
+    padding:40px 20px;
+  }
+  .wrap{max-width:1040px; margin:0 auto; width:100%}
+  header{text-align:center; margin-bottom:44px}
+  header h1{font-size:clamp(2rem,5vw,3rem); margin:0 0 10px; letter-spacing:-.03em}
+  header p{color:var(--muted); margin:0; font-size:1.05rem}
+
+  .grid{
+    display:grid; gap:22px;
+    grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  }
+  .card{
+    position:relative; display:block; padding:30px 26px 26px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); box-shadow:var(--shadow);
+    color:var(--text); text-decoration:none; overflow:hidden;
+    transition:transform .2s ease, border-color .2s ease;
+  }
+  .card::before{
+    content:""; position:absolute; inset:0 0 auto 0; height:5px;
+    background:var(--c);
+  }
+  .card:hover{transform:translateY(-4px); border-color:var(--c); text-decoration:none}
+  .icon{font-size:2.2rem; display:block; margin-bottom:14px}
+  .card h2{font-size:1.2rem; margin:0 0 8px; letter-spacing:-.01em}
+  .card p{margin:0 0 16px; color:var(--muted); font-size:.95rem; min-height:2.6em}
+  .meta{
+    display:inline-block; font-size:.78rem; font-weight:700;
+    color:var(--c); padding:4px 11px; border-radius:999px;
+    background:color-mix(in srgb, var(--c) 14%, transparent);
+  }
+  footer{text-align:center; margin-top:50px; color:var(--muted); font-size:.85rem}
+</style>
 </head>
 <body>
-<main class="container">
-
-  <header class="hero">
+<div class="wrap">
+  <header>
     <h1>Mes révisions</h1>
-    <p class="lead">Cours, QCM et cartes mémoire — BUT1 Informatique</p>
+    <p>Cours · QCM · Cartes mémoire — BUT1 Informatique</p>
   </header>
 
-  <section class="hub-grid">
-
-    <a class="hub-card" href="management/" style="--card-accent:#3b6fe0">
-      <span class="hub-icon">📊</span>
-      <h2>Management &amp; Gestion des Organisations</h2>
+  <div class="grid">
+    <a class="card" href="management/" style="--c:#3b6fe0">
+      <span class="icon">📊</span>
+      <h2>Management &amp; Gestion</h2>
       <p>Entreprise, valeur ajoutée, Fayol, stratégie, PESTEL…</p>
-      <span class="hub-meta">1 chapitre</span>
+      <span class="meta">1 chapitre</span>
     </a>
 
-    <a class="hub-card" href="maths/" style="--card-accent:#8b5cf6">
-      <span class="hub-icon">📐</span>
+    <a class="card" href="maths/" style="--c:#8b5cf6">
+      <span class="icon">📐</span>
       <h2>Mathématiques</h2>
-      <p>Logique, arithmétique, récurrence, second degré.</p>
-      <span class="hub-meta">1 chapitres</span>
+      <p>Logique, arithmétique, récurrence, second degré…</p>
+      <span class="meta">1 chapitre</span>
     </a>
 
-    <a class="hub-card" href="java/" style="--card-accent:#f59e0b">
-      <span class="hub-icon">☕</span>
+    <a class="card" href="java/" style="--c:#f59e0b">
+      <span class="icon">☕</span>
       <h2>Développement Java</h2>
-      <p>Bases du langage, POO…</p>
-      <span class="hub-meta">2 chapitres</span>
+      <p>Bases du langage, programmation orientée objet…</p>
+      <span class="meta">2 chapitres</span>
     </a>
+  </div>
 
-  </section>
-</main>
+  <footer>Luc Jules · GitHub Pages</footer>
+</div>
 </body>
 </html>
