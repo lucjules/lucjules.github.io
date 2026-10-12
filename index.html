@@ -1,70 +1,43 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hub de Luc Jules</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 40px auto;
-            padding: 0 20px;
-            line-height: 1.6;
-            background: #f6f8fa;
-            color: #24292e;
-        }
-        h1 {
-            border-bottom: 2px solid #ddd;
-            padding-bottom: 10px;
-        }
-        ul {
-            list-style: none;
-            padding: 0;
-        }
-        li {
-            background: #fff;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
-        a {
-            text-decoration: none;
-            color: #0366d6;
-            font-weight: bold;
-            font-size: 1.1em;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-        .desc {
-            color: #586069;
-            font-size: 0.9em;
-            margin-top: 5px;
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Révisions · Luc Jules</title>
+<link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
+<main class="container">
 
-    <h1>Mes projets GitHub Pages</h1>
+  <header class="hero">
+    <h1>Mes révisions</h1>
+    <p class="lead">Cours, QCM et cartes mémoire — BUT1 Informatique</p>
+  </header>
 
-    <ul>
-        <li>
-            <a href="https://lucjules.github.io/QCM-Management-Gestion-des-Organisations/">
-                QCM Management & Gestion des Organisations
-            </a>
-            <div class="desc">Questionnaire à choix multiples sur le management.</div>
-        </li>
+  <section class="hub-grid">
 
-        <!-- Ajoutez d'autres projets ici sur le même modèle -->
-        <li>
-            <a href="https://lucjules.github.io/Chapitre-1-maths/">
-                Page de révision maths chapitre 1
-            </a>
-            <div class="desc">Fiche de cours + QCM + Flashcard</div>
-        </li>
-    </ul>
+    <a class="hub-card" href="management/" style="--card-accent:#3b6fe0">
+      <span class="hub-icon">📊</span>
+      <h2>Management &amp; Gestion des Organisations</h2>
+      <p>Entreprise, valeur ajoutée, Fayol, stratégie, PESTEL…</p>
+      <span class="hub-meta">4 chapitres</span>
+    </a>
 
+    <a class="hub-card" href="maths/" style="--card-accent:#8b5cf6">
+      <span class="hub-icon">📐</span>
+      <h2>Mathématiques</h2>
+      <p>Logique, arithmétique, récurrence, second degré.</p>
+      <span class="hub-meta">4 chapitres</span>
+    </a>
+
+    <a class="hub-card" href="java/" style="--card-accent:#f59e0b">
+      <span class="hub-icon">☕</span>
+      <h2>Développement Java</h2>
+      <p>Bases du langage, POO…</p>
+      <span class="hub-meta">2 chapitres</span>
+    </a>
+
+  </section>
+</main>
 </body>
 </html>
