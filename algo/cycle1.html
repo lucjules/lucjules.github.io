@@ -1,0 +1,3712 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>ExAlgo Cycle 1</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/algo.css">
+</head>
+<body>
+<div id="app"></div>
+<script>
+try{var __t=localStorage.getItem('cours-theme');if(__t)document.documentElement.dataset.theme=__t}catch(e){}
+function qOrder(ch){var idx=ch.map(function(_,i){return i}),n=idx.length;
+  if(ch.every(function(x){return /^(vrai|faux|oui|non)$/i.test(String(x))}))return idx;
+  for(var i=n-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=idx[i];idx[i]=idx[j];idx[j]=t}
+  var pin=idx.filter(function(i){return /^Aucune?$/i.test(String(ch[i]))}),rest=idx.filter(function(i){return pin.indexOf(i)<0});
+  return rest.concat(pin)}
+/* exalgo.js */
+/* ExAlgo : interpréteur pédagogique pour le cycle 1
+   Sous-ensemble : Var, ←, ++/--, Si/Sinon Si/Sinon (blocs par indentation),
+   Fonction ... Début ... Fin, Retourner, ecrire, ecrireLigne, lire*, afficheCar, afficheLigne. */
+const Exalgo = (() => {
+  'use strict';
+
+  class ExError extends Error {
+    constructor(message, line) {
+      super(message);
+      this.name = 'ExError';
+      this.line = line || null;
+    }
+  }
+
+  const strip = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+  const TYPE_NAMES = { entier: 'entier', reel: 'réel', caractere: 'caractère', booleen: 'booléen' };
+  function normType(word) {
+    const w = strip(word);
+    if (TYPE_NAMES[w]) return TYPE_NAMES[w];
+    if (w.endsWith('s') && TYPE_NAMES[w.slice(0, -1)]) return TYPE_NAMES[w.slice(0, -1)];
+    return null;
+  }
+  const tname = t => (t === 'chaîne' ? 'texte' : t);
+
+  const BUILTIN_KEYS = new Set(['ecrire', 'ecrireligne', 'lireentier', 'lirereel', 'lirecaractere', 'affichecar', 'afficheligne']);
+
+  /* ---------- Lexer ---------- */
+  function tokenizeLine(text, lineNo, st) {
+    const toks = [];
+    let i = 0;
+    const n = text.length;
+    while (i < n) {
+      if (st.inBlock) {
+        const end = text.indexOf('*/', i);
+        if (end === -1) { i = n; break; }
+        st.inBlock = false;
+        i = end + 2;
+        continue;
+      }
+      const c = text[i];
+      if (c === ' ' || c === '\t') { i++; continue; }
+      if (c === '/' && text[i + 1] === '/') break;
+      if (c === '/' && text[i + 1] === '*') { st.inBlock = true; i += 2; continue; }
+      if (c === '"') {
+        let j = i + 1, s = '';
+        while (j < n && text[j] !== '"') {
+          if (text[j] === '\\' && j + 1 < n) {
+            const nx = text[j + 1];
+            s += nx === 'n' ? '\n' : nx;
+            j += 2;
+          } else { s += text[j]; j++; }
+        }
+        if (j >= n) throw new ExError('Il manque le guillemet fermant (") de ce texte.', lineNo);
+        toks.push({ k: 'str', v: s, line: lineNo });
+        i = j + 1;
+        continue;
+      }
+      if (c === "'") {
+        const cp = [...text.slice(i + 1)][0];
+        if (cp === undefined || cp === "'") throw new ExError("Un caractère s'écrit entre apostrophes, avec exactement un symbole : 'a'.", lineNo);
+        const j = i + 1 + cp.length;
+        if (text[j] !== "'") throw new ExError("Un caractère ne contient qu'un seul symbole : 'a'. Pour du texte, utilise des guillemets.", lineNo);
+        toks.push({ k: 'chr', v: cp, line: lineNo });
+        i = j + 1;
+        continue;
+      }
+      if (/[0-9]/.test(c)) {
+        let j = i;
+        while (j < n && /[0-9]/.test(text[j])) j++;
+        let real = false;
+        if (text[j] === '.' && /[0-9]/.test(text[j + 1] || '')) {
+          real = true;
+          j++;
+          while (j < n && /[0-9]/.test(text[j])) j++;
+        }
+        toks.push({ k: 'num', v: parseFloat(text.slice(i, j)), real, line: lineNo });
+        i = j;
+        continue;
+      }
+      if (/[A-Za-zÀ-ÿ_]/.test(c)) {
+        let j = i;
+        while (j < n && /[A-Za-zÀ-ÿ0-9_]/.test(text[j])) j++;
+        const word = text.slice(i, j);
+        toks.push({ k: 'id', v: word, kw: strip(word), line: lineNo });
+        i = j;
+        continue;
+      }
+      const two = text.slice(i, i + 2);
+      if (['<-', ':=', '==', '!=', '<=', '>=', '++', '--'].includes(two)) {
+        toks.push({ k: 'op', v: (two === '<-' || two === ':=') ? '←' : two, line: lineNo });
+        i += 2;
+        continue;
+      }
+      if ('←≠≤≥'.includes(c)) {
+        toks.push({ k: 'op', v: c === '≠' ? '!=' : c === '≤' ? '<=' : c === '≥' ? '>=' : c, line: lineNo });
+        i++;
+        continue;
+      }
+      if ('+-*/%()<>,:='.includes(c)) {
+        toks.push({ k: 'op', v: c, line: lineNo });
+        i++;
+        continue;
+      }
+      throw new ExError(`Symbole inattendu « ${c} ».`, lineNo);
+    }
+    return toks;
+  }
+
+  function splitLines(src) {
+    const st = { inBlock: false };
+    const lines = [];
+    src.replace(/\r\n?/g, '\n').split('\n').forEach((raw, idx) => {
+      const lineNo = idx + 1;
+      let indent = 0, i = 0;
+      while (i < raw.length && (raw[i] === ' ' || raw[i] === '\t')) {
+        indent += raw[i] === '\t' ? 4 : 1;
+        i++;
+      }
+      const toks = tokenizeLine(raw.slice(i), lineNo, st);
+      if (toks.length) lines.push({ indent, toks, line: lineNo });
+    });
+    return lines;
+  }
+
+  const tokText = t => (t.k === 'str' ? `"${t.v}"` : t.k === 'chr' ? `'${t.v}'` : String(t.v));
+
+  class Cur {
+    constructor(toks, line) { this.t = toks; this.i = 0; this.line = line; }
+    peek(o = 0) { return this.t[this.i + o]; }
+    next() { return this.t[this.i++]; }
+    eof() { return this.i >= this.t.length; }
+    isKw(w, o = 0) { const t = this.peek(o); return !!t && t.k === 'id' && t.kw === w; }
+    isOp(v, o = 0) { const t = this.peek(o); return !!t && t.k === 'op' && t.v === v; }
+    expectOp(v, msg) {
+      if (!this.isOp(v)) throw new ExError(msg || `Il manque « ${v} ».`, this.line);
+      return this.next();
+    }
+  }
+
+  /* ---------- Parser ---------- */
+  class Parser {
+    constructor(lines) {
+      this.lines = lines;
+      this.p = 0;
+      this.fns = new Map();
+      this.top = [];
+    }
+
+    parseProgram() {
+      while (this.p < this.lines.length) {
+        const L = this.lines[this.p];
+        const t0 = L.toks[0];
+        if (t0.k === 'id' && t0.kw === 'fonction') this.parseFunction();
+        else this.top.push(this.parseStatement());
+      }
+    }
+
+    /* --- expressions --- */
+    parseExpr(c) { return this.parseOr(c); }
+    parseOr(c) {
+      let l = this.parseAnd(c);
+      while (c.isKw('ou')) { c.next(); const r = this.parseAnd(c); l = { k: 'bin', op: 'ou', l, r, line: c.line }; }
+      return l;
+    }
+    parseAnd(c) {
+      let l = this.parseNot(c);
+      while (c.isKw('et')) { c.next(); const r = this.parseNot(c); l = { k: 'bin', op: 'et', l, r, line: c.line }; }
+      return l;
+    }
+    parseNot(c) {
+      if (c.isKw('non')) { c.next(); const e = this.parseNot(c); return { k: 'un', op: 'non', e, line: c.line }; }
+      return this.parseCmp(c);
+    }
+    parseCmp(c) {
+      const l = this.parseAdd(c);
+      const t = c.peek();
+      if (t && t.k === 'op' && ['==', '!=', '<=', '>=', '<', '>'].includes(t.v)) {
+        c.next();
+        const r = this.parseAdd(c);
+        return { k: 'bin', op: t.v, l, r, line: c.line };
+      }
+      if (t && t.k === 'op' && t.v === '=') {
+        throw new ExError("Pour comparer deux valeurs, écris « == » (un seul « = » n'existe pas en ExAlgo).", c.line);
+      }
+      return l;
+    }
+    parseAdd(c) {
+      let l = this.parseMul(c);
+      while (c.isOp('+') || c.isOp('-')) {
+        const op = c.next().v;
+        const r = this.parseMul(c);
+        l = { k: 'bin', op, l, r, line: c.line };
+      }
+      return l;
+    }
+    parseMul(c) {
+      let l = this.parseUnary(c);
+      while (c.isOp('*') || c.isOp('/') || c.isOp('%')) {
+        const op = c.next().v;
+        const r = this.parseUnary(c);
+        l = { k: 'bin', op, l, r, line: c.line };
+      }
+      return l;
+    }
+    parseUnary(c) {
+      if (c.isOp('-')) { c.next(); const e = this.parseUnary(c); return { k: 'un', op: 'neg', e, line: c.line }; }
+      if (c.isOp('+')) { c.next(); return this.parseUnary(c); }
+      return this.parsePrimary(c);
+    }
+    parsePrimary(c) {
+      const t = c.peek();
+      if (!t) throw new ExError("L'expression est incomplète : il manque une valeur à la fin.", c.line);
+      if (t.k === 'num') { c.next(); return { k: 'num', t: t.real ? 'réel' : 'entier', v: t.v, line: c.line }; }
+      if (t.k === 'str') { c.next(); return { k: 'str', v: t.v, line: c.line }; }
+      if (t.k === 'chr') { c.next(); return { k: 'chr', v: t.v, line: c.line }; }
+      if (t.k === 'id') {
+        if (t.kw === 'vrai' || t.kw === 'faux') { c.next(); return { k: 'bool', v: t.kw === 'vrai', line: c.line }; }
+        if (['alors', 'sinon', 'debut', 'fin', 'si', 'var', 'fonction', 'retourner', 'et', 'ou'].includes(t.kw)) {
+          throw new ExError(`On attend une valeur ici, mais on trouve le mot-clé « ${t.v} ».`, c.line);
+        }
+        c.next();
+        if (c.isOp('(')) {
+          c.next();
+          const args = [];
+          if (!c.isOp(')')) {
+            for (;;) {
+              args.push(this.parseExpr(c));
+              if (c.isOp(',')) { c.next(); continue; }
+              break;
+            }
+          }
+          c.expectOp(')', `Il manque « ) » pour fermer l'appel de ${t.v}.`);
+          return { k: 'call', name: t.v, args, line: c.line };
+        }
+        return { k: 'id', name: t.v, line: c.line };
+      }
+      if (t.k === 'op' && t.v === '(') {
+        const t1 = c.peek(1), t2 = c.peek(2);
+        if (t1 && t1.k === 'id' && normType(t1.v) && t2 && t2.k === 'op' && t2.v === ')') {
+          c.next(); c.next(); c.next();
+          const e = this.parseUnary(c);
+          return { k: 'cast', type: normType(t1.v), e, line: c.line };
+        }
+        c.next();
+        const e = this.parseExpr(c);
+        c.expectOp(')', 'Il manque une parenthèse fermante « ) ».');
+        return e;
+      }
+      throw new ExError(`On attend une valeur ici, mais on trouve « ${tokText(t)} ».`, c.line);
+    }
+
+    /* --- statements --- */
+    parseStatement() {
+      const L = this.lines[this.p];
+      this.p++;
+      return this.parseStatementFrom(L);
+    }
+
+    parseStatementFrom(L) {
+      const c = new Cur(L.toks, L.line);
+      const first = c.peek();
+      const kw = first.k === 'id' ? first.kw : null;
+      let node;
+      if (kw === 'var') {
+        node = this.parseVarDecl(c, L);
+      } else if (kw === 'si') {
+        return this.parseIf(L, c);
+      } else if (kw === 'retourner') {
+        c.next();
+        let e = null;
+        if (!c.eof()) e = this.parseExpr(c);
+        node = { k: 'ret', e, line: L.line };
+      } else if (kw === 'sinon') {
+        throw new ExError("« Sinon » doit suivre un bloc « Si … Alors » et avoir la même indentation que ce Si.", L.line);
+      } else if (kw === 'alors') {
+        throw new ExError("« Alors » se place à la fin de la ligne du Si, après la condition.", L.line);
+      } else if (kw === 'debut' || kw === 'fin') {
+        throw new ExError(`« ${first.v} » n'est pas attendu ici.`, L.line);
+      } else if (kw === 'fonction') {
+        throw new ExError("Une fonction se déclare au niveau principal, pas dans une autre fonction ni dans un Si.", L.line);
+      } else if (first.k === 'id' && !['et', 'ou', 'non', 'vrai', 'faux'].includes(kw)) {
+        const nxt = c.peek(1);
+        if (nxt && nxt.k === 'op' && nxt.v === '←') {
+          c.next(); c.next();
+          if (c.eof()) throw new ExError("Il manque la valeur à droite de « ← ».", L.line);
+          const e = this.parseExpr(c);
+          node = { k: 'assign', name: first.v, e, line: L.line };
+        } else if (nxt && nxt.k === 'op' && (nxt.v === '++' || nxt.v === '--')) {
+          c.next(); c.next();
+          node = { k: 'incr', name: first.v, d: nxt.v === '++' ? 1 : -1, line: L.line };
+        } else if (nxt && nxt.k === 'op' && nxt.v === '(') {
+          const e = this.parseExpr(c);
+          node = { k: 'callstmt', e, line: L.line };
+        } else if (nxt && nxt.k === 'op' && nxt.v === '=') {
+          throw new ExError("Pour ranger une valeur dans une variable, utilise « ← » (ou « <- »). Le symbole « == » sert à comparer.", L.line);
+        } else {
+          throw new ExError(`Instruction non reconnue : « ${first.v} ». Une instruction est une affectation (x ← …), un appel (f(…)), un Si ou un Retourner.`, L.line);
+        }
+      } else {
+        throw new ExError(`Instruction non reconnue : « ${tokText(first)} ».`, L.line);
+      }
+      if (!c.eof()) {
+        throw new ExError(`Il y a quelque chose en trop à la fin de la ligne : « ${tokText(c.peek())} ».`, L.line);
+      }
+      return node;
+    }
+
+    parseVarDecl(c, L) {
+      c.next();
+      const names = [];
+      for (;;) {
+        const t = c.next();
+        if (!t || t.k !== 'id') throw new ExError("Après « Var », écris le nom de la variable : Var nom : type", L.line);
+        names.push(t.v);
+        if (c.isOp(',')) { c.next(); continue; }
+        break;
+      }
+      c.expectOp(':', 'Il manque « : » et le type : Var nom : type');
+      const tt = c.next();
+      const ty = tt && tt.k === 'id' ? normType(tt.v) : null;
+      if (!ty) throw new ExError(`Type inconnu${tt ? ` : « ${tokText(tt)} »` : ''}. Les types sont : entier, réel, caractère, booléen.`, L.line);
+      return { k: 'var', names, type: ty, line: L.line };
+    }
+
+    parseBlock(parent) {
+      const out = [];
+      while (this.p < this.lines.length) {
+        const L = this.lines[this.p];
+        if (L.indent <= parent) break;
+        out.push(this.parseStatement());
+      }
+      return out;
+    }
+
+    parseIf(L, c) {
+      c.next();
+      if (c.eof() || c.isKw('alors')) throw new ExError("Il manque la condition entre « Si » et « Alors ».", L.line);
+      const cond = this.parseExpr(c);
+      if (!c.isKw('alors')) throw new ExError("Il manque « Alors » à la fin de la ligne du Si.", L.line);
+      c.next();
+      const node = { k: 'if', cond, then: [], else: null, line: L.line };
+      if (!c.eof()) {
+        const rest = c.t.slice(c.i);
+        node.then = [this.parseStatementFrom({ indent: L.indent + 1, toks: rest, line: L.line })];
+      } else {
+        node.then = this.parseBlock(L.indent);
+        if (!node.then.length) throw new ExError("Le bloc après « Alors » est vide : décale les instructions vers la droite (indentation) sous le Si.", L.line);
+      }
+      const nl = this.lines[this.p];
+      if (nl && nl.indent === L.indent && nl.toks[0].k === 'id' && nl.toks[0].kw === 'sinon') {
+        this.p++;
+        const rest = nl.toks.slice(1);
+        if (rest.length && rest[0].k === 'id' && rest[0].kw === 'si') {
+          node.else = [this.parseIf({ indent: L.indent, toks: rest, line: nl.line }, new Cur(rest, nl.line))];
+        } else if (rest.length) {
+          node.else = [this.parseStatementFrom({ indent: L.indent + 1, toks: rest, line: nl.line })];
+        } else {
+          node.else = this.parseBlock(L.indent);
+          if (!node.else.length) throw new ExError("Le bloc après « Sinon » est vide : décale les instructions vers la droite (indentation).", nl.line);
+        }
+      }
+      return node;
+    }
+
+    parseFunction() {
+      const L = this.lines[this.p];
+      this.p++;
+      const c = new Cur(L.toks, L.line);
+      c.next();
+      const nameTok = c.next();
+      if (!nameTok || nameTok.k !== 'id') throw new ExError("Il manque le nom de la fonction après « Fonction ».", L.line);
+      if (BUILTIN_KEYS.has(strip(nameTok.v))) throw new ExError(`« ${nameTok.v} » existe déjà (c'est une fonction fournie) : choisis un autre nom.`, L.line);
+      if (this.fns.has(nameTok.v)) throw new ExError(`La fonction « ${nameTok.v} » est déjà définie.`, L.line);
+      c.expectOp('(', "Il manque « ( » après le nom de la fonction.");
+      const params = [];
+      if (!c.isOp(')')) {
+        for (;;) {
+          let mode = 'E';
+          const a = c.peek(), b = c.peek(1);
+          if (a && a.k === 'id' && (a.kw === 'e' || a.kw === 'es') && b && b.k === 'id') {
+            mode = a.kw === 'es' ? 'ES' : 'E';
+            c.next();
+          }
+          const pn = c.next();
+          if (!pn || pn.k !== 'id') throw new ExError("Un paramètre s'écrit : E nom : type", L.line);
+          c.expectOp(':', `Il manque « : » et le type après le paramètre « ${pn.v} ».`);
+          const tt = c.next();
+          const ty = tt && tt.k === 'id' ? normType(tt.v) : null;
+          if (!ty) throw new ExError(`Type inconnu pour le paramètre « ${pn.v} ». Types possibles : entier, réel, caractère, booléen.`, L.line);
+          if (mode === 'ES') throw new ExError("Le mode de passage ES sera vu plus tard (cycle 3). Ici, utilise le mode E.", L.line);
+          params.push({ name: pn.v, type: ty });
+          if (c.isOp(',')) { c.next(); continue; }
+          break;
+        }
+      }
+      c.expectOp(')', "Il manque « ) » à la fin de la liste des paramètres.");
+      let ret = null;
+      if (c.isOp(':')) {
+        c.next();
+        const tt = c.next();
+        ret = tt && tt.k === 'id' ? normType(tt.v) : null;
+        if (!ret) throw new ExError("Type de retour inconnu. Types possibles : entier, réel, caractère, booléen.", L.line);
+      }
+      if (!c.eof()) throw new ExError(`Il y a quelque chose en trop dans la signature : « ${tokText(c.peek())} ».`, L.line);
+
+      const body = [];
+      for (;;) {
+        const l = this.lines[this.p];
+        if (!l) throw new ExError(`Il manque « Début » pour la fonction « ${nameTok.v} ».`, L.line);
+        const t0 = l.toks[0];
+        const k = t0.k === 'id' ? t0.kw : null;
+        if (k === 'debut') {
+          this.p++;
+          if (l.toks.length > 1) throw new ExError("« Début » s'écrit seul sur sa ligne.", l.line);
+          break;
+        }
+        if (k === 'var') { body.push(this.parseStatement()); continue; }
+        throw new ExError(`Avant « Début », on ne trouve que des déclarations « Var ». Il manque « Début » pour la fonction « ${nameTok.v} ».`, l.line);
+      }
+      for (;;) {
+        const l = this.lines[this.p];
+        if (!l) throw new ExError(`Il manque « Fin » pour terminer la fonction « ${nameTok.v} ».`, L.line);
+        const t0 = l.toks[0];
+        if (t0.k === 'id' && t0.kw === 'fin') {
+          this.p++;
+          if (l.toks.length > 1) throw new ExError("« Fin » s'écrit seul sur sa ligne.", l.line);
+          break;
+        }
+        if (t0.k === 'id' && t0.kw === 'fonction') {
+          throw new ExError(`Il manque « Fin » pour terminer la fonction « ${nameTok.v} » avant d'en commencer une autre.`, l.line);
+        }
+        body.push(this.parseStatement());
+      }
+      this.fns.set(nameTok.v, { name: nameTok.v, params, ret, body, line: L.line });
+    }
+  }
+
+  /* ---------- Valeurs ---------- */
+  function fmtReal(x) {
+    if (!isFinite(x)) return String(x);
+    let s = String(parseFloat(x.toPrecision(12)));
+    if (/^-?\d+$/.test(s)) s += '.0';
+    return s;
+  }
+  function toText(v) {
+    switch (v.t) {
+      case 'entier': return String(v.v);
+      case 'réel': return fmtReal(v.v);
+      case 'booléen': return v.v ? 'vrai' : 'faux';
+      default: return v.v;
+    }
+  }
+  function describe(v) {
+    if (v === undefined) return '(rien)';
+    if (v.t === 'caractère') return `'${v.v}'`;
+    return toText(v);
+  }
+  function fmtTrace(v) {
+    if (v.t === 'booléen') return v.v ? 'Vrai' : 'Faux';
+    if (v.t === 'caractère') return `'${v.v}'`;
+    return toText(v);
+  }
+  function valuesEqual(a, b) {
+    if (!a || !b) return a === b;
+    const num = x => x.t === 'entier' || x.t === 'réel';
+    if (num(a) && num(b)) return Math.abs(a.v - b.v) < 1e-9;
+    return a.t === b.t && a.v === b.v;
+  }
+
+  /* ---------- Interpréteur ---------- */
+  class Interp {
+    constructor(prog, io, opts) {
+      this.fns = prog.fns;
+      this.io = io;
+      this.steps = 0;
+      this.depth = 0;
+      this.traceOn = !!(opts && opts.trace);
+      this.trace = null;
+      this.traceVars = [];
+    }
+
+    tick(line) {
+      if (this.io.aborted) throw new ExError('Exécution arrêtée.', line);
+      if (++this.steps > 300000) throw new ExError("Le programme est trop long (récursion infinie ?).", line);
+    }
+
+    rec(s, fr) {
+      if (!this.traceOn || fr.depth !== 0) return;
+      this.trace.rows.push({
+        line: s.line,
+        vals: this.traceVars.map(n => {
+          const b = fr.vars.get(n);
+          return b && b.v !== undefined ? fmtTrace(b.v) : '/';
+        })
+      });
+    }
+
+    lookup(fr, name, line) {
+      const b = fr.vars.get(name);
+      if (!b) {
+        const alt = [...fr.vars.keys()].find(k => k.toLowerCase() === name.toLowerCase());
+        throw new ExError(alt
+          ? `La variable « ${name} » n'existe pas. Voulais-tu écrire « ${alt} » ? (les majuscules comptent)`
+          : `La variable « ${name} » n'est pas déclarée. Il faut écrire « Var ${name} : type » avant de l'utiliser.`, line);
+      }
+      return b;
+    }
+
+    coerce(type, val, line, ctx) {
+      if (val.t === type) return val;
+      if (type === 'réel' && val.t === 'entier') return { t: 'réel', v: val.v };
+      if (type === 'entier' && val.t === 'réel') {
+        throw new ExError(`Impossible de ranger un réel dans ${ctx} (type entier) : on perdrait la partie décimale. Utilise la conversion explicite : (entier)valeur.`, line);
+      }
+      throw new ExError(`${ctx[0].toUpperCase() + ctx.slice(1)} est de type ${type}, mais la valeur donnée est de type ${tname(val.t)}.`, line);
+    }
+
+    async execBlock(stmts, fr) {
+      for (const s of stmts) {
+        const r = await this.exec(s, fr);
+        if (r) return r;
+      }
+      return null;
+    }
+
+    async exec(s, fr) {
+      this.tick(s.line);
+      switch (s.k) {
+        case 'var': {
+          for (const name of s.names) {
+            if (fr.vars.has(name)) throw new ExError(`La variable « ${name} » est déjà déclarée.`, s.line);
+            fr.vars.set(name, { type: s.type, v: undefined });
+          }
+          this.rec(s, fr);
+          return null;
+        }
+        case 'assign': {
+          const b = this.lookup(fr, s.name, s.line);
+          if (b.param) throw new ExError(`Il est interdit de modifier un paramètre passé en entrée (E) : « ${s.name} ». Recopie-le d'abord dans une variable locale.`, s.line);
+          const val = await this.val(s.e, fr);
+          b.v = this.coerce(b.type, val, s.line, `la variable « ${s.name} »`);
+          this.rec(s, fr);
+          return null;
+        }
+        case 'incr': {
+          const b = this.lookup(fr, s.name, s.line);
+          if (b.param) throw new ExError(`Il est interdit de modifier un paramètre passé en entrée (E) : « ${s.name} ».`, s.line);
+          if (b.v === undefined) throw new ExError(`La variable « ${s.name} » n'a pas encore de valeur : initialise-la avant de l'incrémenter.`, s.line);
+          if (b.type !== 'entier' && b.type !== 'réel') throw new ExError(`On ne peut pas utiliser ++ ou -- sur une variable de type ${b.type}.`, s.line);
+          b.v = { t: b.type, v: b.v.v + s.d };
+          this.rec(s, fr);
+          return null;
+        }
+        case 'callstmt': {
+          await this.eval(s.e, fr);
+          this.rec(s, fr);
+          return null;
+        }
+        case 'ret': {
+          let value;
+          if (s.e) value = await this.val(s.e, fr);
+          this.rec(s, fr);
+          return { value };
+        }
+        case 'if': {
+          const c = await this.val(s.cond, fr);
+          if (c.t !== 'booléen') throw new ExError(`La condition d'un Si doit être un booléen (vrai ou faux), mais c'est un ${tname(c.t)}.`, s.line);
+          this.rec(s, fr);
+          const branch = c.v ? s.then : s.else;
+          return branch ? this.execBlock(branch, fr) : null;
+        }
+        default:
+          throw new ExError('Instruction inconnue.', s.line);
+      }
+    }
+
+    async val(e, fr) {
+      const v = await this.eval(e, fr);
+      if (v === undefined) {
+        throw new ExError(`La fonction « ${e.name} » ne retourne rien : on ne peut pas utiliser son résultat.`, e.line);
+      }
+      return v;
+    }
+
+    async eval(e, fr) {
+      switch (e.k) {
+        case 'num': return { t: e.t, v: e.v };
+        case 'str': return { t: 'chaîne', v: e.v };
+        case 'chr': return { t: 'caractère', v: e.v };
+        case 'bool': return { t: 'booléen', v: e.v };
+        case 'id': {
+          const b = this.lookup(fr, e.name, e.line);
+          if (b.v === undefined) throw new ExError(`La variable « ${e.name} » n'a pas encore de valeur : il faut l'initialiser (${e.name} ← …) avant de l'utiliser.`, e.line);
+          return b.v;
+        }
+        case 'un': {
+          const v = await this.val(e.e, fr);
+          if (e.op === 'neg') {
+            if (v.t !== 'entier' && v.t !== 'réel') throw new ExError(`Le signe « - » ne s'applique qu'à un nombre, pas à un ${tname(v.t)}.`, e.line);
+            return { t: v.t, v: -v.v };
+          }
+          if (v.t !== 'booléen') throw new ExError(`« non » s'applique à un booléen, pas à un ${tname(v.t)}.`, e.line);
+          return { t: 'booléen', v: !v.v };
+        }
+        case 'bin': return this.binary(e, fr);
+        case 'cast': return this.cast(e, fr);
+        case 'call': return this.call(e, fr);
+        default: throw new ExError('Expression inconnue.', e.line);
+      }
+    }
+
+    async binary(e, fr) {
+      if (e.op === 'et' || e.op === 'ou') {
+        const a = await this.val(e.l, fr);
+        if (a.t !== 'booléen') throw new ExError(`« ${e.op} » s'applique à des booléens, pas à un ${tname(a.t)}.`, e.line);
+        if (e.op === 'et' && !a.v) return { t: 'booléen', v: false };
+        if (e.op === 'ou' && a.v) return { t: 'booléen', v: true };
+        const b = await this.val(e.r, fr);
+        if (b.t !== 'booléen') throw new ExError(`« ${e.op} » s'applique à des booléens, pas à un ${tname(b.t)}.`, e.line);
+        return { t: 'booléen', v: b.v };
+      }
+      const a = await this.val(e.l, fr);
+      const b = await this.val(e.r, fr);
+      if (['==', '!=', '<', '<=', '>', '>='].includes(e.op)) return this.compare(e.op, a, b, e.line);
+      return this.arith(e.op, a, b, e.line);
+    }
+
+    arith(op, a, b, line) {
+      if (op === '+' && (a.t === 'chaîne' || b.t === 'chaîne')) return { t: 'chaîne', v: toText(a) + toText(b) };
+      const num = x => x.t === 'entier' || x.t === 'réel';
+      if (!num(a) || !num(b)) {
+        throw new ExError(`L'opération « ${op} » n'est pas possible entre un ${tname(a.t)} et un ${tname(b.t)}.` +
+          (op === '+' ? ' Pour assembler du texte, commence par un texte entre guillemets : "a = " + valeur.' : ''), line);
+      }
+      if (a.t === 'entier' && b.t === 'entier') {
+        switch (op) {
+          case '+': return { t: 'entier', v: a.v + b.v };
+          case '-': return { t: 'entier', v: a.v - b.v };
+          case '*': return { t: 'entier', v: a.v * b.v };
+          case '/':
+            if (b.v === 0) throw new ExError('Division par zéro.', line);
+            return { t: 'entier', v: Math.trunc(a.v / b.v) };
+          case '%':
+            if (b.v === 0) throw new ExError('Modulo par zéro.', line);
+            return { t: 'entier', v: a.v % b.v };
+        }
+      }
+      switch (op) {
+        case '+': return { t: 'réel', v: a.v + b.v };
+        case '-': return { t: 'réel', v: a.v - b.v };
+        case '*': return { t: 'réel', v: a.v * b.v };
+        case '/':
+          if (b.v === 0) throw new ExError('Division par zéro.', line);
+          return { t: 'réel', v: a.v / b.v };
+        case '%':
+          if (b.v === 0) throw new ExError('Modulo par zéro.', line);
+          return { t: 'réel', v: a.v % b.v };
+      }
+      throw new ExError('Opération inconnue.', line);
+    }
+
+    compare(op, a, b, line) {
+      const isNum = x => x.t === 'entier' || x.t === 'réel';
+      let ca, cb, tol = false;
+      if (isNum(a) && isNum(b)) {
+        ca = a.v; cb = b.v;
+        tol = a.t === 'réel' || b.t === 'réel';
+      } else if (a.t === b.t && ['caractère', 'booléen', 'chaîne'].includes(a.t)) {
+        if (a.t === 'booléen' && op !== '==' && op !== '!=') throw new ExError("Les booléens se comparent seulement avec « == » et « != ».", line);
+        ca = a.t === 'caractère' ? a.v.codePointAt(0) : a.t === 'booléen' ? (a.v ? 1 : 0) : a.v;
+        cb = b.t === 'caractère' ? b.v.codePointAt(0) : b.t === 'booléen' ? (b.v ? 1 : 0) : b.v;
+      } else {
+        throw new ExError(`On ne peut pas comparer un ${tname(a.t)} avec un ${tname(b.t)}.`, line);
+      }
+      const eq = tol ? Math.abs(ca - cb) < 1e-9 : ca === cb;
+      let r;
+      switch (op) {
+        case '==': r = eq; break;
+        case '!=': r = !eq; break;
+        case '<': r = ca < cb && !eq; break;
+        case '<=': r = ca < cb || eq; break;
+        case '>': r = ca > cb && !eq; break;
+        case '>=': r = ca > cb || eq; break;
+      }
+      return { t: 'booléen', v: r };
+    }
+
+    async cast(e, fr) {
+      const v = await this.val(e.e, fr);
+      const num = v.t === 'entier' || v.t === 'réel';
+      switch (e.type) {
+        case 'entier':
+          if (v.t === 'entier') return v;
+          if (v.t === 'réel') return { t: 'entier', v: Math.trunc(v.v) };
+          if (v.t === 'caractère') return { t: 'entier', v: v.v.codePointAt(0) };
+          break;
+        case 'réel':
+          if (num) return { t: 'réel', v: v.v };
+          break;
+        case 'caractère':
+          if (v.t === 'caractère') return v;
+          if (v.t === 'entier') return { t: 'caractère', v: String.fromCodePoint(v.v) };
+          break;
+        case 'booléen':
+          if (v.t === 'booléen') return v;
+          break;
+      }
+      throw new ExError(`Impossible de convertir un ${tname(v.t)} en ${e.type}.`, e.line);
+    }
+
+    async call(e, fr) {
+      const args = [];
+      for (const a of e.args) args.push(await this.val(a, fr));
+      const key = strip(e.name);
+      if (BUILTIN_KEYS.has(key)) return this.builtin(key, args, e);
+      const fn = this.fns.get(e.name);
+      if (!fn) {
+        const alt = [...this.fns.keys()].find(k => k.toLowerCase() === e.name.toLowerCase());
+        throw new ExError(alt
+          ? `La fonction « ${e.name} » n'existe pas. Voulais-tu écrire « ${alt} » ? (les majuscules comptent)`
+          : `La fonction « ${e.name} » n'est pas définie.`, e.line);
+      }
+      return this.callUser(fn, args, e.line);
+    }
+
+    async callUser(fn, args, line) {
+      if (this.depth >= 150) throw new ExError('Trop d’appels de fonctions imbriqués (récursion infinie ?).', line);
+      if (args.length !== fn.params.length) {
+        throw new ExError(`La fonction « ${fn.name} » attend ${fn.params.length} argument${fn.params.length > 1 ? 's' : ''}, mais en reçoit ${args.length}.`, line);
+      }
+      this.depth++;
+      const fr = { vars: new Map(), depth: this.depth };
+      try {
+        fn.params.forEach((p, i) => {
+          fr.vars.set(p.name, { type: p.type, v: this.coerce(p.type, args[i], line, `le paramètre « ${p.name} » de ${fn.name}`), param: true });
+        });
+        const r = await this.execBlock(fn.body, fr);
+        if (r && r.value !== undefined) {
+          if (!fn.ret) throw new ExError(`La fonction « ${fn.name} » ne retourne rien (pas de type de retour dans sa signature), mais elle exécute « Retourner valeur ».`, line);
+          return this.coerce(fn.ret, r.value, line, `le résultat de ${fn.name}`);
+        }
+        if (fn.ret) {
+          throw new ExError(`La fonction « ${fn.name} » doit retourner un ${fn.ret}, mais aucun « Retourner valeur » n'a été exécuté.`, line);
+        }
+        return undefined;
+      } finally {
+        this.depth--;
+      }
+    }
+
+    need(name, args, types, line) {
+      if (args.length !== types.length) {
+        throw new ExError(`${name} attend ${types.length} argument${types.length > 1 ? 's' : ''}, mais en reçoit ${args.length}.`, line);
+      }
+      args.forEach((a, i) => {
+        const ok = a.t === types[i] || (types[i] === 'réel' && a.t === 'entier');
+        if (!ok) throw new ExError(`${name} : l'argument ${i + 1} doit être de type ${types[i]}, pas ${tname(a.t)}.`, line);
+      });
+    }
+
+    async builtin(key, args, e) {
+      const line = e.line;
+      switch (key) {
+        case 'ecrire':
+          if (args.length !== 1) throw new ExError('ecrire attend exactement 1 argument : ecrire("a = " + a).', line);
+          this.io.write(toText(args[0]));
+          return undefined;
+        case 'ecrireligne':
+          if (args.length > 1) throw new ExError('ecrireLigne attend 0 ou 1 argument.', line);
+          this.io.write((args.length ? toText(args[0]) : '') + '\n');
+          return undefined;
+        case 'lireentier':
+        case 'lirereel':
+        case 'lirecaractere': {
+          if (args.length) throw new ExError(`${e.name} n'a pas d'argument : ${e.name}().`, line);
+          for (;;) {
+            const raw = String(await this.io.read(key === 'lireentier' ? 'entier' : key === 'lirereel' ? 'réel' : 'caractère')).trim();
+            if (key === 'lireentier') {
+              if (/^[+-]?\d+$/.test(raw)) return { t: 'entier', v: parseInt(raw, 10) };
+              this.io.write('(saisie invalide : un entier est attendu)\n');
+            } else if (key === 'lirereel') {
+              const s = raw.replace(',', '.');
+              if (/^[+-]?\d+(\.\d+)?$/.test(s)) return { t: 'réel', v: parseFloat(s) };
+              this.io.write('(saisie invalide : un réel est attendu)\n');
+            } else {
+              const ch = [...raw][0];
+              if (ch !== undefined) return { t: 'caractère', v: ch };
+              this.io.write('(saisie invalide : tape un caractère)\n');
+            }
+          }
+        }
+        case 'affichecar': {
+          this.need('afficheCar', args, ['caractère', 'entier'], line);
+          if (args[1].v < 0) throw new ExError('afficheCar : le nombre de répétitions ne peut pas être négatif.', line);
+          this.io.write(args[0].v.repeat(args[1].v));
+          return undefined;
+        }
+        case 'afficheligne': {
+          this.need('afficheLigne', args, ['caractère', 'entier', 'entier'], line);
+          if (args[1].v < 1) throw new ExError('afficheLigne : la position de départ (min) commence à 1.', line);
+          if (args[2].v < 0) throw new ExError('afficheLigne : la taille ne peut pas être négative.', line);
+          this.io.write(' '.repeat(args[1].v - 1) + args[0].v.repeat(args[2].v) + '\n');
+          return undefined;
+        }
+      }
+      throw new ExError('Fonction fournie inconnue.', line);
+    }
+  }
+
+  /* ---------- API ---------- */
+  function compile(src) {
+    const p = new Parser(splitLines(src));
+    p.parseProgram();
+    return { fns: p.fns, top: p.top, src };
+  }
+
+  function topVars(top) {
+    const out = [];
+    top.forEach(s => { if (s.k === 'var') s.names.forEach(n => out.push(n)); });
+    return out;
+  }
+
+  async function run(prog, io, opts) {
+    const it = new Interp(prog, io, opts || {});
+    if (it.traceOn) {
+      it.traceVars = topVars(prog.top);
+      it.trace = { vars: it.traceVars, rows: [] };
+    }
+    await it.execBlock(prog.top, { vars: new Map(), depth: 0 });
+    return { trace: it.trace };
+  }
+
+  const NO_IO = {
+    write() {},
+    read() { return Promise.reject(new ExError("Cette expression ne peut pas lire au clavier.")); }
+  };
+
+  async function evalExpression(text) {
+    const lines = splitLines(text);
+    const toks = lines.flatMap(l => l.toks);
+    const parser = new Parser([]);
+    const cur = new Cur(toks, 1);
+    const expr = parser.parseExpr(cur);
+    if (!cur.eof()) throw new ExError(`Il y a quelque chose en trop : « ${tokText(cur.peek())} ».`, 1);
+    const it = new Interp({ fns: new Map() }, NO_IO, {});
+    return it.val(expr, { vars: new Map(), depth: 0 });
+  }
+
+  async function call(prog, name, argLiterals, io) {
+    const fn = prog.fns.get(name);
+    if (!fn) throw new ExError(`La fonction « ${name} » n'est pas définie dans ton code.`);
+    const args = [];
+    for (const lit of argLiterals) args.push(await evalExpression(lit));
+    const it = new Interp(prog, io, {});
+    return it.callUser(fn, args, fn.line);
+  }
+
+  function queueIO(lines) {
+    const q = (lines || []).slice();
+    return {
+      out: '',
+      aborted: false,
+      write(s) { this.out += s; },
+      read() {
+        if (!q.length) return Promise.reject(new ExError("Le programme attend une saisie au clavier, mais aucune n'est prévue ici."));
+        return Promise.resolve(q.shift());
+      }
+    };
+  }
+
+  async function traceProgram(src, stdin) {
+    const prog = compile(src);
+    const io = queueIO(stdin);
+    const r = await run(prog, io, { trace: true });
+    return r.trace;
+  }
+
+  return { compile, run, call, evalExpression, queueIO, traceProgram, ExError, toText, describe, valuesEqual, fmtTrace, strip };
+})();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = Exalgo;
+
+/* data.js */
+/* Données du site : solutions de référence, maison du niveau 5, exercices */
+
+/* ===== Fonctions du jeu (référence ExAlgo) ===== */
+const REF = {
+  messageAccueil: `Fonction messageAccueil()
+Début
+    ecrireLigne("Bienvenue dans le programme de révision des formes géométriques")
+    ecrireLigne("Saisir un niveau de difficulté entre 1 et 4")
+Fin`,
+
+  messageErreur: `Fonction messageErreur()
+Début
+    ecrireLigne("Votre choix n'est pas conforme aux options possibles, jeu terminé")
+Fin`,
+
+  messageFinDeJeu: `Fonction messageFinDeJeu(E niveauReussi : booléen, E niveau : entier)
+Début
+    Si niveauReussi Alors
+        ecrireLigne("Bravo, vous avez validé le niveau " + niveau)
+    Sinon
+        ecrireLigne("Dommage, vous n'avez pas validé le niveau " + niveau)
+Fin`,
+
+  saisirNombreValide: `Fonction saisirNombreValide(E min : entier, E max : entier) : entier
+Var n : entier
+Var res : entier
+Début
+    res ← -1
+    n ← lireEntier()
+    Si n >= min et n <= max Alors
+        res ← n
+    Retourner res
+Fin`,
+
+  formeCorrecte: `Fonction formeCorrecte(E niveau : entier) : caractère
+Var forme : caractère
+Début
+    forme ← ' '
+    Si (niveau == 1 ou niveau == 2) Alors
+        forme ← 'c'
+    Sinon Si (niveau == 3 ou niveau == 4) Alors
+        forme ← 't'
+    Retourner forme
+Fin`,
+
+  surfaceCorrecte: `Fonction surfaceCorrecte(E niveau : entier) : entier
+Var surface : entier
+Début
+    surface ← -1
+    Si niveau == 1 Alors
+        surface ← 9
+    Sinon Si niveau == 2 Alors
+        surface ← 25
+    Sinon Si niveau == 3 Alors
+        surface ← 2
+    Sinon Si niveau == 4 Alors
+        surface ← 14
+    Retourner surface
+Fin`,
+
+  saisieReponseForme: `Fonction saisieReponseForme() : caractère
+Var reponse : caractère
+Début
+    ecrireLigne("Est-ce un carré (c) ou un triangle (t) ?")
+    reponse ← lireCaractere()
+    Retourner reponse
+Fin`,
+
+  saisieReponseSurface: `Fonction saisieReponseSurface() : entier
+Var reponse : entier
+Début
+    ecrireLigne("Quelle est la surface de cette forme ?")
+    reponse ← lireEntier()
+    Retourner reponse
+Fin`,
+
+  afficherFormeNiveau: `Fonction afficherFormeNiveau(E niveau : entier)
+Début
+    Si niveau == 1 Alors
+        afficheLigne('#', 1, 3)
+        afficheLigne('#', 1, 3)
+        afficheLigne('#', 1, 3)
+    Sinon Si niveau == 2 Alors
+        afficheLigne('#', 1, 5)
+        afficheLigne('#', 1, 5)
+        afficheLigne('#', 1, 5)
+        afficheLigne('#', 1, 5)
+        afficheLigne('#', 1, 5)
+    Sinon Si niveau == 3 Alors
+        afficheLigne('#', 1, 1)
+        afficheLigne('#', 1, 2)
+    Sinon Si niveau == 4 Alors
+        afficheLigne('#', 4, 1)
+        afficheLigne('#', 3, 3)
+        afficheLigne('#', 2, 5)
+        afficheLigne('#', 1, 7)
+Fin`,
+
+  jouerUnNiveau: `Fonction jouerUnNiveau(E niveau : entier) : booléen
+Var reussi : booléen
+Var reponseForme : caractère
+Var reponseSurface : entier
+Début
+    reussi ← faux
+    afficherFormeNiveau(niveau)
+    reponseForme ← saisieReponseForme()
+    Si reponseForme == formeCorrecte(niveau) Alors
+        reponseSurface ← saisieReponseSurface()
+        reussi ← reponseSurface == surfaceCorrecte(niveau)
+    Retourner reussi
+Fin`,
+
+  jeuForme: `Fonction jeuForme()
+Var niveau : entier
+Var reussi : booléen
+Début
+    messageAccueil()
+    niveau ← saisirNombreValide(1, 4)
+    Si niveau == -1 Alors
+        messageErreur()
+    Sinon
+        reussi ← jouerUnNiveau(niveau)
+        messageFinDeJeu(reussi, niveau)
+Fin`
+};
+const REF_ORDER = ['messageAccueil', 'messageErreur', 'messageFinDeJeu', 'saisirNombreValide', 'formeCorrecte', 'surfaceCorrecte',
+  'saisieReponseForme', 'saisieReponseSurface', 'afficherFormeNiveau', 'jouerUnNiveau', 'jeuForme'];
+
+/* ===== Équivalents Java ===== */
+const REF_JAVA = {
+  messageAccueil: `static void messageAccueil() {
+    System.out.println("Bienvenue dans le programme de révision des formes géométriques");
+    System.out.println("Saisir un niveau de difficulté entre 1 et 4");
+}`,
+  messageErreur: `static void messageErreur() {
+    System.out.println("Votre choix n'est pas conforme aux options possibles, jeu terminé");
+}`,
+  messageFinDeJeu: `static void messageFinDeJeu(boolean niveauReussi, int niveau) {
+    if (niveauReussi) {
+        System.out.println("Bravo, vous avez validé le niveau " + niveau);
+    } else {
+        System.out.println("Dommage, vous n'avez pas validé le niveau " + niveau);
+    }
+}`,
+  saisirNombreValide: `static int saisirNombreValide(int min, int max) {
+    int res = -1;
+    int n = clavier.nextInt();
+    if (n >= min && n <= max) {
+        res = n;
+    }
+    return res;
+}`,
+  formeCorrecte: `static char formeCorrecte(int niveau) {
+    char forme = ' ';
+    if (niveau == 1 || niveau == 2) {
+        forme = 'c';
+    } else if (niveau == 3 || niveau == 4) {
+        forme = 't';
+    }
+    return forme;
+}`,
+  surfaceCorrecte: `static int surfaceCorrecte(int niveau) {
+    int surface = -1;
+    if (niveau == 1) {
+        surface = 9;
+    } else if (niveau == 2) {
+        surface = 25;
+    } else if (niveau == 3) {
+        surface = 2;
+    } else if (niveau == 4) {
+        surface = 14;
+    }
+    return surface;
+}`,
+  saisieReponseForme: `static char saisieReponseForme() {
+    System.out.println("Est-ce un carré (c) ou un triangle (t) ?");
+    char reponse = clavier.next().charAt(0);
+    return reponse;
+}`,
+  saisieReponseSurface: `static int saisieReponseSurface() {
+    System.out.println("Quelle est la surface de cette forme ?");
+    int reponse = clavier.nextInt();
+    return reponse;
+}`,
+  afficherFormeNiveau: `static void afficherFormeNiveau(int niveau) {
+    if (niveau == 1) {
+        afficheLigne('#', 1, 3);
+        afficheLigne('#', 1, 3);
+        afficheLigne('#', 1, 3);
+    } else if (niveau == 2) {
+        afficheLigne('#', 1, 5);
+        afficheLigne('#', 1, 5);
+        afficheLigne('#', 1, 5);
+        afficheLigne('#', 1, 5);
+        afficheLigne('#', 1, 5);
+    } else if (niveau == 3) {
+        afficheLigne('#', 1, 1);
+        afficheLigne('#', 1, 2);
+    } else if (niveau == 4) {
+        afficheLigne('#', 4, 1);
+        afficheLigne('#', 3, 3);
+        afficheLigne('#', 2, 5);
+        afficheLigne('#', 1, 7);
+    }
+}`,
+  jouerUnNiveau: `static boolean jouerUnNiveau(int niveau) {
+    boolean reussi = false;
+    afficherFormeNiveau(niveau);
+    char reponseForme = saisieReponseForme();
+    if (reponseForme == formeCorrecte(niveau)) {
+        int reponseSurface = saisieReponseSurface();
+        reussi = reponseSurface == surfaceCorrecte(niveau);
+    }
+    return reussi;
+}`,
+  jeuForme: `static void jeuForme() {
+    messageAccueil();
+    int niveau = saisirNombreValide(1, 4);
+    if (niveau == -1) {
+        messageErreur();
+    } else {
+        boolean reussi = jouerUnNiveau(niveau);
+        messageFinDeJeu(reussi, niveau);
+    }
+}`
+};
+
+const JAVA_BASE = `import java.util.Scanner;
+
+public class JeuForme {
+    static Scanner clavier = new Scanner(System.in);
+
+    // ----- code de base (fourni en TP : à adapter à ta version) -----
+    static void afficheCar(char car, int nb) {
+        for (int i = 0; i < nb; i++) {
+            System.out.print(car);
+        }
+    }
+
+    static void afficheLigne(char car, int min, int taille) {
+        afficheCar(' ', min - 1);
+        afficheCar(car, taille);
+        System.out.println();
+    }
+`;
+
+function javaIndent(code) { return code.split('\n').map(l => (l ? '    ' + l : l)).join('\n'); }
+function fullJavaProgram() {
+  return JAVA_BASE + '\n' + REF_ORDER.map(n => javaIndent(REF_JAVA[n])).join('\n\n') + `
+
+    public static void main(String[] args) {
+        jeuForme();
+    }
+}
+`;
+}
+function fullExalgoProgram() { return REF_ORDER.map(n => REF[n]).join('\n\n') + '\n'; }
+
+/* ===== Niveau 5 : la maison ===== */
+const HOUSE_EX = `Fonction afficheFenetre(E mur : caractère, E volet : caractère)
+Début
+    afficheCar(volet, 1)
+    afficheCar(' ', 2)
+    afficheCar(volet, 1)
+    afficheCar(mur, 1)
+Fin
+
+Fonction afficheLigneFenetres(E nbFenetres : entier, E mur : caractère, E volet : caractère)
+Début
+    afficheCar(mur, 1)
+    afficheFenetre(mur, volet)
+    afficheFenetre(mur, volet)
+    afficheFenetre(mur, volet)
+    Si nbFenetres >= 4 Alors
+        afficheFenetre(mur, volet)
+    Si nbFenetres >= 5 Alors
+        afficheFenetre(mur, volet)
+    ecrireLigne()
+Fin
+
+Fonction afficheLignePorte(E nbFenetres : entier, E fenetrePorte : entier, E mur : caractère)
+Var largeur : entier
+Var gauche : entier
+Début
+    largeur ← 5 * nbFenetres + 1
+    gauche ← 5 * (fenetrePorte - 1) + 1
+    afficheCar(mur, gauche)
+    afficheCar(' ', 4)
+    afficheCar(mur, largeur - gauche - 4)
+    ecrireLigne()
+Fin
+
+Fonction dessinerMaison(E nbFenetres : entier, E fenetrePorte : entier, E toit : caractère, E mur : caractère, E volet : caractère)
+Var largeur : entier
+Début
+    largeur ← 5 * nbFenetres + 1
+    afficheLigne(toit, 3, largeur - 4)
+    afficheLigne(toit, 2, largeur - 2)
+    afficheLigne(toit, 1, largeur)
+    afficheLigne(mur, 1, largeur)
+    afficheLigneFenetres(nbFenetres, mur, volet)
+    afficheLigneFenetres(nbFenetres, mur, volet)
+    afficheLigne(mur, 1, largeur)
+    afficheLignePorte(nbFenetres, fenetrePorte, mur)
+    afficheLignePorte(nbFenetres, fenetrePorte, mur)
+Fin
+
+Fonction jouerMaison()
+Var nb : entier
+Var porte : entier
+Var toit : caractère
+Var mur : caractère
+Var volet : caractère
+Début
+    ecrireLigne("-- Mode dessin maison --")
+    ecrireLigne(" ~ Combien de fenêtres (3 à 5) ?")
+    nb ← lireEntier()
+    ecrireLigne(" ~ Porte sous quelle fenêtre (1 à " + nb + ") ?")
+    porte ← lireEntier()
+    ecrireLigne(" ~ Caractère du toit :")
+    toit ← lireCaractere()
+    ecrireLigne(" ~ Caractère des murs :")
+    mur ← lireCaractere()
+    ecrireLigne(" ~ Caractère des volets :")
+    volet ← lireCaractere()
+    dessinerMaison(nb, porte, toit, mur, volet)
+Fin
+
+Fonction jeuFormeComplet()
+Var niveau : entier
+Var reussi : booléen
+Début
+    messageAccueil()
+    niveau ← saisirNombreValide(1, 5)
+    Si niveau == -1 Alors
+        messageErreur()
+    Sinon Si niveau == 5 Alors
+        jouerMaison()
+        messageFinDeJeu(vrai, niveau)
+    Sinon
+        reussi ← jouerUnNiveau(niveau)
+        messageFinDeJeu(reussi, niveau)
+Fin`;
+
+const HOUSE_JAVA = `static void afficheFenetre(char mur, char volet) {
+    afficheCar(volet, 1);
+    afficheCar(' ', 2);
+    afficheCar(volet, 1);
+    afficheCar(mur, 1);
+}
+
+static void afficheLigneFenetres(int nbFenetres, char mur, char volet) {
+    afficheCar(mur, 1);
+    afficheFenetre(mur, volet);
+    afficheFenetre(mur, volet);
+    afficheFenetre(mur, volet);
+    if (nbFenetres >= 4) {
+        afficheFenetre(mur, volet);
+    }
+    if (nbFenetres >= 5) {
+        afficheFenetre(mur, volet);
+    }
+    System.out.println();
+}
+
+static void afficheLignePorte(int nbFenetres, int fenetrePorte, char mur) {
+    int largeur = 5 * nbFenetres + 1;
+    int gauche = 5 * (fenetrePorte - 1) + 1;
+    afficheCar(mur, gauche);
+    afficheCar(' ', 4);
+    afficheCar(mur, largeur - gauche - 4);
+    System.out.println();
+}
+
+static void dessinerMaison(int nbFenetres, int fenetrePorte, char toit, char mur, char volet) {
+    int largeur = 5 * nbFenetres + 1;
+    afficheLigne(toit, 3, largeur - 4);
+    afficheLigne(toit, 2, largeur - 2);
+    afficheLigne(toit, 1, largeur);
+    afficheLigne(mur, 1, largeur);
+    afficheLigneFenetres(nbFenetres, mur, volet);
+    afficheLigneFenetres(nbFenetres, mur, volet);
+    afficheLigne(mur, 1, largeur);
+    afficheLignePorte(nbFenetres, fenetrePorte, mur);
+    afficheLignePorte(nbFenetres, fenetrePorte, mur);
+}`;
+
+/* Générateur JS de la maison (aperçu interactif), avec les extensions */
+function houseLines(o) {
+  const n = o.n, k = Math.min(Math.max(o.k, 1), n);
+  const W = 5 * n + 1;
+  const floors = o.floors || 1;
+  const toit = o.toit, mur = o.mur, volet = o.volet;
+  const rep = (c, m) => c.repeat(Math.max(0, m));
+  const roof = [
+    ' '.repeat(2) + rep(toit, W - 4),
+    ' '.repeat(1) + rep(toit, W - 2),
+    rep(toit, W)
+  ];
+  const wall = rep(mur, W);
+  const win = mur + rep(volet + '  ' + volet + mur, n);
+  const left = 5 * (k - 1) + 1;
+  const door = rep(mur, left) + '    ' + rep(mur, W - left - 4);
+  let rows = [];
+  rows.push(...roof);
+  for (let f = 0; f < floors; f++) rows.push(wall, win, win);
+  rows.push(wall);
+  if (floors > 1) { /* le rez-de-chaussée garde la porte */ }
+  rows.push(door, door);
+  if (o.chimney) {
+    const r = Math.min(Math.max(o.chimney.row, 1), 3) - 1; // 0 = sommet du toit
+    const lo = 3 - r, hi = W - 2 + r; // étendue du toit sur cette rangée (colonnes à partir de 1)
+    const col = Math.min(Math.max(o.chimney.col, lo + 1), hi - 1) - 1;
+    const pad = (t, len) => t + ' '.repeat(Math.max(0, len - t.length));
+    const setc = (t, i, c) => t.slice(0, i) + c + t.slice(i + 1);
+    const all = [' '.repeat(W), ' '.repeat(W)].concat(rows.map(t => pad(t, W)));
+    all[2 + r] = setc(all[2 + r], col, 'M');
+    all[r] = setc(all[r], col, '~');
+    all[r + 1] = setc(all[r + 1], col, '~');
+    rows = all;
+  }
+  return rows.map(s => s.replace(/\s+$/, ''));
+}
+
+/* ===== Exercices ===== */
+const EXERCISES = {
+  /* ---- Leçon 1 ---- */
+  'l1-q1': { type: 'qcm', codeChoices: true, q: 'Dans « Var saisie : caractère », quel est le type de la variable ?',
+    choices: ['saisie', 'caractère', 'Var', "'r'"], answer: 1,
+    why: 'Le nom est « saisie », le type est « caractère ». « Var » est le mot-clé de déclaration.' },
+  'l1-q2': { type: 'qcm', codeChoices: true, q: 'Quel nom de variable respecte la convention CamelCase du cours ?',
+    choices: ['NoteMaths', 'note_maths', 'noteMaths', 'NOTEMATHS'], answer: 2,
+    why: 'Première lettre en minuscule, puis une majuscule au début de chaque mot suivant : noteMaths, temperatureExterieure.' },
+  'l1-q3': { type: 'qcm', q: 'Quel type faut-il pour ranger la valeur 4.0 ?',
+    choices: ['entier', 'réel', 'caractère', 'booléen'], answer: 1,
+    why: 'La présence du point décimal fait de 4.0 un réel, même si sa partie décimale est nulle. 4 (sans point) serait un entier.' },
+  'l1-q4': { type: 'qcm', q: "De quel type est '4' (avec des apostrophes) ?",
+    choices: ['entier', 'réel', 'caractère', 'booléen'], answer: 2,
+    why: "Les apostrophes indiquent un caractère : '4' est le symbole « 4 », pas le nombre quatre." },
+  'l1-q5': { type: 'qcm', q: 'Pourquoi doit-on initialiser une variable avant de la lire ?',
+    choices: ["Pour ne pas dépendre d'une valeur par défaut, ce qui est considéré comme un mauvais style",
+      'Pour que la variable puisse changer de type', 'Pour économiser de la mémoire'], answer: 0,
+    why: "Convention du cours : une variable est toujours initialisée par ton code avant d'être utilisée. Ici, l'atelier te le rappelle avec une erreur." },
+  'l1-c1': { type: 'code', title: 'Déclarer, initialiser, afficher',
+    prompt: 'Déclare quatre variables a (entier), b (réel), c (caractère) et d (booléen). Initialise-les avec 2, 3.3, \'T\' et vrai, puis affiche chacune sur sa ligne, sous la forme « a = 2 ».',
+    starter: `// Déclarations
+Var a : entier
+
+// À toi de compléter
+`,
+    tests: [{ script: true, out: 'a = 2\nb = 3.3\nc = T\nd = vrai' }],
+    hint: 'Une ligne ecrireLigne("a = " + a) par variable. Les valeurs : 2, 3.3, \'T\' et vrai.',
+    solution: {
+      ex: `Var a : entier
+Var b : réel
+Var c : caractère
+Var d : booléen
+a ← 2
+b ← 3.3
+c ← 'T'
+d ← vrai
+ecrireLigne("a = " + a)
+ecrireLigne("b = " + b)
+ecrireLigne("c = " + c)
+ecrireLigne("d = " + d)`,
+      java: `int a;
+double b;
+char c;
+boolean d;
+a = 2;
+b = 3.3;
+c = 'T';
+d = true;
+System.out.println("a = " + a);
+System.out.println("b = " + b);
+System.out.println("c = " + c);
+System.out.println("d = " + d);   // Java affiche true (et non vrai)` } },
+
+  /* ---- Leçon 2 ---- */
+  'l2-q1': { type: 'qcm', codeChoices: true, q: 'Quelle fonction affiche un texte puis passe à la ligne ?',
+    choices: ['ecrire()', 'ecrireLigne()', 'lireEntier()', 'lireCaractere()'], answer: 1,
+    why: 'ecrire() reste sur la même ligne, ecrireLigne() passe à la ligne ensuite.' },
+  'l2-q2': { type: 'qcm', q: 'Que fait « a ← lireEntier() » ?',
+    choices: ["Elle affiche l'entier a", "Elle lit un entier au clavier et le range dans a", 'Elle compare a avec un entier', "Elle lit un caractère et le range dans a"], answer: 1,
+    why: "lireEntier() renvoie l'entier saisi, et la flèche ← le range dans la variable a (qui doit être de type entier)." },
+  'l2-q3': { type: 'qcm', codeChoices: true, q: 'Si a vaut 24, que montre ecrire("a = " + a) ?',
+    choices: ['a = 24', '"a = " + 24', 'a = a', '24'], answer: 0,
+    why: "Le + concatène : le texte « a = » est suivi de la valeur de a." },
+  'l2-c1': { type: 'code', title: 'Lire puis afficher',
+    prompt: 'Lis un entier puis un caractère (dans cet ordre), range-les dans a et c, puis affiche « a = … » et « c = … », chacun sur sa ligne.',
+    starter: `Var a : entier
+Var c : caractère
+`,
+    tests: [{ script: true, stdin: ['24', '@'], out: 'a = 24\nc = @' }, { script: true, stdin: ['-3', 'x'], out: 'a = -3\nc = x' }],
+    hint: 'a ← lireEntier() puis c ← lireCaractere(), ensuite deux ecrireLigne.',
+    solution: {
+      ex: `Var a : entier
+Var c : caractère
+a ← lireEntier()
+c ← lireCaractere()
+ecrireLigne("a = " + a)
+ecrireLigne("c = " + c)`,
+      java: `Scanner clavier = new Scanner(System.in);
+int a;
+char c;
+a = clavier.nextInt();
+c = clavier.next().charAt(0);
+System.out.println("a = " + a);
+System.out.println("c = " + c);` } },
+  'l2-c2': { type: 'code', title: 'Afficher une addition',
+    prompt: 'Lis deux entiers x et y, puis affiche sur une seule ligne « x + y = somme ». Exemple : en tapant 12 puis 30, on voit « 12 + 30 = 42 ».',
+    starter: `Var x : entier
+Var y : entier
+`,
+    tests: [{ script: true, stdin: ['12', '30'], out: '12 + 30 = 42' }, { script: true, stdin: ['-5', '5'], out: '-5 + 5 = 0' }],
+    hint: 'Dès qu\'un texte figure dans l\'opération, le + concatène. Mets (x + y) entre parenthèses pour additionner avant de concaténer.',
+    solution: {
+      ex: `Var x : entier
+Var y : entier
+x ← lireEntier()
+y ← lireEntier()
+ecrireLigne(x + " + " + y + " = " + (x + y))`,
+      java: `Scanner clavier = new Scanner(System.in);
+int x = clavier.nextInt();
+int y = clavier.nextInt();
+System.out.println(x + " + " + y + " = " + (x + y));` } },
+
+  /* ---- Leçon 3 ---- */
+  'l3-q1': { type: 'qcm', code: `Var n : entier
+Var x : réel
+x ← 13.57
+n ← x`, q: 'Que se passe-t-il à la dernière ligne ?',
+    choices: ['n vaut 13', 'Erreur : on perdrait la partie décimale', 'n vaut 14', 'n vaut 13.57'], answer: 1,
+    why: "Ranger un réel dans un entier fait perdre la partie décimale : l'affectation directe est impossible. Il faut une conversion explicite : n ← (entier)x." },
+  'l3-q2': { type: 'qcm', codeChoices: true, q: 'Avec n entier et x réel, quelle affectation est valide sans conversion explicite ?',
+    choices: ['n ← x', 'x ← n', 'n ← 2.5', "x ← 'a'"], answer: 1,
+    why: "Un entier se range dans un réel sans aucune perte : la conversion est automatique. Le contraire est impossible, et un caractère n'est pas un nombre." },
+  'l3-v1': { type: 'val', expr: '(entier)13.57', kind: 'entier', why: "La conversion (entier) garde la partie entière : 13." },
+  'l3-v2': { type: 'val', expr: '(entier)(-2.9)', kind: 'entier', why: "La conversion supprime la partie décimale (elle tronque vers zéro) : -2, et pas -3." },
+  'l3-c1': { type: 'code', title: 'Garder la partie entière',
+    prompt: 'x vaut 13.57. Range sa partie entière dans n, puis affiche n.',
+    starter: `Var n : entier
+Var x : réel
+x ← 13.57
+`,
+    tests: [{ script: true, out: '13' }],
+    hint: 'Conversion explicite : n ← (entier)x',
+    solution: {
+      ex: `Var n : entier
+Var x : réel
+x ← 13.57
+n ← (entier)x
+ecrire(n)`,
+      java: `int n;
+double x;
+x = 13.57;
+n = (int) x;
+System.out.print(n);` } },
+
+  /* ---- Leçon 4 ---- */
+  'l4-v1': { type: 'val', expr: '7 / 2', kind: 'entier', why: "Entre deux entiers, / est la division entière : 3 (le reste est perdu)." },
+  'l4-v2': { type: 'val', expr: '7 % 2', kind: 'entier', why: "% donne le reste de la division entière : 7 = 3 × 2 + 1." },
+  'l4-v3': { type: 'val', expr: '7.0 / 2.0', kind: 'réel', why: "Avec des réels, la division garde les décimales : 3.5." },
+  'l4-v4': { type: 'val', expr: '10 % 3', kind: 'entier', why: "10 = 3 × 3 + 1, donc le reste vaut 1." },
+  'l4-v5': { type: 'val', expr: '2 + 3 * 4', kind: 'entier', why: "La multiplication passe avant l'addition : 2 + 12 = 14." },
+  'l4-v6': { type: 'val', expr: '9 / 2 * 2', kind: 'entier', why: "On calcule de gauche à droite : 9 / 2 = 4 (division entière), puis 4 × 2 = 8." },
+  'l4-v7': { type: 'val', expr: '9 / 2.0', kind: 'réel', why: "Dès qu'un opérande est réel, le calcul est réel : 4.5." },
+  'l4-q1': { type: 'qcm', codeChoices: true, q: 'Que signifie p++ ?', choices: ['p ← p + 2', 'p ← p + 1', 'p ← p * p', 'p ← 1'], answer: 1,
+    why: "p++ ajoute 1 à p, comme p ← p + 1. De même, n-- signifie n ← n - 1." },
+  'l4-c1': { type: 'code', title: 'Dernier chiffre',
+    prompt: "Lis un entier n et affiche son dernier chiffre (le reste de la division par 10).",
+    starter: `Var n : entier
+`,
+    tests: [{ script: true, stdin: ['345'], out: '5' }, { script: true, stdin: ['10'], out: '0' }, { script: true, stdin: ['7'], out: '7' }],
+    hint: 'Le dernier chiffre de n est n % 10.',
+    solution: {
+      ex: `Var n : entier
+n ← lireEntier()
+ecrireLigne(n % 10)`,
+      java: `Scanner clavier = new Scanner(System.in);
+int n = clavier.nextInt();
+System.out.println(n % 10);` } },
+  'l4-c2': { type: 'code', title: 'Minutes et secondes',
+    prompt: "Lis un nombre de secondes. Affiche sur deux lignes le nombre de minutes entières (« m = … ») puis les secondes restantes (« s = … »). Exemple : 135 donne m = 2 et s = 15.",
+    starter: `Var total : entier
+`,
+    tests: [{ script: true, stdin: ['135'], out: 'm = 2\ns = 15' }, { script: true, stdin: ['59'], out: 'm = 0\ns = 59' }, { script: true, stdin: ['120'], out: 'm = 2\ns = 0' }],
+    hint: 'Minutes : total / 60 (division entière). Secondes restantes : total % 60.',
+    solution: {
+      ex: `Var total : entier
+total ← lireEntier()
+ecrireLigne("m = " + (total / 60))
+ecrireLigne("s = " + (total % 60))`,
+      java: `Scanner clavier = new Scanner(System.in);
+int total = clavier.nextInt();
+System.out.println("m = " + (total / 60));
+System.out.println("s = " + (total % 60));` } },
+
+  /* ---- Leçon 5 ---- */
+  'l5-v1': { type: 'val', expr: '3 >= 4', kind: 'booléen', why: "3 n'est ni plus grand ni égal à 4 : faux." },
+  'l5-v2': { type: 'val', expr: '2 != 2', kind: 'booléen', why: "!= signifie « différent de ». 2 est égal à 2, donc c'est faux." },
+  'l5-v3': { type: 'val', expr: 'vrai et non faux', kind: 'booléen', why: "non faux vaut vrai, et vrai et vrai vaut vrai." },
+  'l5-v4': { type: 'val', expr: '(3 > 2) ou (1 > 5)', kind: 'booléen', why: "Un seul vrai suffit pour un ou : (3 > 2) est vrai." },
+  'l5-v5': { type: 'val', expr: 'non (2 == 2)', kind: 'booléen', why: "2 == 2 est vrai, et non vrai vaut faux." },
+  'l5-v6': { type: 'val', expr: "'a' == 'b'", kind: 'booléen', why: "Deux caractères différents ne sont pas égaux." },
+  'l5-v7': { type: 'val', expr: '5 % 2 == 1', kind: 'booléen', why: "% passe avant == : 5 % 2 vaut 1, et 1 == 1 est vrai." },
+  'l5-v8': { type: 'val', expr: '(4 > 1) et (2 > 3)', kind: 'booléen', why: "Pour un et, les deux côtés doivent être vrais. 2 > 3 est faux." },
+  'l5-q1': { type: 'qcm', codeChoices: true, q: 'Quelle expression est vraie quand x est compris entre 1 et 10, bornes incluses ?',
+    choices: ['x >= 1 et x <= 10', 'x >= 1 ou x <= 10', 'x > 1 et x < 10', '1 <= x <= 10'], answer: 0,
+    why: "Il faut deux conditions vraies en même temps : et. Avec ou, tout nombre convient. Les bornes incluses demandent >= et <=. Enfin 1 <= x <= 10 n'existe pas en ExAlgo." },
+  'l5-q2': { type: 'qcm', codeChoices: true, q: "Quel opérateur teste l'égalité de deux valeurs ?", choices: ['=', '==', '←', '!='], answer: 1,
+    why: "== compare. ← range une valeur dans une variable. != teste la différence." },
+
+  /* ---- Leçon 6 ---- */
+  'l6-q1': { type: 'qcm', code: `Var n : entier
+n ← 7
+Si n > 10 Alors
+    ecrire("grand")
+Sinon Si n > 5 Alors
+    ecrire("moyen")
+Sinon
+    ecrire("petit")`, q: "Qu'affiche ce programme ?", choices: ['grand', 'moyen', 'petit', 'rien'], answer: 1,
+    why: "7 > 10 est faux, on passe au Sinon Si : 7 > 5 est vrai, donc « moyen ». Le dernier Sinon est ignoré." },
+  'l6-q2': { type: 'qcm', q: "En ExAlgo, qu'est-ce qui délimite les instructions d'un Si ?", choices: ["L'indentation (le décalage vers la droite)", 'Des accolades { }', 'Le mot FinSi'], answer: 0,
+    why: "Les instructions décalées sous « Alors » ou « Sinon » forment le bloc. Dès qu'une ligne revient à la marge du Si, le bloc est terminé." },
+  'l6-c1': { type: 'code', title: 'Positif, négatif ou nul',
+    prompt: 'Lis un entier et affiche « positif », « négatif » ou « nul » selon son signe.',
+    starter: `Var n : entier
+n ← lireEntier()
+`,
+    tests: [{ script: true, stdin: ['5'], out: 'positif' }, { script: true, stdin: ['-2'], out: 'négatif' }, { script: true, stdin: ['0'], out: 'nul' }],
+    hint: 'Un Si, un Sinon Si, un Sinon. Le cas 0 doit tomber dans le dernier Sinon.',
+    solution: {
+      ex: `Var n : entier
+n ← lireEntier()
+Si n > 0 Alors
+    ecrire("positif")
+Sinon Si n < 0 Alors
+    ecrire("négatif")
+Sinon
+    ecrire("nul")`,
+      java: `Scanner clavier = new Scanner(System.in);
+int n = clavier.nextInt();
+if (n > 0) {
+    System.out.print("positif");
+} else if (n < 0) {
+    System.out.print("négatif");
+} else {
+    System.out.print("nul");
+}` } },
+  'l6-c2': { type: 'code', title: 'Comparer deux entiers',
+    prompt: "Lis deux entiers x et y. Affiche « L'entier x est strictement supérieur à l'entier y », « … strictement inférieur à … » ou « L'entier x est égal à l'entier y » (en remplaçant x et y par leurs valeurs).",
+    starter: `Var x, y : entiers
+x ← lireEntier()
+y ← lireEntier()
+`,
+    tests: [
+      { script: true, stdin: ['5', '3'], out: "L'entier 5 est strictement supérieur à l'entier 3" },
+      { script: true, stdin: ['2', '9'], out: "L'entier 2 est strictement inférieur à l'entier 9" },
+      { script: true, stdin: ['4', '4'], out: "L'entier 4 est égal à l'entier 4" }],
+    hint: 'Trois cas : x > y, x < y, sinon égalité. Une seule phrase est affichée.',
+    solution: {
+      ex: `Var x, y : entiers
+x ← lireEntier()
+y ← lireEntier()
+Si x > y Alors
+    ecrire("L'entier " + x + " est strictement supérieur à l'entier " + y)
+Sinon Si x < y Alors
+    ecrire("L'entier " + x + " est strictement inférieur à l'entier " + y)
+Sinon
+    ecrire("L'entier " + x + " est égal à l'entier " + y)`,
+      java: `Scanner clavier = new Scanner(System.in);
+int x = clavier.nextInt();
+int y = clavier.nextInt();
+if (x > y) {
+    System.out.print("L'entier " + x + " est strictement supérieur à l'entier " + y);
+} else if (x < y) {
+    System.out.print("L'entier " + x + " est strictement inférieur à l'entier " + y);
+} else {
+    System.out.print("L'entier " + x + " est égal à l'entier " + y);
+}` } },
+  'l6-c3': { type: 'code', title: 'Reçu ou refusé',
+    prompt: "Lis une note entière sur 20. Affiche « reçu » si elle vaut au moins 10, sinon « refusé ». Pense à la valeur limite 10.",
+    starter: `Var note : entier
+note ← lireEntier()
+`,
+    tests: [{ script: true, stdin: ['10'], out: 'reçu' }, { script: true, stdin: ['9'], out: 'refusé' }, { script: true, stdin: ['20'], out: 'reçu' }, { script: true, stdin: ['0'], out: 'refusé' }],
+    hint: '« Au moins 10 » veut dire plus grand ou égal : >=.',
+    solution: {
+      ex: `Var note : entier
+note ← lireEntier()
+Si note >= 10 Alors
+    ecrire("reçu")
+Sinon
+    ecrire("refusé")`,
+      java: `Scanner clavier = new Scanner(System.in);
+int note = clavier.nextInt();
+if (note >= 10) {
+    System.out.print("reçu");
+} else {
+    System.out.print("refusé");
+}` } },
+
+  /* ---- Leçon 7 : traces ---- */
+  'l7-q1': { type: 'qcm', q: "Faut-il noter dans la trace les lignes qui n'ont pas été exécutées (par exemple le Sinon non pris) ?",
+    choices: ['Oui, toutes les lignes du programme', 'Non, seulement les lignes exécutées'], answer: 1,
+    why: "La trace décrit l'exécution réelle : numéro de la ligne exécutée, puis contenu des variables après cette instruction." },
+  'l7-q2': { type: 'qcm', q: "Que note-t-on pour la ligne d'un « Si … Alors » ?",
+    choices: ["L'état des variables, inchangé (le Si n'en modifie aucune)", "Rien, on saute la ligne", "Les variables mises à jour par le bloc"], answer: 0,
+    why: "Le Si est bien exécuté : il évalue la condition. Il ne modifie aucune variable, donc les valeurs sont identiques à la ligne précédente." },
+  'l7-t1': { type: 'trace', title: 'Trace n°1',
+    prompt: "Écris la trace de ce programme : une ligne par instruction exécutée, avec la valeur de a et de b après la ligne. Écris / pour une variable sans valeur.",
+    program: `Var a, b : entier
+a ← 4
+b ← 9
+Si a > b Alors
+    a ← b
+Sinon
+    b ← b - a
+a ← a + b` },
+  'l7-t2': { type: 'trace', title: 'Trace n°2',
+    prompt: "Même exercice, avec ++ et --. Les booléens s'écrivent Vrai ou Faux. Attention à la dernière ligne.",
+    program: `Var n, p : entier
+Var petit : booléen
+n ← 3
+p ← 0
+p++
+p++
+n--
+petit ← n < p
+Si petit Alors
+    n ← n + 10` },
+
+  /* ---- Leçon 8 : fonctions ---- */
+  'l8-q1': { type: 'qcm', code: 'Fonction fct3(E a : entier, E b : booléen) : caractère',
+    q: 'Que dit cette signature ?', choices: ['2 paramètres (un entier et un booléen), retourne un caractère', '1 paramètre, retourne un booléen', '2 paramètres, ne retourne rien', 'Aucun paramètre, retourne un caractère'], answer: 0,
+    why: "Entre parenthèses : deux paramètres en mode E (entrée). Après les parenthèses, « : caractère » est le type de retour." },
+  'l8-q2': { type: 'qcm', codeChoices: true, code: `Fonction somme(E n1 : entier, E n2 : entier) : entier
+Début
+    ???
+Fin`, q: 'Quelle ligne est interdite à la place de ??? ?', choices: ['n1 ← n1 + n2', 'Retourner n1 + n2', 'ecrire(n1)', 'Retourner n2'], answer: 0,
+    why: "Un paramètre en entrée (E) ne se modifie pas : c'est une erreur de syntaxe. On calcule dans une variable locale, ou on retourne directement l'expression." },
+  'l8-q3': { type: 'qcm', codeChoices: true, code: 'Fonction fct2(E a : entier)', q: 'Quel appel est correct ?', choices: ['fct2(2)', "fct2('a')", 'fct2()', 'res ← fct2(2)'], answer: 0,
+    why: "Il faut un argument de type entier. Un caractère ne convient pas. Et fct2 ne retourne rien : il n'y a aucune valeur à ranger dans res." },
+  'l8-q4': { type: 'qcm', code: 'Fonction fct1() : entier', q: 'Que signifie cette signature ?', choices: ['Aucun paramètre, retourne un entier', 'Un paramètre entier, ne retourne rien', 'Aucun paramètre, ne retourne rien', 'Un paramètre entier, retourne un entier'], answer: 0,
+    why: "Parenthèses vides : pas de paramètre. « : entier » : elle retourne un entier." },
+  'l8-q5': { type: 'qcm', q: "Où déclare-t-on les variables locales d'une fonction ?", choices: ['Après la signature et avant Début, avec le mot-clé Var', 'Après Fin', 'Dans la signature, avec E'], answer: 0,
+    why: "Le corps d'une fonction a deux parties : les déclarations Var, puis le code entre Début et Fin." },
+  'l8-c1': { type: 'code', title: 'somme',
+    prompt: "Écris la fonction somme(E n1 : entier, E n2 : entier) : entier qui retourne n1 + n2.",
+    starter: `Fonction somme(E n1 : entier, E n2 : entier) : entier
+Début
+    // à compléter
+Fin`,
+    tests: [{ call: 'somme', args: ['2', '3'], expect: '5' }, { call: 'somme', args: ['-4', '4'], expect: '0' }, { call: 'somme', args: ['0', '0'], expect: '0' }],
+    hint: 'Retourner n1 + n2',
+    solution: {
+      ex: `Fonction somme(E n1 : entier, E n2 : entier) : entier
+Début
+    Retourner n1 + n2
+Fin`,
+      java: `static int somme(int n1, int n2) {
+    return n1 + n2;
+}` } },
+  'l8-c2': { type: 'code', title: 'estPair',
+    prompt: "Écris estPair(E n : entier) : booléen. Elle retourne vrai si n est pair, faux sinon.",
+    starter: `Fonction estPair(E n : entier) : booléen
+Début
+    // à compléter
+Fin`,
+    tests: [{ call: 'estPair', args: ['4'], expect: 'vrai' }, { call: 'estPair', args: ['7'], expect: 'faux' }, { call: 'estPair', args: ['0'], expect: 'vrai' }, { call: 'estPair', args: ['-2'], expect: 'vrai' }],
+    hint: 'n est pair quand le reste de la division par 2 vaut 0. Une comparaison est déjà un booléen : Retourner n % 2 == 0',
+    solution: {
+      ex: `Fonction estPair(E n : entier) : booléen
+Début
+    Retourner n % 2 == 0
+Fin`,
+      java: `static boolean estPair(int n) {
+    return n % 2 == 0;
+}` } },
+  'l8-c3': { type: 'code', title: 'maximum',
+    prompt: "Écris maximum(E a : entier, E b : entier) : entier qui retourne le plus grand des deux. Convention du cours : une seule instruction Retourner, à la fin.",
+    starter: `Fonction maximum(E a : entier, E b : entier) : entier
+Var res : entier
+Début
+    // à compléter
+Fin`,
+    tests: [{ call: 'maximum', args: ['3', '8'], expect: '8' }, { call: 'maximum', args: ['8', '3'], expect: '8' }, { call: 'maximum', args: ['5', '5'], expect: '5' }, { call: 'maximum', args: ['-1', '-7'], expect: '-1' }],
+    hint: 'Range a dans res, puis si b > a, range b dans res. Retourne res.',
+    solution: {
+      ex: `Fonction maximum(E a : entier, E b : entier) : entier
+Var res : entier
+Début
+    res ← a
+    Si b > a Alors
+        res ← b
+    Retourner res
+Fin`,
+      java: `static int maximum(int a, int b) {
+    int res = a;
+    if (b > a) {
+        res = b;
+    }
+    return res;
+}` } },
+  'l8-c4': { type: 'code', title: 'afficheDouble',
+    prompt: "Écris afficheDouble(E n : entier), une fonction sans retour : elle affiche le double de n, suivi d'un retour à la ligne.",
+    starter: `Fonction afficheDouble(E n : entier)
+Début
+    // à compléter
+Fin`,
+    tests: [{ call: 'afficheDouble', args: ['21'], out: '42' }, { call: 'afficheDouble', args: ['-3'], out: '-6' }, { call: 'afficheDouble', args: ['0'], out: '0' }],
+    hint: 'Pas de Retourner ici : la fonction affiche directement avec ecrireLigne(n * 2).',
+    solution: {
+      ex: `Fonction afficheDouble(E n : entier)
+Début
+    ecrireLigne(n * 2)
+Fin`,
+      java: `static void afficheDouble(int n) {
+    System.out.println(n * 2);
+}` } },
+  'l8-c5': { type: 'code', title: 'estDansIntervalle',
+    prompt: "Écris estDansIntervalle(E x : entier, E min : entier, E max : entier) : booléen : vrai si x est compris entre min et max, bornes incluses. C'est le test qu'utilise saisirNombreValide dans le projet.",
+    starter: `Fonction estDansIntervalle(E x : entier, E min : entier, E max : entier) : booléen
+Début
+    // à compléter
+Fin`,
+    tests: [{ call: 'estDansIntervalle', args: ['5', '1', '10'], expect: 'vrai' }, { call: 'estDansIntervalle', args: ['1', '1', '10'], expect: 'vrai' }, { call: 'estDansIntervalle', args: ['10', '1', '10'], expect: 'vrai' }, { call: 'estDansIntervalle', args: ['0', '1', '10'], expect: 'faux' }, { call: 'estDansIntervalle', args: ['11', '1', '10'], expect: 'faux' }],
+    hint: 'Retourner x >= min et x <= max',
+    solution: {
+      ex: `Fonction estDansIntervalle(E x : entier, E min : entier, E max : entier) : booléen
+Début
+    Retourner x >= min et x <= max
+Fin`,
+      java: `static boolean estDansIntervalle(int x, int min, int max) {
+    return x >= min && x <= max;
+}` } },
+  'l8-c6': { type: 'code', title: 'Composer des fonctions',
+    prompt: "Écris surfaceRectangle(E l : entier, E h : entier) : entier, puis surfaceCarre(E c : entier) : entier qui appelle surfaceRectangle.",
+    starter: `Fonction surfaceRectangle(E l : entier, E h : entier) : entier
+Début
+    // à compléter
+Fin
+
+Fonction surfaceCarre(E c : entier) : entier
+Début
+    // à compléter
+Fin`,
+    tests: [{ call: 'surfaceRectangle', args: ['3', '5'], expect: '15' }, { call: 'surfaceCarre', args: ['4'], expect: '16' }, { call: 'surfaceCarre', args: ['0'], expect: '0' }],
+    hint: 'surfaceCarre retourne surfaceRectangle(c, c).',
+    solution: {
+      ex: `Fonction surfaceRectangle(E l : entier, E h : entier) : entier
+Début
+    Retourner l * h
+Fin
+
+Fonction surfaceCarre(E c : entier) : entier
+Début
+    Retourner surfaceRectangle(c, c)
+Fin`,
+      java: `static int surfaceRectangle(int l, int h) {
+    return l * h;
+}
+
+static int surfaceCarre(int c) {
+    return surfaceRectangle(c, c);
+}` } },
+
+  /* ---- Projet : étape 3 (tests) ---- */
+  'p3-t1': { type: 'testtable', fn: 'surfaceCorrecte', param: 'niveau', inputs: ['1', '2', '3', '4', '0', '5', '-1'] },
+
+  /* ---- Projet : étape 4 (algorithmes) ---- */
+  'p4-formeCorrecte': { type: 'code', env: true, title: 'formeCorrecte', projectFn: 'formeCorrecte',
+    prompt: "formeCorrecte(E niveau : entier) : caractère retourne 'c' (carré) pour les niveaux 1 et 2, 't' (triangle) pour 3 et 4. L'énoncé donne déjà cet algorithme : relis-le, écris-le de mémoire, puis vérifie.",
+    starter: `Fonction formeCorrecte(E niveau : entier) : caractère
+Var forme : caractère
+Début
+    // à compléter
+Fin`,
+    tests: [1, 2].map(n => ({ call: 'formeCorrecte', args: [String(n)], expect: "'c'" })).concat([3, 4].map(n => ({ call: 'formeCorrecte', args: [String(n)], expect: "'t'" })), [{ call: 'formeCorrecte', args: ['5'], expect: "' '" }]),
+    hint: "Initialise forme à ' ', puis un Si … Sinon Si, et un seul Retourner à la fin." },
+  'p4-surfaceCorrecte': { type: 'code', env: true, title: 'surfaceCorrecte', projectFn: 'surfaceCorrecte',
+    prompt: "surfaceCorrecte(E niveau : entier) : entier retourne la surface de la forme du niveau : 9, 25, 2 et 14. Pour un niveau incorrect, elle retourne -1.",
+    starter: `Fonction surfaceCorrecte(E niveau : entier) : entier
+Var surface : entier
+Début
+    // à compléter
+Fin`,
+    tests: [['1', '9'], ['2', '25'], ['3', '2'], ['4', '14'], ['0', '-1'], ['5', '-1'], ['-3', '-1']].map(([a, e]) => ({ call: 'surfaceCorrecte', args: [a], expect: e })),
+    hint: "Commence par surface ← -1 : ce sera la valeur renvoyée si aucun niveau ne correspond." },
+  'p4-saisirNombreValide': { type: 'code', env: true, title: 'saisirNombreValide', projectFn: 'saisirNombreValide',
+    prompt: "saisirNombreValide(E min : entier, E max : entier) : entier lit un entier au clavier (sans afficher de message). Elle le retourne s'il est entre min et max inclus, sinon elle retourne -1.",
+    starter: `Fonction saisirNombreValide(E min : entier, E max : entier) : entier
+Var n : entier
+Var res : entier
+Début
+    // à compléter
+Fin`,
+    tests: [['0', '5', '3', '3'], ['0', '5', '0', '0'], ['0', '5', '5', '5'], ['0', '5', '6', '-1'], ['0', '5', '-1', '-1'], ['-10', '-5', '-7', '-7'], ['-10', '-5', '-4', '-1'], ['1', '1', '1', '1'], ['1', '1', '2', '-1']]
+      .map(([a, b, s, e]) => ({ call: 'saisirNombreValide', args: [a, b], stdin: [s], expect: e })),
+    hint: "Lis n avec lireEntier(). Une seule condition suffit : n >= min et n <= max." },
+  'p4-messageAccueil': { type: 'code', env: true, title: 'messageAccueil', projectFn: 'messageAccueil',
+    prompt: "messageAccueil() affiche le message d'accueil. Dans l'exemple de l'énoncé, la première ligne est « Bienvenue dans le programme de révision des formes géométriques ».",
+    starter: `Fonction messageAccueil()
+Début
+    // à compléter
+Fin`,
+    tests: [{ call: 'messageAccueil', args: [], outHas: ['Bienvenue', 'formes géométriques'] }],
+    hint: "Deux ecrireLigne : le bienvenue, puis l'invitation à saisir un niveau entre 1 et 4." },
+  'p4-messageErreur': { type: 'code', env: true, title: 'messageErreur', projectFn: 'messageErreur',
+    prompt: "messageErreur() affiche le message imposé : Votre choix n'est pas conforme aux options possibles, jeu terminé",
+    starter: `Fonction messageErreur()
+Début
+    // à compléter
+Fin`,
+    tests: [{ call: 'messageErreur', args: [], out: "Votre choix n'est pas conforme aux options possibles, jeu terminé" }],
+    hint: "Un seul ecrireLigne avec ce texte exact." },
+  'p4-messageFinDeJeu': { type: 'code', env: true, title: 'messageFinDeJeu', projectFn: 'messageFinDeJeu',
+    prompt: "messageFinDeJeu(E niveauReussi : booléen, E niveau : entier) affiche si le niveau a été validé ou non. Exemple de l'énoncé : « Bravo, vous avez validé le niveau 5 ». Écris un autre message en cas d'échec (sans le mot Bravo).",
+    starter: `Fonction messageFinDeJeu(E niveauReussi : booléen, E niveau : entier)
+Début
+    // à compléter
+Fin`,
+    tests: [{ call: 'messageFinDeJeu', args: ['vrai', '3'], outHas: ['Bravo', 'niveau 3'] }, { call: 'messageFinDeJeu', args: ['faux', '2'], outHas: ['niveau 2'], outNot: ['Bravo'] }],
+    hint: "Un Si niveauReussi Alors … Sinon … : le paramètre est déjà un booléen, pas besoin de == vrai." },
+  'p4-saisieReponseForme': { type: 'code', env: true, title: 'saisieReponseForme', projectFn: 'saisieReponseForme',
+    prompt: "saisieReponseForme() : caractère affiche un message invitant à répondre (c)arré ou (t)riangle, puis retourne le caractère saisi.",
+    starter: `Fonction saisieReponseForme() : caractère
+Var reponse : caractère
+Début
+    // à compléter
+Fin`,
+    tests: [{ call: 'saisieReponseForme', args: [], stdin: ['t'], expect: "'t'", outNonEmpty: true }, { call: 'saisieReponseForme', args: [], stdin: ['c'], expect: "'c'", outNonEmpty: true }],
+    hint: "ecrireLigne pour le message, puis reponse ← lireCaractere(), puis Retourner reponse." },
+  'p4-saisieReponseSurface': { type: 'code', env: true, title: 'saisieReponseSurface', projectFn: 'saisieReponseSurface',
+    prompt: "saisieReponseSurface() : entier affiche un message invitant à saisir une surface, puis retourne l'entier saisi.",
+    starter: `Fonction saisieReponseSurface() : entier
+Var reponse : entier
+Début
+    // à compléter
+Fin`,
+    tests: [{ call: 'saisieReponseSurface', args: [], stdin: ['9'], expect: '9', outNonEmpty: true }, { call: 'saisieReponseSurface', args: [], stdin: ['14'], expect: '14', outNonEmpty: true }],
+    hint: "Même structure que saisieReponseForme, avec lireEntier()." },
+  'p4-afficherFormeNiveau': { type: 'code', env: true, title: 'afficherFormeNiveau', projectFn: 'afficherFormeNiveau',
+    prompt: "afficherFormeNiveau(E niveau : entier) dessine la forme du niveau avec afficheLigne('#', min, taille). Niveaux 1 et 2 : carrés 3×3 et 5×5. Niveau 3 : « # » puis « ## ». Niveau 4 : triangle de hauteur 4 centré, avec 1, 3, 5 puis 7 caractères.",
+    starter: `Fonction afficherFormeNiveau(E niveau : entier)
+Début
+    // à compléter
+Fin`,
+    tests: [
+      { call: 'afficherFormeNiveau', args: ['1'], out: '###\n###\n###' },
+      { call: 'afficherFormeNiveau', args: ['2'], out: '#####\n#####\n#####\n#####\n#####' },
+      { call: 'afficherFormeNiveau', args: ['3'], out: '#\n##' },
+      { call: 'afficherFormeNiveau', args: ['4'], out: '   #\n  ###\n #####\n#######' },
+      { call: 'afficherFormeNiveau', args: ['9'], out: '' }],
+    hint: "afficheLigne('#', 4, 1) place un seul # à partir de la colonne 4. Pour le niveau 4 : colonnes de départ 4, 3, 2, 1 et tailles 1, 3, 5, 7. Pas de boucle : une ligne par appel." },
+  'p4-jouerUnNiveau': { type: 'code', env: true, title: 'jouerUnNiveau', projectFn: 'jouerUnNiveau',
+    prompt: "jouerUnNiveau(E niveau : entier) : booléen affiche la forme, pose la question de la forme, puis (seulement si elle est bonne) celle de la surface. Elle retourne vrai si tout est correct, faux sinon. Les autres fonctions du jeu sont fournies pour tes tests.",
+    starter: `Fonction jouerUnNiveau(E niveau : entier) : booléen
+Var reussi : booléen
+Var reponseForme : caractère
+Var reponseSurface : entier
+Début
+    // à compléter
+Fin`,
+    tests: [
+      { call: 'jouerUnNiveau', args: ['1'], stdin: ['c', '9'], expect: 'vrai' },
+      { call: 'jouerUnNiveau', args: ['1'], stdin: ['t'], expect: 'faux' },
+      { call: 'jouerUnNiveau', args: ['1'], stdin: ['c', '8'], expect: 'faux' },
+      { call: 'jouerUnNiveau', args: ['2'], stdin: ['c', '25'], expect: 'vrai' },
+      { call: 'jouerUnNiveau', args: ['3'], stdin: ['t', '2'], expect: 'vrai' },
+      { call: 'jouerUnNiveau', args: ['3'], stdin: ['c'], expect: 'faux' },
+      { call: 'jouerUnNiveau', args: ['4'], stdin: ['t', '14'], expect: 'vrai' },
+      { call: 'jouerUnNiveau', args: ['4'], stdin: ['t', '16'], expect: 'faux' }],
+    hint: "Si la forme est fausse, on ne pose pas la seconde question : la saisie de la surface se trouve à l'intérieur du Si." },
+  'p4-jeuForme': { type: 'code', env: true, title: 'jeuForme', projectFn: 'jeuForme',
+    prompt: "jeuForme() est le programme principal : accueil, saisie du niveau (1 à 4, sinon message d'erreur et fin), jeu du niveau, message de fin. L'énoncé conseille de commencer par elle : les autres fonctions sont fournies pour la tester.",
+    starter: `Fonction jeuForme()
+Var niveau : entier
+Var reussi : booléen
+Début
+    // à compléter
+Fin`,
+    tests: [
+      { call: 'jeuForme', args: [], stdin: ['1', 'c', '9'], outHas: ['Bravo', 'niveau 1'] },
+      { call: 'jeuForme', args: [], stdin: ['4', 't', '14'], outHas: ['Bravo', 'niveau 4'] },
+      { call: 'jeuForme', args: [], stdin: ['3', 'c'], outHas: ['niveau 3'], outNot: ['Bravo'] },
+      { call: 'jeuForme', args: [], stdin: ['2', 'c', '24'], outHas: ['niveau 2'], outNot: ['Bravo'] },
+      { call: 'jeuForme', args: [], stdin: ['7'], outHas: ['pas conforme'], outNot: ['Bravo'] },
+      { call: 'jeuForme', args: [], stdin: ['0'], outHas: ['pas conforme'] }],
+    hint: "niveau ← saisirNombreValide(1, 4). Si niveau vaut -1, messageErreur(). Sinon jouerUnNiveau(niveau) puis messageFinDeJeu(reussi, niveau)." }
+};
+
+const P4_ORDER = ['jeuForme', 'jouerUnNiveau', 'saisirNombreValide', 'formeCorrecte', 'surfaceCorrecte', 'afficherFormeNiveau',
+  'saisieReponseForme', 'saisieReponseSurface', 'messageAccueil', 'messageErreur', 'messageFinDeJeu'];
+
+/* Les solutions des exercices du projet viennent des fonctions de référence */
+P4_ORDER.forEach(n => {
+  const e = EXERCISES['p4-' + n];
+  e.solution = { ex: REF[n], java: REF_JAVA[n] };
+});
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { REF, REF_ORDER, REF_JAVA, EXERCISES, HOUSE_EX, HOUSE_JAVA, houseLines, fullJavaProgram, fullExalgoProgram, P4_ORDER };
+}
+
+/* runner.js */
+/* Exécution des exercices : tests de code, questions « que vaut ? », traces */
+function createRunner(Exalgo, REF, REF_ORDER) {
+  const normOut = s => String(s).split('\n').map(l => l.replace(/\s+$/, '')).join('\n').replace(/\n+$/, '');
+
+  async function buildProgram(def, userCode) {
+    const user = Exalgo.compile(userCode);
+    if (!def.env) return user;
+    const missing = REF_ORDER.filter(n => !user.fns.has(n)).map(n => REF[n]).join('\n\n');
+    return missing ? Exalgo.compile(userCode + '\n\n' + missing) : user;
+  }
+
+  function labelOf(t) {
+    const base = t.script ? 'Programme complet' : `${t.call}(${(t.args || []).join(', ')})`;
+    return t.stdin && t.stdin.length ? `${base}, saisie : ${t.stdin.join(' puis ')}` : base;
+  }
+
+  async function runOne(prog, t) {
+    const io = Exalgo.queueIO(t.stdin || []);
+    const label = labelOf(t);
+    let value, error;
+    try {
+      if (t.script) await Exalgo.run(prog, io);
+      else value = await Exalgo.call(prog, t.call, t.args || [], io);
+    } catch (e) {
+      error = e;
+    }
+    if (error) {
+      const where = error.line ? `ligne ${error.line} : ` : '';
+      return { ok: false, label, detail: where + error.message };
+    }
+    const problems = [];
+    if ('expect' in t) {
+      const exp = await Exalgo.evalExpression(t.expect);
+      if (!Exalgo.valuesEqual(value, exp)) problems.push(`résultat attendu : ${Exalgo.describe(exp)}, obtenu : ${Exalgo.describe(value)}`);
+    }
+    if ('out' in t && normOut(io.out) !== normOut(t.out)) {
+      problems.push(`affichage attendu :\n${t.out || '(rien)'}\naffichage obtenu :\n${io.out || '(rien)'}`);
+    }
+    (t.outHas || []).forEach(s => {
+      if (!io.out.toLowerCase().includes(s.toLowerCase())) problems.push(`l'affichage devrait contenir « ${s} »`);
+    });
+    (t.outNot || []).forEach(s => {
+      if (io.out.toLowerCase().includes(s.toLowerCase())) problems.push(`l'affichage ne devrait pas contenir « ${s} »`);
+    });
+    if (t.outNonEmpty && !io.out.trim()) problems.push("rien n'est affiché : la fonction doit afficher un message");
+    return { ok: problems.length === 0, label, detail: problems.join(' ; ') };
+  }
+
+  async function runCodeExercise(def, userCode) {
+    let prog;
+    try {
+      prog = await buildProgram(def, userCode);
+    } catch (e) {
+      return { fatal: e };
+    }
+    const results = [];
+    for (const t of def.tests) results.push(await runOne(prog, t));
+    return { results };
+  }
+
+  /* --- « Que vaut ? » --- */
+  async function checkValue(def, answer) {
+    const exp = await Exalgo.evalExpression(def.expr);
+    const a = String(answer).trim().toLowerCase();
+    const shown = Exalgo.describe(exp);
+    if (def.kind === 'booléen') {
+      return { ok: (a === 'vrai') === exp.v && (a === 'vrai' || a === 'faux'), expected: shown };
+    }
+    if (def.kind === 'caractère') {
+      const ch = a.replace(/^'(.*)'$/, '$1');
+      return { ok: ch === String(exp.v).toLowerCase(), expected: shown };
+    }
+    const n = parseFloat(a.replace(',', '.'));
+    if (!/^[+-]?\d+([.,]\d+)?$/.test(a)) return { ok: false, expected: shown, format: true };
+    if (def.kind === 'entier' && /[.,]/.test(a)) return { ok: false, expected: shown, format: 'entier' };
+    return { ok: Math.abs(n - exp.v) < 1e-9, expected: shown };
+  }
+
+  /* --- Traces --- */
+  const normCell = s => {
+    let x = String(s).trim().toLowerCase();
+    if (x === '' ) return '';
+    x = x.replace(/^'(.*)'$/, '$1');
+    if (/^[+-]?\d+([.,]\d+)?$/.test(x)) return String(parseFloat(x.replace(',', '.')));
+    return x;
+  };
+  async function expectedTrace(program) {
+    return Exalgo.traceProgram(program, []);
+  }
+  function checkTrace(expected, rows) {
+    const out = [];
+    const n = Math.max(expected.rows.length, rows.length);
+    let allOk = rows.length === expected.rows.length;
+    for (let i = 0; i < n; i++) {
+      const e = expected.rows[i], u = rows[i];
+      if (!e) { out.push({ extra: true }); allOk = false; continue; }
+      if (!u) { out.push({ missing: true }); allOk = false; continue; }
+      const lineOk = String(u.line).trim() === String(e.line);
+      const cells = e.vals.map((v, j) => {
+        const ue = normCell(u.vals[j] === undefined ? '' : u.vals[j]);
+        const ee = normCell(v);
+        return ue !== '' && ue === ee;
+      });
+      if (!lineOk || cells.some(c => !c)) allOk = false;
+      out.push({ lineOk, cells });
+    }
+    return { rows: out, ok: allOk };
+  }
+
+  return { runCodeExercise, checkValue, expectedTrace, checkTrace, normOut };
+}
+if (typeof module !== 'undefined' && module.exports) module.exports = createRunner;
+
+/* ui.js */
+/* Composants d'interface : coloration, blocs de code, terminal, éditeur, exercices, widgets */
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => [...(r || document).querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const Store = {
+  key: 'exalgo-cycle1-v1',
+  data: { done: {}, lessons: {}, lang: 'ex', code: {}, atelier: '' },
+  load() {
+    try { const s = localStorage.getItem(this.key); if (s) Object.assign(this.data, JSON.parse(s)); } catch (e) { /* stockage indisponible */ }
+  },
+  save() {
+    try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) { /* stockage indisponible */ }
+  }
+};
+
+let Runner = null; // créé au démarrage
+
+/* ===== Coloration syntaxique ===== */
+const EX_KW = new Set(['var', 'fonction', 'debut', 'fin', 'si', 'alors', 'sinon', 'retourner', 'et', 'ou', 'non', 'vrai', 'faux']);
+const EX_TYPES = new Set(['entier', 'entiers', 'reel', 'reels', 'caractere', 'caracteres', 'booleen', 'booleens']);
+const EX_BI = new Set(['ecrire', 'ecrireligne', 'lireentier', 'lirereel', 'lirecaractere', 'affichecar', 'afficheligne']);
+function highlight(code, kw, types, builtins, opRe) {
+  const re = new RegExp('(\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/)|("(?:[^"\\\\\\n]|\\\\.)*")|(\'(?:\\\\.|[^\'\\\\\\n])\')|(\\b\\d+(?:\\.\\d+)?\\b)|([A-Za-zÀ-ÿ_][A-Za-zÀ-ÿ0-9_]*)|(' + opRe + ')', 'g');
+  let out = '', last = 0, m;
+  while ((m = re.exec(code))) {
+    out += esc(code.slice(last, m.index));
+    const t = m[0];
+    let cls = '';
+    if (m[1]) cls = 'c-com';
+    else if (m[2] || m[3]) cls = 'c-str';
+    else if (m[4]) cls = 'c-num';
+    else if (m[5]) {
+      const k = Exalgo.strip(t);
+      const call = code[m.index + t.length] === '(';
+      if (kw.has(k) || ((t === 'E' || t === 'ES') && kw === EX_KW)) cls = 'c-kw';
+      else if (types.has(k)) cls = 'c-type';
+      else if (builtins.has(k)) cls = 'c-bi';
+      else if (call) cls = 'c-fn';
+    } else cls = 'c-op';
+    out += cls ? `<span class="${cls}">${esc(t)}</span>` : esc(t);
+    last = m.index + t.length;
+  }
+  return out + esc(code.slice(last));
+}
+const hlEx = code => highlight(code, EX_KW, EX_TYPES, EX_BI, '←|<-|!=|==|<=|>=|\\+\\+|--');
+const JV_KW = new Set(['public', 'class', 'static', 'void', 'if', 'else', 'return', 'new', 'true', 'false', 'for', 'import', 'final']);
+const JV_TYPES = new Set(['int', 'double', 'char', 'boolean', 'string', 'scanner']);
+const hlJava = code => highlight(code, JV_KW, JV_TYPES, new Set(), '&&|\\|\\||==|!=|<=|>=|\\+\\+|--');
+const numberLines = html => html.split('\n').map(l => `<span class="ln">${l}</span>`).join('');
+
+/* ===== Blocs de code ===== */
+let cbSeq = 0;
+const CODEREG = {};
+function cb(o) {
+  const id = 'cb' + (++cbSeq);
+  CODEREG[id] = o;
+  const hasJava = !!o.java;
+  const exHtml = o.lines ? numberLines(hlEx(o.ex)) : hlEx(o.ex);
+  return `<figure class="cb${hasJava ? ' has-java' : ''}${o.lines ? ' numbered' : ''}" data-cb="${id}">
+  <div class="cb-bar">
+    ${hasJava
+      ? `<div class="tabs" role="tablist" aria-label="Langage"><button type="button" role="tab" class="tab" aria-selected="true" data-act="cb-tab" data-lang="ex">ExAlgo</button><button type="button" role="tab" class="tab" aria-selected="false" data-act="cb-tab" data-lang="java">Java</button></div>`
+      : '<span class="cb-lang">ExAlgo</span>'}
+    <div class="cb-actions">
+      ${o.run ? '<button type="button" class="btn mini" data-act="cb-run">▶ Exécuter</button>' : ''}
+      ${o.noAtelier ? '' : '<button type="button" class="btn mini ghost" data-act="cb-open">Atelier</button>'}
+      <button type="button" class="btn mini ghost" data-act="cb-copy">Copier</button>
+    </div>
+  </div>
+  <pre class="cb-code" data-lang="ex"><code>${exHtml}</code></pre>
+  ${hasJava ? `<pre class="cb-code" data-lang="java" hidden><code>${hlJava(o.java)}</code></pre>` : ''}
+  <div class="cb-term" hidden></div>
+</figure>`;
+}
+function setBlockLang(fig, lang) {
+  if (!fig.classList.contains('has-java')) return;
+  $$('.tab', fig).forEach(t => t.setAttribute('aria-selected', String(t.dataset.lang === lang)));
+  $$('.cb-code', fig).forEach(p => { p.hidden = p.dataset.lang !== lang; });
+  const run = $('[data-act="cb-run"]', fig);
+  const open = $('[data-act="cb-open"]', fig);
+  if (run) run.hidden = lang !== 'ex';
+  if (open) open.hidden = lang !== 'ex';
+}
+function applyGlobalLang(root) {
+  $$('.cb.has-java', root).forEach(f => setBlockLang(f, Store.data.lang));
+}
+
+/* ===== Terminal ===== */
+function termHTML() {
+  return `<div class="term">
+  <div class="term-out" role="log" aria-live="polite" tabindex="0"></div>
+  <form class="term-in" autocomplete="off" hidden>
+    <span class="prompt" aria-hidden="true">›</span>
+    <input type="text" class="term-input" aria-label="Saisie au clavier" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send">
+    <button class="btn mini" type="submit">Entrée</button>
+  </form>
+  <div class="term-bar"><span class="term-status" role="status"></span><button type="button" class="btn mini ghost" data-act="term-stop" hidden>■ Arrêter</button></div>
+</div>`;
+}
+class Term {
+  constructor(root) {
+    this.root = root;
+    this.out = $('.term-out', root);
+    this.form = $('.term-in', root);
+    this.input = $('.term-input', root);
+    this.status = $('.term-status', root);
+    this.stopBtn = $('[data-act="term-stop"]', root);
+    this.pending = null;
+    this.aborted = false;
+    this.form.addEventListener('submit', e => { e.preventDefault(); this.submit(); });
+  }
+  clear() { this.out.textContent = ''; this.setStatus('', ''); }
+  setStatus(text, cls) { this.status.textContent = text; this.status.className = 'term-status ' + (cls || ''); }
+  write(text, cls) {
+    const s = document.createElement('span');
+    if (cls) s.className = cls;
+    s.textContent = text;
+    this.out.appendChild(s);
+    this.out.scrollTop = this.out.scrollHeight;
+  }
+  read(kind) {
+    return new Promise((res, rej) => {
+      this.pending = { res, rej };
+      this.form.hidden = false;
+      this.input.value = '';
+      this.input.inputMode = kind === 'entier' ? 'numeric' : kind === 'réel' ? 'decimal' : 'text';
+      this.input.placeholder = ({ entier: 'un entier', 'réel': 'un nombre réel', 'caractère': 'un caractère' })[kind] || '';
+      this.setStatus('En attente de ta saisie…', 'wait');
+      this.input.focus();
+    });
+  }
+  submit() {
+    if (!this.pending) return;
+    const v = this.input.value;
+    this.write(v + '\n', 't-echo');
+    this.form.hidden = true;
+    const p = this.pending;
+    this.pending = null;
+    this.setStatus('Exécution…', 'run');
+    p.res(v);
+  }
+  abort() {
+    this.aborted = true;
+    if (this.pending) {
+      this.form.hidden = true;
+      const p = this.pending;
+      this.pending = null;
+      p.rej(new Exalgo.ExError('Exécution arrêtée.'));
+    }
+  }
+  io() {
+    const self = this;
+    return { write: s => self.write(s), read: k => self.read(k), get aborted() { return self.aborted; } };
+  }
+  async run(code, opts) {
+    opts = opts || {};
+    this.aborted = false;
+    this.clear();
+    this.stopBtn.hidden = false;
+    this.setStatus('Exécution…', 'run');
+    let result = null;
+    try {
+      const prog = Exalgo.compile(code);
+      result = await Exalgo.run(prog, this.io(), { trace: opts.trace });
+      this.setStatus('Terminé.', 'ok');
+    } catch (e) {
+      if (e instanceof Exalgo.ExError) {
+        const where = e.line ? `Erreur ligne ${e.line} : ` : 'Erreur : ';
+        this.write((this.out.textContent && !this.out.textContent.endsWith('\n') ? '\n' : '') + where + e.message + '\n', 't-err');
+        this.setStatus(e.message === 'Exécution arrêtée.' ? 'Arrêté.' : 'Erreur.', 'err');
+        if (opts.onError) opts.onError(e);
+      } else {
+        this.write('Erreur interne : ' + e.message + '\n', 't-err');
+        this.setStatus('Erreur.', 'err');
+      }
+    }
+    this.form.hidden = true;
+    this.stopBtn.hidden = true;
+    return result;
+  }
+}
+function mountTerm(host) {
+  if (!host._term) {
+    host.innerHTML = termHTML();
+    host._term = new Term($('.term', host));
+    $('[data-act="term-stop"]', host).addEventListener('click', () => host._term.abort());
+  }
+  host.hidden = false;
+  return host._term;
+}
+
+/* ===== Éditeur ===== */
+function editorHTML(id, text, tools) {
+  return `<div class="editor" data-editor="${id}">
+  <div class="gutter" aria-hidden="true"></div>
+  <textarea class="ta" wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Éditeur ExAlgo">${esc(text)}</textarea>
+</div>
+${tools === false ? '' : `<div class="ed-tools" role="toolbar" aria-label="Insertion rapide">
+  <button type="button" class="btn mini ghost" data-act="ed-ins" data-ins="←" title="Flèche d'affectation (ou tape <-)">←</button>
+  <button type="button" class="btn mini ghost" data-act="ed-ins" data-ins="    " title="Décaler vers la droite">⇥ Indenter</button>
+  <button type="button" class="btn mini ghost" data-act="ed-ins" data-ins="≤">≤</button>
+  <button type="button" class="btn mini ghost" data-act="ed-ins" data-ins="≥">≥</button>
+  <button type="button" class="btn mini ghost" data-act="ed-ins" data-ins="≠">≠</button>
+  <span class="ed-hint">Astuce : <code>&lt;-</code> devient ←</span>
+</div>`}`;
+}
+function editorUpdate(ed) {
+  const ta = $('.ta', ed), g = $('.gutter', ed);
+  const n = ta.value.split('\n').length;
+  if (g.childElementCount !== n) {
+    let h = '';
+    for (let i = 1; i <= n; i++) h += `<span>${i}</span>`;
+    g.innerHTML = h;
+  }
+  ta.rows = Math.min(Math.max(n + 1, 7), 26);
+  g.scrollTop = ta.scrollTop;
+}
+function editorMark(ed, line) {
+  $$('.gutter span', ed).forEach(s => s.classList.remove('err'));
+  if (line) { const s = $$('.gutter span', ed)[line - 1]; if (s) s.classList.add('err'); }
+}
+function editorInsert(ta, text) {
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  ta.setRangeText(text, s, e, 'end');
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  ta.focus();
+}
+function initEditor(ed, opts) {
+  opts = opts || {};
+  if (ed._init) return;
+  ed._init = true;
+  const ta = $('.ta', ed);
+  editorUpdate(ed);
+  ta.addEventListener('scroll', () => { $('.gutter', ed).scrollTop = ta.scrollTop; });
+  ta.addEventListener('input', () => {
+    if (ta.value.includes('<-')) {
+      const pos = ta.selectionStart;
+      const n = (ta.value.slice(0, pos).match(/<-/g) || []).length;
+      ta.value = ta.value.replace(/<-/g, '←');
+      ta.selectionStart = ta.selectionEnd = pos - n;
+    }
+    editorUpdate(ed);
+    editorMark(ed, 0);
+    if (opts.onChange) opts.onChange(ta.value);
+  });
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      if (opts.onRun) opts.onRun();
+      return;
+    }
+    if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.isComposing) {
+      const s = ta.selectionStart;
+      const lineStart = ta.value.lastIndexOf('\n', s - 1) + 1;
+      const before = ta.value.slice(lineStart, s);
+      const indent = (before.match(/^ */) || [''])[0];
+      const code = before.replace(/\/\/.*$/, '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const more = /(alors|sinon|debut)$/.test(code) ? '    ' : '';
+      e.preventDefault();
+      editorInsert(ta, '\n' + indent + more);
+    }
+  });
+}
+
+/* ===== Callouts ===== */
+function note(kind, title, html) {
+  return `<aside class="note ${kind}"><div class="note-h">${title}</div><div class="note-b">${html}</div></aside>`;
+}
+
+/* ===== Exercices ===== */
+function codeOrText(s, isCode) { return isCode ? `<code>${esc(s)}</code>` : esc(s); }
+
+function exercise(id) {
+  const def = EXERCISES[id];
+  if (!def) return '';
+  const done = !!Store.data.done[id];
+  const head = kind => `<header class="ex-h"><span class="ex-kind">${kind}</span><span class="ex-badge" ${done ? '' : 'hidden'}>✓ Réussi</span></header>`;
+  switch (def.type) {
+    case 'qcm':
+      return `<section class="ex ex-qcm${done ? ' is-done' : ''}" data-ex="${id}">
+  ${head('Question')}
+  <p class="ex-q">${esc(def.q)}</p>
+  ${def.code ? `<pre class="ex-code"><code>${hlEx(def.code)}</code></pre>` : ''}
+  <div class="choices" role="group" aria-label="Réponses">
+    ${qOrder(def.choices).map(i => [def.choices[i], i]).map(([c, i]) => `<button type="button" class="choice" data-act="qcm" data-i="${i}"><span class="mark" aria-hidden="true"></span><span class="ct">${codeOrText(c, def.codeChoices)}</span></button>`).join('')}
+  </div>
+  <p class="ex-fb" role="status"></p>
+</section>`;
+    case 'val': {
+      const isBool = def.kind === 'booléen';
+      return `<section class="ex ex-val${done ? ' is-done' : ''}" data-ex="${id}">
+  ${head('Que vaut… ?')}
+  <p class="ex-q"><code class="big">${esc(def.expr)}</code></p>
+  ${isBool
+    ? `<div class="bool-btns" role="group" aria-label="Réponse"><button type="button" class="choice" data-act="val-bool" data-v="vrai"><span class="mark" aria-hidden="true"></span>vrai</button><button type="button" class="choice" data-act="val-bool" data-v="faux"><span class="mark" aria-hidden="true"></span>faux</button></div>`
+    : `<form class="val-form" data-act-submit="val"><label class="sr-only" for="${id}-in">Ta réponse</label><input id="${id}-in" class="val-input" type="text" inputmode="${def.kind === 'réel' ? 'decimal' : def.kind === 'entier' ? 'numeric' : 'text'}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${def.kind === 'réel' ? 'un réel, ex. 2.5' : def.kind === 'entier' ? 'un entier' : 'ta réponse'}"><button class="btn mini" type="submit">Vérifier</button></form>`}
+  <p class="ex-fb" role="status"></p>
+</section>`;
+    }
+    case 'code': {
+      const saved = Store.data.code[id];
+      return `<section class="ex ex-code-ex${done ? ' is-done' : ''}" data-ex="${id}">
+  ${head('Exercice de code')}
+  <h4 class="ex-title">${esc(def.title)}</h4>
+  <p class="ex-q">${esc(def.prompt)}</p>
+  ${editorHTML(id, saved !== undefined ? saved : def.starter)}
+  <div class="ex-actions">
+    <button type="button" class="btn" data-act="code-run">Vérifier mon code</button>
+    <button type="button" class="btn ghost" data-act="code-hint">Indice</button>
+    <button type="button" class="btn ghost" data-act="code-sol">Solution</button>
+    <button type="button" class="btn ghost" data-act="code-reset">Réinitialiser</button>
+  </div>
+  <div class="tests-out" role="status"></div>
+  <p class="hint" hidden>${esc(def.hint || '')}</p>
+  <div class="sol" hidden>${cb({ ex: def.solution.ex, java: def.solution.java, noAtelier: false })}</div>
+</section>`;
+    }
+    case 'trace': {
+      const vars = [];
+      def.program.split('\n').forEach(l => {
+        const m = l.match(/^\s*Var\s+([^:]+):/i);
+        if (m) m[1].split(',').forEach(v => vars.push(v.trim()));
+      });
+      return `<section class="ex ex-trace${done ? ' is-done' : ''}" data-ex="${id}" data-vars="${esc(vars.join(','))}">
+  ${head('Trace à remplir')}
+  <h4 class="ex-title">${esc(def.title)}</h4>
+  <p class="ex-q">${esc(def.prompt)}</p>
+  <div class="trace-layout">
+    <pre class="numbered prog"><code>${numberLines(hlEx(def.program))}</code></pre>
+    <div class="trace-wrap"><table class="trace in"><thead><tr><th scope="col">Ligne</th>${vars.map(v => `<th scope="col"><code>${esc(v)}</code></th>`).join('')}</tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="ex-actions">
+    <button type="button" class="btn ghost" data-act="trace-add">+ Ajouter une ligne</button>
+    <button type="button" class="btn ghost" data-act="trace-del">− Retirer</button>
+    <button type="button" class="btn" data-act="trace-check">Vérifier</button>
+    <button type="button" class="btn ghost" data-act="trace-show">Voir la trace corrigée</button>
+  </div>
+  <p class="ex-fb" role="status"></p>
+  <div class="trace-sol" hidden></div>
+</section>`;
+    }
+    case 'testtable':
+      return `<section class="ex ex-tt${done ? ' is-done' : ''}" data-ex="${id}">
+  ${head('Proposer des tests')}
+  <p class="ex-q">Pour chaque valeur de <code>${esc(def.param)}</code>, écris le résultat que doit retourner <code>${esc(def.fn)}()</code>.</p>
+  <div class="trace-wrap"><table class="trace in">
+    <thead><tr><th scope="col"><code>${esc(def.param)}</code></th><th scope="col">Résultat attendu</th></tr></thead>
+    <tbody>${def.inputs.map((v, i) => `<tr><td><code>${esc(v)}</code></td><td><input class="t-val" data-i="${i}" inputmode="numeric" autocomplete="off" aria-label="Résultat pour ${esc(def.param)} = ${esc(v)}"></td></tr>`).join('')}</tbody>
+  </table></div>
+  <div class="ex-actions"><button type="button" class="btn" data-act="tt-check">Vérifier</button></div>
+  <p class="ex-fb" role="status"></p>
+</section>`;
+  }
+  return '';
+}
+
+function markDone(id) {
+  if (!Store.data.done[id]) {
+    Store.data.done[id] = 1;
+    Store.save();
+  }
+  const sec = $(`[data-ex="${id}"]`);
+  if (sec) { sec.classList.add('is-done'); const b = $('.ex-badge', sec); if (b) b.hidden = false; }
+  if (window.updateProgress) window.updateProgress();
+}
+
+/* --- Délégation des clics --- */
+function setFb(sec, text, cls) {
+  const fb = $('.ex-fb', sec);
+  if (fb) { fb.textContent = text; fb.className = 'ex-fb ' + (cls || ''); }
+}
+
+const handlers = {
+  'cb-tab'(b) {
+    setBlockLang(b.closest('.cb'), b.dataset.lang);
+  },
+  async 'cb-run'(b) {
+    const fig = b.closest('.cb');
+    const o = CODEREG[fig.dataset.cb];
+    const term = mountTerm($('.cb-term', fig));
+    await term.run(o.ex + (o.runExtra || ''));
+  },
+  'cb-open'(b) {
+    const o = CODEREG[b.closest('.cb').dataset.cb];
+    window.pendingAtelier = o.ex + (o.runExtra || '');
+    location.hash = '#atelier';
+  },
+  async 'cb-copy'(b) {
+    const fig = b.closest('.cb');
+    const o = CODEREG[fig.dataset.cb];
+    const visible = $('.cb-code:not([hidden])', fig);
+    const text = visible && visible.dataset.lang === 'java' ? o.java : o.ex;
+    const old = b.textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      b.textContent = 'Copié ✓';
+    } catch (e) {
+      const r = document.createRange();
+      r.selectNodeContents(visible);
+      const sel = getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+      b.textContent = 'Sélectionné';
+    }
+    setTimeout(() => { b.textContent = old; }, 1600);
+  },
+  'term-stop'() { /* géré par le terminal */ },
+  'ed-ins'(b) {
+    const ed = b.closest('.ex, .atelier') ? $('.ta', b.closest('.ex, .atelier')) : null;
+    if (ed) editorInsert(ed, b.dataset.ins);
+  },
+  'qcm'(b) {
+    const sec = b.closest('.ex');
+    if (sec.classList.contains('is-done') && $('.choice.ok', sec)) return;
+    const def = EXERCISES[sec.dataset.ex];
+    const i = +b.dataset.i;
+    if (i === def.answer) {
+      b.classList.add('ok');
+      $$('.choice', sec).forEach(c => { c.disabled = true; });
+      setFb(sec, 'Exact. ' + def.why, 'ok');
+      markDone(sec.dataset.ex);
+    } else {
+      b.classList.add('ko');
+      b.disabled = true;
+      setFb(sec, "Ce n'est pas celle-là. Relis le cours et essaie une autre réponse.", 'ko');
+    }
+  },
+  async 'val-bool'(b) {
+    const sec = b.closest('.ex');
+    const id = sec.dataset.ex, def = EXERCISES[id];
+    const r = await Runner.checkValue(def, b.dataset.v);
+    if (r.ok) {
+      b.classList.add('ok');
+      $$('.choice', sec).forEach(c => { c.disabled = true; });
+      setFb(sec, 'Exact. ' + def.why, 'ok');
+      markDone(id);
+    } else {
+      b.classList.add('ko');
+      b.disabled = true;
+      setFb(sec, 'Pas tout à fait. Réfléchis encore, ou refais la table de vérité.', 'ko');
+    }
+  },
+  'code-hint'(b) {
+    const h = $('.hint', b.closest('.ex'));
+    h.hidden = !h.hidden;
+  },
+  'code-sol'(b) {
+    const s = $('.sol', b.closest('.ex'));
+    s.hidden = !s.hidden;
+    b.textContent = s.hidden ? 'Solution' : 'Masquer la solution';
+    if (!s.hidden) applyGlobalLang(s);
+  },
+  'code-reset'(b) {
+    const sec = b.closest('.ex');
+    const def = EXERCISES[sec.dataset.ex];
+    const ta = $('.ta', sec);
+    ta.value = def.starter;
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    delete Store.data.code[sec.dataset.ex];
+    Store.save();
+    $('.tests-out', sec).innerHTML = '';
+  },
+  async 'code-run'(b) {
+    const sec = b.closest('.ex');
+    const id = sec.dataset.ex, def = EXERCISES[id];
+    const ed = $('.editor', sec);
+    const out = $('.tests-out', sec);
+    out.innerHTML = '<p class="muted">Vérification…</p>';
+    const r = await Runner.runCodeExercise(def, $('.ta', ed).value);
+    if (r.fatal) {
+      editorMark(ed, r.fatal.line);
+      out.innerHTML = `<p class="res-err"><strong>${r.fatal.line ? 'Erreur ligne ' + r.fatal.line : 'Erreur'}</strong> : ${esc(r.fatal.message)}</p>`;
+      return;
+    }
+    const okCount = r.results.filter(x => x.ok).length;
+    const all = okCount === r.results.length;
+    out.innerHTML = `<p class="res-sum ${all ? 'ok' : 'ko'}">${all ? 'Bravo : ' : ''}${okCount} test${okCount > 1 ? 's' : ''} réussi${okCount > 1 ? 's' : ''} sur ${r.results.length}</p>
+<ul class="res-list">${r.results.map(x => `<li class="${x.ok ? 'ok' : 'ko'}"><span class="res-mark" aria-hidden="true">${x.ok ? '✓' : '✗'}</span><div><code>${esc(x.label)}</code>${x.detail ? `<pre class="res-detail">${esc(x.detail)}</pre>` : ''}</div></li>`).join('')}</ul>`;
+    if (all) markDone(id);
+  },
+  'trace-add'(b) { traceAddRow(b.closest('.ex')); },
+  'trace-del'(b) {
+    const tb = $('tbody', b.closest('.ex'));
+    if (tb.rows.length > 1) tb.deleteRow(-1);
+  },
+  async 'trace-check'(b) {
+    const sec = b.closest('.ex');
+    const id = sec.dataset.ex, def = EXERCISES[id];
+    const exp = await Runner.expectedTrace(def.program);
+    const rows = $$('tbody tr', sec).map(tr => ({ line: $('.t-line', tr).value, vals: $$('.t-val', tr).map(i => i.value) }));
+    const filled = rows.filter(r => r.line.trim() || r.vals.some(v => v.trim()));
+    const res = Runner.checkTrace(exp, filled);
+    $$('tbody tr', sec).forEach(tr => tr.classList.remove('row-extra'));
+    const trs = $$('tbody tr', sec).filter(tr => $('.t-line', tr).value.trim() || $$('.t-val', tr).some(i => i.value.trim()));
+    trs.forEach((tr, i) => {
+      const r = res.rows[i];
+      const inputs = [$('.t-line', tr), ...$$('.t-val', tr)];
+      inputs.forEach(x => x.classList.remove('ok', 'ko'));
+      if (!r || r.extra) { inputs.forEach(x => x.classList.add('ko')); return; }
+      inputs[0].classList.add(r.lineOk ? 'ok' : 'ko');
+      r.cells.forEach((c, j) => inputs[j + 1].classList.add(c ? 'ok' : 'ko'));
+    });
+    if (res.ok) {
+      setFb(sec, 'Trace exacte. Une ligne par instruction exécutée, avec les bonnes valeurs.', 'ok');
+      markDone(id);
+    } else if (filled.length < exp.rows.length) {
+      setFb(sec, `Il manque des lignes : une instruction exécutée n'est pas encore notée (vérifie aussi les lignes marquées en rouge).`, 'ko');
+    } else if (filled.length > exp.rows.length) {
+      setFb(sec, 'Il y a trop de lignes : seules les lignes réellement exécutées se notent.', 'ko');
+    } else {
+      setFb(sec, "Certaines cases sont fausses (en rouge). Pour une variable sans valeur, écris /.", 'ko');
+    }
+  },
+  async 'trace-show'(b) {
+    const sec = b.closest('.ex');
+    const def = EXERCISES[sec.dataset.ex];
+    const exp = await Runner.expectedTrace(def.program);
+    const box = $('.trace-sol', sec);
+    box.hidden = !box.hidden;
+    if (!box.hidden) box.innerHTML = traceTableHTML(exp, exp.rows.length);
+  },
+  async 'tt-check'(b) {
+    const sec = b.closest('.ex');
+    const id = sec.dataset.ex, def = EXERCISES[id];
+    const prog = Exalgo.compile(REF[def.fn]);
+    let all = true;
+    for (const inp of $$('.t-val', sec)) {
+      const arg = def.inputs[+inp.dataset.i];
+      const exp = await Exalgo.call(prog, def.fn, [arg], Exalgo.queueIO());
+      const good = inp.value.trim() !== '' && Math.abs(parseFloat(inp.value.replace(',', '.')) - exp.v) < 1e-9;
+      inp.classList.remove('ok', 'ko');
+      inp.classList.add(good ? 'ok' : 'ko');
+      if (!good) all = false;
+    }
+    if (all) {
+      setFb(sec, "Tous les cas sont justes, y compris les valeurs hors des niveaux 1 à 4 (0, 5 et -1) qui doivent donner -1.", 'ok');
+      markDone(id);
+    } else {
+      setFb(sec, "Certains résultats sont faux. Pense aux niveaux qui n'existent pas : que doit retourner la fonction ?", 'ko');
+    }
+  }
+};
+
+function traceAddRow(sec) {
+  const vars = (sec.dataset.vars || '').split(',').filter(Boolean);
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td><input class="t-line" inputmode="numeric" autocomplete="off" aria-label="Numéro de ligne"></td>` +
+    vars.map(v => `<td><input class="t-val" autocomplete="off" aria-label="Valeur de ${esc(v)}"></td>`).join('');
+  $('tbody', sec).appendChild(tr);
+}
+function traceTableHTML(tr, upto) {
+  return `<div class="trace-wrap"><table class="trace"><thead><tr><th scope="col">Ligne</th>${tr.vars.map(v => `<th scope="col"><code>${esc(v)}</code></th>`).join('')}</tr></thead><tbody>${tr.rows.slice(0, upto).map((r, i) => `<tr${i === upto - 1 ? ' class="cur"' : ''}><td>${r.line}</td>${r.vals.map(v => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ===== Widgets ===== */
+const TRACE_PROGS = {};
+function evaluator(chips) {
+  return `<div class="widget evaluator" data-widget="evaluator">
+  <div class="w-title">Évaluateur d'expressions</div>
+  <form class="ev-form"><label class="sr-only" for="ev-${++cbSeq}">Expression</label><input id="ev-${cbSeq}" class="ev-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ex. 5 / 2"><button class="btn mini" type="submit">Évaluer</button></form>
+  <div class="chips">${chips.map(c => `<button type="button" class="chip" data-chip="${esc(c)}"><code>${esc(c)}</code></button>`).join('')}</div>
+  <p class="ev-out" role="status">Tape une expression, ou clique sur un exemple.</p>
+</div>`;
+}
+function traceplayer(key, program) {
+  TRACE_PROGS[key] = program;
+  return `<div class="widget traceplayer" data-widget="traceplayer" data-key="${key}">
+  <div class="w-title">Trace pas à pas</div>
+  <div class="tp-body"><pre class="numbered prog"><code></code></pre><div class="tp-table"></div></div>
+  <div class="tp-ctl">
+    <button type="button" class="btn mini ghost" data-tp="first" aria-label="Début">⏮</button>
+    <button type="button" class="btn mini ghost" data-tp="prev" aria-label="Pas précédent">◀</button>
+    <span class="tp-pos" role="status"></span>
+    <button type="button" class="btn mini" data-tp="next" aria-label="Pas suivant">Pas suivant ▶</button>
+    <button type="button" class="btn mini ghost" data-tp="last" aria-label="Fin">⏭</button>
+  </div>
+</div>`;
+}
+function afficheLigneWidget() {
+  return `<div class="widget afl" data-widget="afficheligne">
+  <div class="w-title">Essayer afficheLigne</div>
+  <div class="afl-form">
+    <label>car <input class="afl-car" maxlength="1" value="#" aria-label="Caractère"></label>
+    <label>min <input class="afl-min" type="number" min="1" max="20" value="3" aria-label="Position de départ min"></label>
+    <label>taille <input class="afl-size" type="number" min="0" max="30" value="5" aria-label="Taille"></label>
+  </div>
+  <pre class="afl-out" aria-live="polite"></pre>
+</div>`;
+}
+function houseWidget() {
+  return `<div class="widget house" data-widget="house">
+  <div class="w-title">Aperçu du niveau 5</div>
+  <div class="house-form">
+    <label>Fenêtres <input class="h-n" type="range" min="3" max="5" value="5" aria-label="Nombre de fenêtres"><output class="h-n-o">5</output></label>
+    <label>Porte sous la fenêtre <input class="h-k" type="range" min="1" max="5" value="4" aria-label="Fenêtre sous laquelle placer la porte"><output class="h-k-o">4</output></label>
+    <label>Toit <input class="h-toit" maxlength="1" value="^" aria-label="Caractère du toit"></label>
+    <label>Murs <input class="h-mur" maxlength="1" value="#" aria-label="Caractère des murs"></label>
+    <label>Volets <input class="h-volet" maxlength="1" value="Z" aria-label="Caractère des volets"></label>
+  </div>
+  <details class="ext">
+    <summary>Extensions facultatives de l'énoncé</summary>
+    <div class="house-form">
+      <label>Étages <input class="h-f" type="range" min="1" max="3" value="1" aria-label="Nombre d'étages"><output class="h-f-o">1</output></label>
+      <label class="check"><input type="checkbox" class="h-ch"> Cheminée (M) et fumée (~)</label>
+      <label>Rangée du toit <input class="h-cr" type="range" min="1" max="3" value="2" aria-label="Rangée de la cheminée"><output class="h-cr-o">2</output></label>
+      <label>Distance du bord gauche <input class="h-cc" type="range" min="4" max="24" value="18" aria-label="Distance de la cheminée au bord gauche"><output class="h-cc-o">18</output></label>
+    </div>
+  </details>
+  <pre class="house-out" aria-live="polite"></pre>
+</div>`;
+}
+
+function mountWidgets(root) {
+  $$('[data-widget]', root).forEach(w => {
+    if (w._mounted) return;
+    w._mounted = true;
+    const kind = w.dataset.widget;
+    if (kind === 'evaluator') {
+      const input = $('.ev-input', w), out = $('.ev-out', w);
+      const go = async () => {
+        const text = input.value.trim();
+        if (!text) return;
+        try {
+          const v = await Exalgo.evalExpression(text);
+          out.className = 'ev-out ok';
+          out.innerHTML = `<code>${esc(text)}</code> vaut <strong>${esc(Exalgo.describe(v))}</strong> <span class="ty">(${v.t === 'chaîne' ? 'texte' : v.t})</span>`;
+        } catch (e) {
+          out.className = 'ev-out ko';
+          out.textContent = e.message;
+        }
+      };
+      $('.ev-form', w).addEventListener('submit', e => { e.preventDefault(); go(); });
+      $$('.chip', w).forEach(c => c.addEventListener('click', () => { input.value = c.dataset.chip; go(); }));
+    } else if (kind === 'traceplayer') {
+      const prog = TRACE_PROGS[w.dataset.key];
+      const code = $('.prog code', w), table = $('.tp-table', w), pos = $('.tp-pos', w);
+      code.innerHTML = numberLines(hlEx(prog));
+      let tr = null, step = 0;
+      const draw = () => {
+        const lines = $$('.ln', code);
+        lines.forEach(l => l.classList.remove('active'));
+        if (step > 0) {
+          const ln = tr.rows[step - 1].line;
+          if (lines[ln - 1]) lines[ln - 1].classList.add('active');
+        }
+        table.innerHTML = step === 0 ? '<p class="muted">Appuie sur « Pas suivant » pour exécuter la première ligne.</p>' : traceTableHTML(tr, step);
+        pos.textContent = `${step} / ${tr.rows.length}`;
+        $('[data-tp="next"]', w).disabled = step >= tr.rows.length;
+        $('[data-tp="prev"]', w).disabled = step <= 0;
+        $('[data-tp="first"]', w).disabled = step <= 0;
+        $('[data-tp="last"]', w).disabled = step >= tr.rows.length;
+      };
+      Exalgo.traceProgram(prog, []).then(t => { tr = t; draw(); });
+      w.addEventListener('click', e => {
+        const b = e.target.closest('[data-tp]');
+        if (!b || !tr) return;
+        const k = b.dataset.tp;
+        if (k === 'next') step = Math.min(step + 1, tr.rows.length);
+        else if (k === 'prev') step = Math.max(step - 1, 0);
+        else if (k === 'first') step = 0;
+        else step = tr.rows.length;
+        draw();
+      });
+    } else if (kind === 'afficheligne') {
+      const car = $('.afl-car', w), min = $('.afl-min', w), size = $('.afl-size', w), out = $('.afl-out', w);
+      const draw = () => {
+        const c = car.value || '#';
+        const m = Math.max(1, parseInt(min.value, 10) || 1);
+        const s = Math.max(0, parseInt(size.value, 10) || 0);
+        out.innerHTML = esc(`afficheLigne('${c}', ${m}, ${s})`) + '\n<span class="sp">' + '·'.repeat(m - 1) + '</span>' + esc(c.repeat(s)) + '\n<span class="muted">(les · représentent des espaces)</span>';
+      };
+      [car, min, size].forEach(i => i.addEventListener('input', draw));
+      draw();
+    } else if (kind === 'house') {
+      const q = s => $(s, w);
+      const draw = () => {
+        const n = +q('.h-n').value;
+        const kEl = q('.h-k');
+        kEl.max = n;
+        if (+kEl.value > n) kEl.value = n;
+        const W = 5 * n + 1;
+        q('.h-cc').max = W - 4;
+        if (+q('.h-cc').value > W - 4) q('.h-cc').value = W - 4;
+        q('.h-n-o').textContent = n;
+        q('.h-k-o').textContent = kEl.value;
+        q('.h-f-o').textContent = q('.h-f').value;
+        q('.h-cr-o').textContent = q('.h-cr').value;
+        q('.h-cc-o').textContent = q('.h-cc').value;
+        const lines = houseLines({
+          n, k: +kEl.value,
+          toit: q('.h-toit').value || '^', mur: q('.h-mur').value || '#', volet: q('.h-volet').value || 'Z',
+          floors: +q('.h-f').value,
+          chimney: q('.h-ch').checked ? { row: +q('.h-cr').value, col: +q('.h-cc').value } : null
+        });
+        q('.house-out').textContent = lines.join('\n');
+      };
+      $$('input', w).forEach(i => i.addEventListener('input', draw));
+      draw();
+    }
+  });
+}
+
+/* ===== Initialisation des exercices dans une page ===== */
+function mountExercises(root) {
+  $$('.ex-code-ex', root).forEach(sec => {
+    const id = sec.dataset.ex;
+    initEditor($('.editor', sec), {
+      onChange: v => { Store.data.code[id] = v; Store.save(); },
+      onRun: () => handlers['code-run']($('[data-act="code-run"]', sec))
+    });
+  });
+  $$('.ex-trace', root).forEach(sec => {
+    if (!$('tbody tr', sec)) for (let i = 0; i < 4; i++) traceAddRow(sec);
+  });
+  mountWidgets(root);
+  applyGlobalLang(root);
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b || !handlers[b.dataset.act]) return;
+  handlers[b.dataset.act](b, e);
+});
+document.addEventListener('submit', async e => {
+  const f = e.target.closest('[data-act-submit="val"]');
+  if (!f) return;
+  e.preventDefault();
+  const sec = f.closest('.ex');
+  const id = sec.dataset.ex, def = EXERCISES[id];
+  const input = $('.val-input', f);
+  const r = await Runner.checkValue(def, input.value);
+  input.classList.remove('ok', 'ko');
+  if (r.ok) {
+    input.classList.add('ok');
+    setFb(sec, 'Exact. ' + def.why, 'ok');
+    markDone(id);
+  } else {
+    input.classList.add('ko');
+    setFb(sec, r.format === 'entier'
+      ? "Le résultat est un entier : écris-le sans virgule."
+      : r.format ? 'Écris un nombre (par exemple 3 ou 2.5).' : 'Pas tout à fait. Refais le calcul étape par étape en respectant les priorités.', 'ko');
+  }
+});
+
+/* lessons.js */
+/* Contenu des leçons, du projet, du mémo et de l'atelier */
+const c = s => `<code>${esc(s)}</code>`;
+const tbl = (head, rows, cls) => `<div class="tbl-wrap"><table class="tbl ${cls || ''}"><thead><tr>${head.map(h => `<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+const bool = v => `<span class="bv ${v ? 't' : 'f'}">${v ? 'vrai' : 'faux'}</span>`;
+const valTable = (rows, withRemark) => tbl(withRemark ? ['Expression', 'Vaut', 'Remarque'] : ['Expression', 'Vaut'],
+  rows.map(r => withRemark ? [c(r[0]), r[1] === 'vrai' || r[1] === 'faux' ? bool(r[1] === 'vrai') : c(r[1]), r[2] || ''] : [c(r[0]), r[1] === 'vrai' || r[1] === 'faux' ? bool(r[1] === 'vrai') : c(r[1])]), 'vals');
+
+const PROG7 = `Var n, p : entier
+Var plusGrand : booléen
+n ← 5
+p ← 2
+plusGrand ← n > p
+Si plusGrand Alors
+    n ← n - p
+Sinon
+    n ← n + p
+p ← p + 10`;
+
+const LESSONS = [
+  /* ---------------------------------------------------------------- 1 */
+  {
+    id: 'l1', title: 'Variables et types',
+    lead: "Une variable est une case de mémoire nommée. Tu apprends à la déclarer, à choisir son type et à lui donner sa première valeur.",
+    skill: 'Déclarer et initialiser une variable des 4 types',
+    ex: ['l1-q1', 'l1-q2', 'l1-q3', 'l1-q4', 'l1-q5', 'l1-c1'],
+    body: () => `
+<h2>Les variables</h2>
+<p>Une variable possède trois choses :</p>
+<figure class="anatomy" aria-label="Anatomie d'une variable">
+  <div class="an-code"><span class="c-kw">Var</span> <span class="an-nom">saisie</span> : <span class="an-type">caractère</span><br><span class="an-nom">saisie</span> ← <span class="an-val">'r'</span></div>
+  <ul class="an-legend">
+    <li><span class="dot nom"></span><strong>un nom</strong> qui permet d'y accéder</li>
+    <li><span class="dot type"></span><strong>un type</strong> qui caractérise l'ensemble des valeurs qu'elle peut prendre</li>
+    <li><span class="dot val"></span><strong>une valeur</strong> qui peut changer dans le temps</li>
+  </ul>
+</figure>
+${cb({ ex: `Var saisie : caractère
+saisie ← 'r'`, java: `char saisie;
+saisie = 'r';` })}
+<ol>
+  <li>La ligne 1 est la <strong>déclaration</strong> d'une variable nommée ${c('saisie')}, de type ${c('caractère')}, grâce au mot-clé ${c('Var')}.</li>
+  <li>La ligne 2 est l'<strong>initialisation</strong> de cette variable avec le caractère ${c('r')}.</li>
+</ol>
+${note('convention', 'Convention', `<p>Les noms de variables s'écrivent en <em>CamelCase</em> : tout en minuscules, sauf la première lettre de chaque mot (le premier mot reste en minuscules). Exemples : ${c('noteMaths')}, ${c('temperatureExterieure')}.</p>`)}
+
+<h2>Connaître les 4 types de base</h2>
+${tbl(['Type ExAlgo', 'En Java', 'Exemples de valeurs'], [
+      [c('entier'), c('int'), '-123, -4, 0, 3, 76'],
+      [c('réel'), c('double'), '-94.03, -3.0, 0.0, 1.324, 4.0 (toujours avec un point)'],
+      [c('caractère'), c('char'), `${c("'a'")}, ${c("'@'")}, ${c("'4'")}, ${c("'A'")} (entre apostrophes)`],
+      [c('booléen'), c('boolean'), `${c('vrai')}, ${c('faux')}`]])}
+
+<h2>Déclarer et initialiser une variable</h2>
+<p>On déclare d'abord les variables, puis on leur donne une valeur avec la flèche ${c('←')}. Dans l'éditeur, tape ${c('<-')} : il devient ←.</p>
+${cb({ ex: `Var a : entier
+Var b : réel
+Var c : caractère
+Var d : booléen
+a ← 2
+b ← 3.3
+c ← 'T'
+d ← vrai`, java: `int a;
+double b;
+char c;
+boolean d;
+a = 2;
+b = 3.3;
+c = 'T';
+d = true;` })}
+${note('convention', 'Convention', `<p>Une variable doit <strong>toujours être initialisée</strong> par ton code avant d'être utilisée. On ne se base pas sur les valeurs par défaut du langage : la documentation Java elle-même qualifie cette pratique de mauvais style.</p>`)}
+<p>Pour voir ce qui se passe quand on l'oublie, exécute ce programme :</p>
+${cb({ ex: `Var a : entier
+ecrire("a = " + a)`, run: true })}
+`
+  },
+
+  /* ---------------------------------------------------------------- 2 */
+  {
+    id: 'l2', title: 'Afficher et saisir',
+    lead: "Faire parler le programme avec ecrire et ecrireLigne, puis lui faire lire ce que tape l'utilisateur.",
+    skill: 'Afficher des valeurs et lire une saisie au clavier',
+    ex: ['l2-q1', 'l2-q2', 'l2-q3', 'l2-c1', 'l2-c2'],
+    body: () => `
+<h2>Afficher le contenu d'une variable</h2>
+<p>La fonction ${c('ecrire()')} affiche à l'écran. L'opérateur ${c('+')} permet de coller du texte avec le contenu de variables.</p>
+${cb({ ex: `Var a : entier
+Var b : réel
+Var c : caractère
+Var d : booléen
+a ← 2
+b ← 3.3
+c ← 'T'
+d ← vrai
+ecrire("a = " + a + ", b = " + b + ", c = " + c + ", d = " + d)`, java: `System.out.print("a = " + a + ", b = " + b + ", c = " + c + ", d = " + d);`, run: true })}
+${note('attention', 'Différence avec Java', `<p>Un booléen s'affiche <code>vrai</code> ou <code>faux</code> en ExAlgo, mais <code>true</code> ou <code>false</code> en Java.</p>`)}
+
+<h3>Passer à la ligne</h3>
+<p>Pour passer à la ligne après avoir écrit, on utilise ${c('ecrireLigne()')}.</p>
+${cb({ ex: `Var a : entier
+Var c : caractère
+a ← 2
+c ← 'T'
+ecrireLigne("a = " + a)
+ecrireLigne("c = " + c)`, java: `System.out.println("a = " + a);
+System.out.println("c = " + c);`, run: true })}
+
+<h2>Saisir une valeur au clavier</h2>
+<p>On <strong>saisit une valeur au clavier</strong> et on l'affecte à une variable avec ${c('lireEntier()')}, ${c('lireReel()')} ou ${c('lireCaractere()')}.</p>
+<p>Exécute le programme ci-dessous et tape par exemple ${c('24')} puis ${c('@')}.</p>
+${cb({ ex: `Var a : entier
+Var c : caractère
+a ← lireEntier()
+c ← lireCaractere()
+ecrireLigne("a = " + a)
+ecrireLigne("c = " + c)`, java: `import java.util.Scanner;
+// ...
+Scanner clavier = new Scanner(System.in);
+int a;
+char c;
+a = clavier.nextInt();
+c = clavier.next().charAt(0);
+System.out.println("a = " + a);
+System.out.println("c = " + c);`, run: true })}
+<p>Avec 24 puis @, on obtient ${c('a = 24')} et ${c('c = @')}.</p>
+`
+  },
+
+  /* ---------------------------------------------------------------- 3 */
+  {
+    id: 'l3', title: 'Typage et conversions',
+    lead: "Une variable garde son type toute sa vie. Entre entier et réel, une conversion est parfois automatique, parfois à demander explicitement.",
+    skill: 'Convertir entre entier et réel',
+    ex: ['l3-q1', 'l3-q2', 'l3-v1', 'l3-v2', 'l3-c1'],
+    body: () => `
+<h2>Le typage</h2>
+<p>Une fois que l'on a précisé le type d'une variable :</p>
+<ul>
+  <li>cette variable ne peut plus en changer ;</li>
+  <li>le contenu de cette variable doit obligatoirement être du même type.</li>
+</ul>
+<p>Pour autant, il est possible de transférer le contenu d'un entier dans un réel : cela ne génère aucune perte de précision. L'inverse est impossible, car on perdrait la partie décimale. Il reste possible de récupérer la partie entière d'un réel avec l'opérateur ${c('(entier)')}, qui rend la conversion <strong>explicite</strong>.</p>
+${cb({ ex: `Var n : entier
+Var x : réel
+n ← -5
+x ← 13.57
+x ← n          // ok, conversion automatique
+n ← x          // impossible, erreur
+n ← (entier)x  // ok, conversion explicite`, java: `int n;
+double x;
+n = -5;
+x = 13.57;
+x = n;          // ok, conversion automatique
+// n = x;       // erreur de compilation : possible lossy conversion
+n = (int) x;    // ok, conversion explicite`, noAtelier: false })}
+<p>Les mêmes lignes dans l'atelier, avec la ligne en erreur mise en évidence. Exécute, lis le message, puis mets la ligne fautive en commentaire avec ${c('//')}.</p>
+${cb({ ex: `Var n : entier
+Var x : réel
+n ← -5
+x ← 13.57
+x ← n
+ecrireLigne("x = " + x)
+n ← x
+n ← (entier)x
+ecrireLigne("n = " + n)`, run: true })}
+${note('retenir', 'À retenir', `<p>${c('(entier)13.57')} vaut ${c('13')} : la conversion enlève la partie décimale, elle ne l'arrondit pas.</p>`)}
+`
+  },
+
+  /* ---------------------------------------------------------------- 4 */
+  {
+    id: 'l4', title: 'Les opérations',
+    lead: "Calculer avec des entiers et des réels, comprendre la division entière et le reste, et incrémenter.",
+    skill: 'Calculer avec /, % et ++',
+    ex: ['l4-v1', 'l4-v2', 'l4-v3', 'l4-v4', 'l4-v5', 'l4-v6', 'l4-v7', 'l4-q1', 'l4-c1', 'l4-c2'],
+    body: () => `
+<h2>Les opérations entre variables</h2>
+<h3>Entre entiers</h3>
+${valTable([['1 + 2', '3'], ['1 - 2', '-1'], ['1 * 2', '2'], ['5 / 2', '2', 'division entière'], ['5 % 2', '1', 'reste de la division entière, appelé aussi « modulo »']], true)}
+<h3>Entre réels</h3>
+${valTable([['1.0 + 2.0', '3.0'], ['1.2 - 2.3', '-1.1'], ['10.0 * 2.31', '23.1'], ['5.0 / 2.0', '2.5', 'division réelle']], true)}
+<p>Dès qu'un des deux nombres est réel, le résultat est réel. Entre deux entiers, le résultat est un entier.</p>
+${evaluator(['5 / 2', '5 % 2', '5.0 / 2.0', '9 / 2 * 2', '2 + 3 * 4', '(2 + 3) * 4', '7.0 / 2'])}
+<p>La multiplication, la division et le modulo passent avant l'addition et la soustraction. Les parenthèses forcent l'ordre.</p>
+${note('retenir', 'Écritures abrégées', `<p>Pour les entiers et les réels, l'expression ${c('p++')} existe et signifie ${c('p ← p + 1')}. De même, ${c('n--')} signifie ${c('n ← n - 1')}.</p>`)}
+${cb({ ex: `Var p : entier
+p ← 5
+p++
+p++
+p--
+ecrire("p = " + p)`, java: `int p = 5;
+p++;
+p++;
+p--;
+System.out.print("p = " + p);`, run: true })}
+`
+  },
+
+  /* ---------------------------------------------------------------- 5 */
+  {
+    id: 'l5', title: 'Booléens et comparaisons',
+    lead: "Les conditions s'écrivent avec des comparaisons et les opérateurs et, ou, non.",
+    skill: 'Combiner des conditions avec et, ou, non',
+    ex: ['l5-v1', 'l5-v2', 'l5-v3', 'l5-v4', 'l5-v5', 'l5-v6', 'l5-v7', 'l5-v8', 'l5-q1', 'l5-q2'],
+    body: () => `
+<h2>Les conditions</h2>
+<h3>Entre booléens</h3>
+<div class="truth">
+  <div><h4>« et » logique</h4>${tbl(['a', 'b', 'a et b'], [[bool(0), bool(0), bool(0)], [bool(0), bool(1), bool(0)], [bool(1), bool(0), bool(0)], [bool(1), bool(1), bool(1)]], 'mini')}</div>
+  <div><h4>« ou » logique</h4>${tbl(['a', 'b', 'a ou b'], [[bool(0), bool(0), bool(0)], [bool(0), bool(1), bool(1)], [bool(1), bool(0), bool(1)], [bool(1), bool(1), bool(1)]], 'mini')}</div>
+  <div><h4>« non » logique</h4>${tbl(['a', 'non a'], [[bool(1), bool(0)], [bool(0), bool(1)]], 'mini')}</div>
+</div>
+<p>Un <strong>et</strong> n'est vrai que si les deux côtés sont vrais. Un <strong>ou</strong> est vrai dès qu'un côté est vrai. Le <strong>non</strong> inverse.</p>
+<h3>Opérateurs de comparaison</h3>
+<p>Les opérateurs sont ${c('>')}, ${c('>=')}, ${c('<')}, ${c('<=')}, ${c('==')} et ${c('!=')}. Le résultat est toujours un booléen.</p>
+${valTable([['3 > 2', 'vrai'], ['3 >= 2', 'vrai'], ['2 > 2', 'faux'], ['2 >= 2', 'vrai'], ['3 == 3', 'vrai'], ['3 == 2', 'faux'], ['3 != 3', 'faux'], ['3 != 2', 'vrai']])}
+<p>Cela vaut aussi pour les nombres réels, par exemple ${c('3.07 >= 12.2')}. Attention toutefois à la comparaison de réels très proches comme ${c('2.999')} et ${c('3.000')} : on compare avec un certain degré de précision.</p>
+${evaluator(['3 >= 2', '2 != 2', 'vrai et faux', 'non (2 == 2)', '(3 > 2) ou (1 > 5)', "'a' == 'b'", '5 % 2 == 1'])}
+${note('attention', 'Piège classique', `<p>${c('=')} n'existe pas en ExAlgo. On range avec ${c('←')} et on compare avec ${c('==')}.</p>`)}
+`
+  },
+
+  /* ---------------------------------------------------------------- 6 */
+  {
+    id: 'l6', title: 'L\'instruction Si',
+    lead: "Faire exécuter certaines instructions seulement selon une condition, avec Si, Sinon Si et Sinon.",
+    skill: 'Écrire un Si / Sinon Si / Sinon',
+    ex: ['l6-q1', 'l6-q2', 'l6-c1', 'l6-c2', 'l6-c3'],
+    body: () => `
+<h2>L'instruction Si … Alors</h2>
+<p>Les instructions du bloc sont <strong>décalées vers la droite</strong> sous ${c('Alors')} et sous ${c('Sinon')}. Quand une ligne revient à la marge du ${c('Si')}, le bloc est terminé.</p>
+${cb({ ex: `Si /* expression booléenne */ Alors
+    // instructions réalisées si l'expression a été évaluée à VRAI
+Sinon
+    // instructions réalisées si l'expression a été évaluée à FAUX`, java: `if (/* expression booléenne */) {
+    // instructions réalisées si l'expression a été évaluée à true
+} else {
+    // instructions réalisées si l'expression a été évaluée à false
+}`, noAtelier: true })}
+<h3>Exemple</h3>
+<p>On lit deux entiers et on dit lequel est le plus grand. Exécute et essaie plusieurs couples : ${c('5')} et ${c('3')}, puis ${c('2')} et ${c('9')}, puis ${c('4')} et ${c('4')}.</p>
+${cb({ ex: `Var x, y : entiers
+x ← lireEntier()
+y ← lireEntier()
+Si x > y Alors
+    ecrire("L'entier " + x + " est strictement supérieur à l'entier " + y)
+Sinon Si x < y Alors
+    ecrire("L'entier " + x + " est strictement inférieur à l'entier " + y)
+Sinon
+    ecrire("L'entier " + x + " est égal à l'entier " + y)`, java: `Scanner clavier = new Scanner(System.in);
+int x = clavier.nextInt();
+int y = clavier.nextInt();
+if (x > y) {
+    System.out.print("L'entier " + x + " est strictement supérieur à l'entier " + y);
+} else if (x < y) {
+    System.out.print("L'entier " + x + " est strictement inférieur à l'entier " + y);
+} else {
+    System.out.print("L'entier " + x + " est égal à l'entier " + y);
+}`, run: true })}
+<p>Les conditions sont testées dans l'ordre, et <strong>un seul bloc</strong> est exécuté : le premier dont la condition est vraie, sinon le ${c('Sinon')} final.</p>
+${note('retenir', 'À retenir', `<p>Pas de ${c('FinSi')} en ExAlgo : c'est l'indentation qui délimite les blocs. Si le bloc après ${c('Alors')} n'est pas décalé, l'atelier te le signale.</p>`)}
+`
+  },
+
+  /* ---------------------------------------------------------------- 7 */
+  {
+    id: 'l7', title: 'Les traces',
+    lead: "Dérouler un algorithme à la main, ligne après ligne, pour vérifier ou comprendre son fonctionnement.",
+    skill: 'Dérouler une trace à la main',
+    ex: ['l7-q1', 'l7-q2', 'l7-t1', 'l7-t2'],
+    body: () => `
+<h2>Les traces</h2>
+<p>La <strong>trace</strong> de l'exécution d'un algorithme indique, instruction après instruction :</p>
+<ul>
+  <li>le numéro de la ligne de l'instruction exécutée, et</li>
+  <li>le contenu de chaque variable de l'algorithme.</li>
+</ul>
+<p>Cela permet d'exécuter l'algorithme à la main sans se tromper, pour vérifier ou comprendre son fonctionnement. Considérons l'algorithme suivant :</p>
+${cb({ ex: PROG7, lines: true, noAtelier: false })}
+<p>Dans la trace, ${c('/')} signifie « pas de valeur pour l'instant ». Avance pas à pas :</p>
+${traceplayer('doc7', PROG7)}
+<p>Notez que :</p>
+<ul>
+  <li>on n'indique que les lignes exécutées (ici, tout sauf les lignes 8 et 9) ;</li>
+  <li>on peut se limiter aux lignes qui modifient une variable (ici : 3, 4, 5, 7, 10).</li>
+</ul>
+<p>Ici, ${c('n > p')} est vrai (5 > 2), donc on exécute la ligne 7 et on saute le ${c('Sinon')}. Change les valeurs de départ dans l'atelier et fais prédire la trace à un camarade, ou à toi-même.</p>
+`
+  },
+
+  /* ---------------------------------------------------------------- 8 */
+  {
+    id: 'l8', title: 'Les fonctions',
+    lead: "Découper un gros problème en sous-problèmes simples : signature, corps, appel.",
+    skill: 'Écrire et appeler une fonction',
+    ex: ['l8-q1', 'l8-q2', 'l8-q3', 'l8-q4', 'l8-q5', 'l8-c1', 'l8-c2', 'l8-c3', 'l8-c4', 'l8-c5', 'l8-c6'],
+    body: () => `
+<h2>Les fonctions</h2>
+<p>L'intérêt d'une fonction est de diviser un gros problème en une succession de sous-problèmes simples à résoudre.</p>
+<h3>Signature</h3>
+<ul>
+  <li>Les fonctions peuvent (ou pas) avoir des <strong>paramètres</strong>.</li>
+  <li>Ces paramètres ont des « modes de passage » : <strong>E</strong> (entrée) ou <strong>ES</strong> (entrée/sortie). Cette notion sera vue plus tard (cycle 3). Pour le moment, on utilisera toujours le mode E.</li>
+  <li>Les fonctions peuvent <strong>retourner une valeur, et une seule, ou ne rien retourner</strong>.</li>
+</ul>
+<p>Une fonction a une <strong>signature</strong> (parfois appelée <strong>prototype</strong>) qu'il faut savoir reconnaître :</p>
+${cb({ ex: `Fonction nom(E paramètre1 : type, E paramètre2 : type, ..., E paramètreN : type) : type de retour éventuel`, java: `static typeRetour nom(type paramètre1, type paramètre2, ..., type paramètreN)`, noAtelier: true })}
+<p>Voici quelques exemples possibles :</p>
+<div class="triple-cards">
+  <div class="mini-card"><h4>Pas de paramètre, un retour</h4>${cb({ ex: 'Fonction fct1() : entier', java: 'static int fct1()', noAtelier: true })}<p>${c('fct1')} a 0 paramètre et retourne un entier.</p></div>
+  <div class="mini-card"><h4>Un paramètre, pas de retour</h4>${cb({ ex: 'Fonction fct2(E a : entier)', java: 'static void fct2(int a)', noAtelier: true })}<p>${c('fct2')} a 1 paramètre entier et ne retourne rien. Dans son corps, on accède à la valeur passée via la variable ${c('a')}.</p></div>
+  <div class="mini-card"><h4>Des paramètres et un retour</h4>${cb({ ex: 'Fonction fct3(E a : entier, E b : booléen) : caractère', java: 'static char fct3(int a, boolean b)', noAtelier: true })}<p>${c('fct3')} a 2 paramètres (un entier et un booléen) et retourne un caractère.</p></div>
+</div>
+
+<h3>Corps</h3>
+<p>Après la signature, le corps de la fonction se découpe en deux parties :</p>
+<ul>
+  <li>la déclaration des variables, signalée par le mot-clé ${c('Var')} ;</li>
+  <li>le code délimité par les mots-clés ${c('Début')} et ${c('Fin')}, comprenant au moins une instruction ${c('Retourner')} pour les fonctions qui retournent une valeur.</li>
+</ul>
+${note('convention', 'Convention : retour de fonction', `<p>Au premier semestre, pas de ${c('Retourner')} dans une boucle.</p>`)}
+<h4>Exemple</h4>
+${cb({ ex: `Fonction somme(E n1 : entier, E n2 : entier) : entier
+Var s : entier
+Début
+    s ← n1 + n2
+    Retourner s
+Fin`, java: `static int somme(int n1, int n2) {
+    int s;
+    s = n1 + n2;
+    return s;
+}` })}
+<p>La déclaration des variables n'est pas toujours nécessaire. On aurait ainsi pu écrire :</p>
+${cb({ ex: `Fonction somme(E n1 : entier, E n2 : entier) : entier
+Début
+    Retourner n1 + n2
+Fin`, java: `static int somme(int n1, int n2) {
+    return n1 + n2;
+}` })}
+${note('attention', 'Attention : modification des paramètres', `<p>Il est interdit de modifier un paramètre passé en entrée (E) : c'est une erreur de syntaxe.</p>`)}
+${cb({ ex: `Fonction somme(E n1 : entier, E n2 : entier) : entier
+Début
+    n1 ← n1 + n2 // erreur de syntaxe
+    Retourner n1
+Fin
+
+Var r : entier
+r ← somme(1, 2)`, run: true })}
+
+<h3>Appel</h3>
+<p>Bien sûr, une fonction n'a d'intérêt que lorsqu'elle est <strong>appelée</strong>, c'est-à-dire lorsque l'on demande l'exécution de son code :</p>
+<ul>
+  <li>avec certaines valeurs pour ses paramètres (que l'on appelle <strong>arguments</strong>), et</li>
+  <li>en récupérant (le cas échéant) sa <strong>valeur de retour</strong>.</li>
+</ul>
+<p>Tout ceci en respectant les types : si la fonction attend un réel comme argument, on ne peut pas lui envoyer un caractère.</p>
+<h4>Exemple</h4>
+<p>On part des variables suivantes, puis on appelle les fonctions ${c('fct1')}, ${c('fct2')} et ${c('fct3')} :</p>
+${cb({ ex: `Var res1 : entier
+Var val2 : booléen
+Var res3 : caractère`, noAtelier: true })}
+<p><strong>Récupérer une valeur de retour</strong> :</p>
+${cb({ ex: `res1 ← fct1()
+ecrire(res1)`, noAtelier: true })}
+<p><strong>Passer des valeurs en arguments</strong> :</p>
+${cb({ ex: `fct2(2)
+fct2(-12)
+fct2(res1)`, noAtelier: true })}
+<p><strong>Combiner les deux</strong> :</p>
+${cb({ ex: `res3 ← fct3(-2, vrai)
+ecrire(res3)
+res3 ← fct3(0, faux)
+ecrire(res3)
+val2 ← faux
+res3 ← fct3(4, val2)`, noAtelier: true })}
+<p><strong>Composer les appels de fonction</strong> :</p>
+${cb({ ex: `res3 ← fct3(fct1(), faux)`, noAtelier: true })}
+<p>Ces fonctions n'ont pas de corps ici. Voici un programme complet qui les utilise, avec des corps inventés pour l'exemple. Exécute-le et observe qui appelle qui.</p>
+${cb({
+      ex: `Fonction fct1() : entier
+Début
+    Retourner 42
+Fin
+
+Fonction fct2(E a : entier)
+Début
+    ecrireLigne("fct2 reçoit " + a)
+Fin
+
+Fonction fct3(E a : entier, E b : booléen) : caractère
+Var res : caractère
+Début
+    res ← 'N'
+    Si a > 0 et b Alors
+        res ← 'O'
+    Retourner res
+Fin
+
+Var res1 : entier
+Var val2 : booléen
+Var res3 : caractère
+res1 ← fct1()
+ecrireLigne(res1)
+fct2(2)
+fct2(-12)
+fct2(res1)
+res3 ← fct3(-2, vrai)
+ecrireLigne(res3)
+res3 ← fct3(0, faux)
+ecrireLigne(res3)
+val2 ← vrai
+res3 ← fct3(4, val2)
+ecrireLigne(res3)
+res3 ← fct3(fct1(), faux)
+ecrireLigne(res3)`,
+      java: `static int fct1() {
+    return 42;
+}
+
+static void fct2(int a) {
+    System.out.println("fct2 reçoit " + a);
+}
+
+static char fct3(int a, boolean b) {
+    char res = 'N';
+    if (a > 0 && b) {
+        res = 'O';
+    }
+    return res;
+}
+
+public static void main(String[] args) {
+    int res1 = fct1();
+    System.out.println(res1);
+    fct2(2);
+    fct2(-12);
+    fct2(res1);
+    char res3 = fct3(-2, true);
+    System.out.println(res3);
+    res3 = fct3(0, false);
+    System.out.println(res3);
+    boolean val2 = true;
+    res3 = fct3(4, val2);
+    System.out.println(res3);
+    res3 = fct3(fct1(), false);
+    System.out.println(res3);
+}`, run: true
+    })}
+`
+  }
+];
+
+/* ================================================================== PROJET */
+const GAME_RUN = '\njeuForme()\n';
+const PROJECT = [
+  {
+    id: 'p1', title: 'Étape 1 : Descriptif', ex: [],
+    lead: "Le projet du cycle : un jeu de révision sur les formes géométriques, pour un élève de primaire.",
+    body: () => `
+<h2>Jeu : révision géométrique</h2>
+<p>Écrire le code d'un jeu qui permet à un élève de primaire de réviser son cours sur les formes géométriques.</p>
+<ul>
+  <li>Après un message d'accueil, l'élève choisit un niveau de difficulté parmi 4. Si le choix n'est pas 1, 2, 3 ou 4, le jeu est terminé.</li>
+  <li>En fonction de sa réponse, une forme prédéfinie lui est montrée.</li>
+</ul>
+<div class="levels">
+  <div class="lvl"><h4>Niveau 1</h4><p>un carré 3×3</p><pre class="shape">###
+###
+###</pre><p class="surf">surface : <strong>9</strong></p></div>
+  <div class="lvl"><h4>Niveau 2</h4><p>un carré 5×5</p><pre class="shape">#####
+#####
+#####
+#####
+#####</pre><p class="surf">surface : <strong>25</strong></p></div>
+  <div class="lvl"><h4>Niveau 3</h4><p>un triangle rectangle de hauteur 2</p><pre class="shape">#
+##</pre><p class="surf">surface : <strong>2</strong></p></div>
+  <div class="lvl"><h4>Niveau 4</h4><p>un triangle isocèle de hauteur 4</p><pre class="shape">   #
+  ###
+ #####
+#######</pre><p class="surf">surface : <strong>14</strong></p></div>
+</div>
+<h3>Déroulé d'une partie</h3>
+<ol class="flow">
+  <li><strong>Message d'accueil</strong>, puis saisie du niveau. Un choix hors de 1 à 4 affiche un message d'erreur et le jeu se termine.</li>
+  <li><strong>Première question</strong> : est-ce un carré ou un triangle ? Si la réponse est mauvaise, l'élève en est informé et le jeu s'arrête.</li>
+  <li><strong>Seconde question</strong> : quelle est la surface de cette forme ? Les réponses attendues sont 9 au niveau 1, 25 au niveau 2, 2 au niveau 3 et 14 au niveau 4.</li>
+  <li>Si la réponse est mauvaise, l'élève en est informé et le jeu s'arrête. Sinon, il est félicité pour la réussite de ce niveau.</li>
+  <li>Le jeu se termine. Il faut le relancer pour pouvoir faire un autre niveau.</li>
+</ol>
+<h3>Essaie la solution de référence</h3>
+<p>Voici le jeu complet que tu vas écrire fonction par fonction. Joue une partie : tape un niveau, puis ${c('c')} ou ${c('t')}, puis la surface. Les messages sont ceux de cette solution.</p>
+${cb({ ex: fullExalgoProgram(), java: fullJavaProgram(), runExtra: GAME_RUN, run: true })}
+`
+  },
+  {
+    id: 'p2', title: 'Étape 2 : Analyse', ex: [],
+    lead: "Avant de coder, on décide quelles fonctions créer et ce que chacune retourne.",
+    body: () => `
+<h2>Analyse</h2>
+<p>On ne code pas directement une solution logicielle. Une étape préalable consiste à déterminer quelles seront les grandes fonctionnalités de ton code. Ici, la liste des fonctions est donnée : il faut comprendre le contenu de chacune, et comment on l'utilise.</p>
+<h3>Les fonctions à créer</h3>
+${tbl(['Fonction', 'Rôle'], [
+      [c('jeuForme()'), "Fonction principale du programme. Appelle les autres fonctions et affiche les résultats en fonction de ce qu'elles retournent."],
+      [c('jouerUnNiveau(E niveau : entier) : booléen'), "Permet de jouer un niveau dont la valeur est passée en paramètre. Retourne vrai si le niveau est réussi, faux sinon."],
+      [c('saisirNombreValide(E min : entier, E max : entier) : entier'), "Demande à l'utilisateur de saisir un entier (sans afficher de message). Retourne cet entier s'il est compris entre min et max (inclus), sinon -1."],
+      [c('afficherFormeNiveau(E niveau : entier)'), 'Affiche la forme en fonction du niveau.'],
+      [c('surfaceCorrecte(E niveau : entier) : entier'), "Surface correcte de chaque niveau (retourne -1 si le niveau n'est pas correct). Par exemple, surfaceCorrecte(1) retourne 9."],
+      [c('formeCorrecte(E niveau : entier) : caractère'), "Forme ('c' carré ou 't' triangle) correspondant à un niveau donné. formeCorrecte(1) retourne 'c', formeCorrecte(3) retourne 't'."],
+      [c('messageAccueil()'), "Affiche le message d'accueil du jeu."],
+      [c('messageFinDeJeu(E niveauReussi : booléen, E niveau : entier)'), "Selon la valeur de niveauReussi, affiche un message indiquant si le niveau passé en paramètre a été validé ou non."],
+      [c('messageErreur()'), "Affiche le message d'erreur utilisé quand l'utilisateur saisit un choix incorrect dans le menu principal : « Votre choix n'est pas conforme aux options possibles, jeu terminé »."],
+      [c('saisieReponseForme() : caractère'), "Affiche un message invitant à répondre (c)arré ou (t)riangle. Retourne le caractère saisi."],
+      [c('saisieReponseSurface() : entier'), "Affiche un message invitant à saisir une surface. Retourne l'entier saisi."],
+      [c('afficheLigne(E car : caractère, E min : entier, E taille : entier)'), "Code de base fourni, pas à écrire. Affiche sur le terminal, à partir de la position min, taille fois le caractère car."]])}
+<h3>afficheLigne en action</h3>
+<p>Avec ${c("afficheLigne('#', 3, 5)")}, deux espaces précèdent cinq dièses. Avec ${c("afficheLigne('#', 1, 1)")}, un seul dièse apparaît.</p>
+${afficheLigneWidget()}
+${note('retenir', 'Une hypothèse sur afficheCar', `<p>L'énoncé mentionne aussi la fonction ${c('afficheCar()')} dans le code de base, sans détailler ses paramètres. Dans cet atelier, ${c('afficheCar(car, nb)')} écrit ${c('nb')} fois ${c('car')} sans passer à la ligne. Vérifie avec le code fourni dans ton TP.</p>`)}
+<h3>Qui appelle qui</h3>
+<ul class="calltree">
+  <li><code>jeuForme</code>
+    <ul>
+      <li><code>messageAccueil</code></li>
+      <li><code>saisirNombreValide</code></li>
+      <li><code>messageErreur</code> <span class="muted">si la saisie est invalide</span></li>
+      <li><code>jouerUnNiveau</code>
+        <ul>
+          <li><code>afficherFormeNiveau</code> <span class="muted">qui appelle afficheLigne</span></li>
+          <li><code>saisieReponseForme</code>, <code>formeCorrecte</code></li>
+          <li><code>saisieReponseSurface</code>, <code>surfaceCorrecte</code></li>
+        </ul>
+      </li>
+      <li><code>messageFinDeJeu</code></li>
+    </ul>
+  </li>
+</ul>
+`
+  },
+  {
+    id: 'p3', title: 'Étape 3 : Tests', ex: ['p3-t1'],
+    lead: "Un test, c'est des valeurs de paramètres et le résultat qu'on attend. On les écrit avant de coder.",
+    body: () => `
+<h2>Tests</h2>
+<p>Un test associe des valeurs de paramètres à un résultat attendu. Bien choisir ses tests, c'est penser aux cas ordinaires et aux valeurs limites.</p>
+<h3>Exemples de tests pour formeCorrecte()</h3>
+${tbl(['Valeur du paramètre', 'Résultat attendu'], [['1', c("'c'")], ['2', c("'c'")], ['3', c("'t'")], ['4', c("'t'")]])}
+<h3>Exemples de tests pour saisirNombreValide()</h3>
+${tbl(['Paramètre 1 (min)', 'Paramètre 2 (max)', 'Résultat attendu'], [['0', '5', c('0 <= résultat et résultat <= 5')], ['-10', '-5', c('-10 <= résultat et résultat <= -5')], ['1', '1', c('résultat == 1')]])}
+${note('attention', 'Pense aux valeurs hors bornes', `<p>Les tests ci-dessus supposent que l'utilisateur tape un nombre valide. Une fonction se teste aussi sur ce qu'elle doit refuser : si l'utilisateur tape 6 pour des bornes 0 et 5, le résultat doit valoir -1.</p>`)}
+<h3>À toi : tests de surfaceCorrecte()</h3>
+<p>Complète la table. Les niveaux 0, 5 et -1 n'existent pas : ils testent les limites.</p>
+${exercise('p3-t1')}
+<p>Dans l'étape suivante, chaque exercice de code vérifie ta fonction avec des tests de ce genre, et te montre ce qui est attendu quand un test échoue.</p>
+`
+  },
+  {
+    id: 'p4', title: 'Étape 4 : Algorithmes', ex: P4_ORDER.map(n => 'p4-' + n),
+    lead: "Écrire en ExAlgo chacune des fonctions du jeu, en commençant par la fonction principale.",
+    body: () => `
+<h2>Algorithmes</h2>
+<p>Écris les algorithmes des fonctions mentionnées à l'étape 2. L'énoncé conseille de commencer par ${c('jeuForme()')}. Pour pouvoir tester une fonction seule, <strong>toutes les fonctions que tu n'as pas écrites dans l'exercice sont fournies</strong> : tu avances dans l'ordre que tu veux.</p>
+<p>${c('Ctrl + Entrée')} lance la vérification depuis l'éditeur. Chaque exercice a un indice et une solution en ExAlgo et en Java.</p>
+${P4_ORDER.map((n, i) => `<details class="fn-card" ${i === 0 ? 'open' : ''} data-fn="${n}">
+  <summary><span class="fn-name">${n}</span><span class="fn-state" data-state="p4-${n}"></span></summary>
+  ${exercise('p4-' + n)}
+</details>`).join('\n')}
+<h3>Le programme complet</h3>
+<p>Quand les onze fonctions sont écrites, voici l'assemblage de référence, en ExAlgo et en Java. Le Java ajoute le code de base (${c('afficheCar')}, ${c('afficheLigne')}) pour que la classe se compile seule : adapte-le à la version fournie en TP.</p>
+${cb({ ex: fullExalgoProgram(), java: fullJavaProgram(), runExtra: GAME_RUN, run: true })}
+`
+  },
+  {
+    id: 'p5', title: 'Étape 5 : Refactoring', ex: [],
+    lead: "Prendre du recul sur le code : le découpage en fonctions est-il bon ? Puis le niveau 5 caché.",
+    body: () => {
+      const helpers = REF_ORDER.map(n => REF[n]).join('\n\n');
+      return `
+<h2>Refactoring</h2>
+<p>Il est impossible de produire un code de qualité du premier coup, et ce point reviendra tout au long du semestre. Il est maintenant temps de prendre un peu de recul sur le code proposé. Pose-toi la question du découpage en fonctions :</p>
+<ul>
+  <li>Peut-on découper différemment certaines fonctions ?</li>
+  <li>A-t-on deux fonctions qui font (presque) la même chose ?</li>
+</ul>
+<details class="pistes">
+  <summary>Pistes de réflexion (pas une correction officielle)</summary>
+  <ul>
+    <li><code>saisieReponseForme</code> et <code>saisieReponseSurface</code> ont le même squelette : afficher un message, lire, retourner. Seuls le message et le type lu changent.</li>
+    <li><code>formeCorrecte</code> et <code>surfaceCorrecte</code> font toutes deux la même chose : traduire un niveau en une valeur, avec la même cascade de <code>Si … Sinon Si</code>. Les niveaux valides sont écrits à plusieurs endroits.</li>
+    <li>Dans <code>afficherFormeNiveau</code>, les appels à <code>afficheLigne</code> se répètent à l'identique pour les carrés. Sans boucle (vues plus tard), on ne peut pas faire mieux, mais le défaut est visible.</li>
+    <li><code>saisirNombreValide</code> et la saisie du niveau dans <code>jeuForme</code> : le test « entre min et max » pourrait être sa propre fonction (voir <code>estDansIntervalle</code> dans la leçon 8).</li>
+  </ul>
+</details>
+
+<h2>Pour aller plus loin : le niveau 5 caché</h2>
+<p>Implémente un niveau 5 caché, qui dessine une maison. L'utilisateur saisit : le nombre de fenêtres (entre 3 et 5), le numéro de la fenêtre sous laquelle dessiner la porte (entre 1 et le nombre de fenêtres), puis le caractère utilisé pour le toit, les murs et les volets. Dans ce niveau, l'utilisateur gagne toujours.</p>
+<p>Tu disposes de ${c('afficheLigne()')} et ${c('afficheCar()')} (code de base). Tu ne dois pas utiliser de boucles, à part celles de ces fonctions.</p>
+${houseWidget()}
+<h3>Étapes conseillées</h3>
+<ol>
+  <li>Les deux lignes de fenêtres (elles permettent d'aligner les lignes restantes).</li>
+  <li>Les deux lignes de murs pleins, au-dessus et en dessous.</li>
+  <li>Le toit.</li>
+  <li>La porte.</li>
+</ol>
+<p>Comme le nombre de fenêtres est limité à 3, 4 ou 5, une ligne de fenêtres peut se construire avec trois fenêtres systématiques et deux ${c('Si')} pour les fenêtres supplémentaires. La largeur de la maison vaut ${c('5 * nbFenetres + 1')}.</p>
+<h3>Une solution de référence</h3>
+<p>Le détail de la forme du toit n'est pas imposé par l'énoncé : cette solution l'élargit d'une colonne de chaque côté à chaque rangée. Exécute-la, saisis 5 comme niveau, puis les paramètres de ta maison.</p>
+${cb({ ex: HOUSE_EX, java: '// à ajouter dans la classe JeuForme\n' + HOUSE_JAVA, runExtra: '\n\n' + helpers + '\n\njeuFormeComplet()\n', run: true })}
+${note('retenir', 'Extensions de l\'énoncé', `<p>Tu peux coder aussi : plusieurs étages (1 à 3, un étage étant une ligne de mur plein surmontée de deux lignes de fenêtres), une cheminée dessinée avec ${c('M')} sur une rangée du toit (de 1 au sommet à 3 à la base) et à une distance du bord gauche, et de la fumée ${c('~')} sur les deux lignes au-dessus. L'aperçu ci-dessus les simule, dans « Extensions facultatives ».</p>`)}
+`;
+    }
+  }
+];
+
+/* ================================================================== MÉMO */
+const MEMO_ROWS = [
+  ['Déclarer', 'Var a : entier', 'int a;'],
+  ['Les 4 types', 'entier, réel, caractère, booléen', 'int, double, char, boolean'],
+  ['Affecter', 'a ← 2', 'a = 2;'],
+  ['Valeurs', "3.3   'T'   vrai   faux", "3.3   'T'   true   false"],
+  ['Afficher', 'ecrire("a = " + a)', 'System.out.print("a = " + a);'],
+  ['Afficher + ligne', 'ecrireLigne("a = " + a)', 'System.out.println("a = " + a);'],
+  ['Lire un entier', 'a ← lireEntier()', 'a = clavier.nextInt();'],
+  ['Lire un caractère', 'c ← lireCaractere()', 'c = clavier.next().charAt(0);'],
+  ['Réel vers entier', 'n ← (entier)x', 'n = (int) x;'],
+  ['Division entière, reste', '5 / 2    5 % 2', '5 / 2    5 % 2'],
+  ['Incrémenter', 'p++    n--', 'p++;    n--;'],
+  ['Comparer', '==  !=  >  >=  <  <=', '==  !=  >  >=  <  <='],
+  ['Logique', 'et   ou   non', '&&   ||   !'],
+  ['Condition', 'Si x > 0 Alors\n    …\nSinon Si x < 0 Alors\n    …\nSinon\n    …', 'if (x > 0) {\n    …\n} else if (x < 0) {\n    …\n} else {\n    …\n}'],
+  ['Fonction', 'Fonction f(E a : entier) : entier\nVar r : entier\nDébut\n    …\n    Retourner r\nFin', 'static int f(int a) {\n    int r;\n    …\n    return r;\n}'],
+  ['Appeler', 'res ← f(2)', 'res = f(2);'],
+  ['Commentaire', '// texte', '// texte']
+];
+const PIEGES = [
+  ["Écrire <code>a = 1</code> pour affecter", "En ExAlgo on range avec <code>←</code>. <code>==</code> compare. L'atelier te le signale."],
+  ['Lire une variable sans valeur', "Initialise toujours avant d'utiliser."],
+  ['Ranger un réel dans un entier', 'Impossible directement : <code>n ← (entier)x</code>.'],
+  ['Oublier que / entre entiers est une division entière', '<code>5 / 2</code> vaut 2. Pour 2.5, il faut un réel : <code>5.0 / 2.0</code>.'],
+  ['Ne pas indenter après Alors ou Sinon', "L'indentation délimite le bloc : pas de FinSi."],
+  ['Modifier un paramètre en mode E', 'Interdit. Utilise une variable locale ou retourne directement le calcul.'],
+  ['Oublier Retourner', 'Une fonction qui annonce un type de retour doit exécuter un Retourner.'],
+  ['Mauvais type d\'argument', "<code>fct2('a')</code> alors que fct2 attend un entier : les types doivent correspondre."],
+  ['Tester seulement les cas faciles', "Teste les bornes et les valeurs hors limites : 0, min, max, max + 1."]
+];
+
+/* ================================================================== ATELIER */
+const SNIPPETS = {
+  'Variables et affichage': `Var a : entier
+Var b : réel
+Var c : caractère
+Var d : booléen
+a ← 2
+b ← 3.3
+c ← 'T'
+d ← vrai
+ecrireLigne("a = " + a)
+ecrireLigne("b = " + b)
+ecrireLigne("c = " + c)
+ecrireLigne("d = " + d)`,
+  'Saisie au clavier': `Var a : entier
+Var c : caractère
+a ← lireEntier()
+c ← lireCaractere()
+ecrireLigne("a = " + a)
+ecrireLigne("c = " + c)`,
+  'Comparer deux entiers': `Var x, y : entiers
+x ← lireEntier()
+y ← lireEntier()
+Si x > y Alors
+    ecrire("L'entier " + x + " est strictement supérieur à l'entier " + y)
+Sinon Si x < y Alors
+    ecrire("L'entier " + x + " est strictement inférieur à l'entier " + y)
+Sinon
+    ecrire("L'entier " + x + " est égal à l'entier " + y)`,
+  'Trace de la leçon 7 (bouton Trace)': PROG7,
+  'Fonction somme': `Fonction somme(E n1 : entier, E n2 : entier) : entier
+Début
+    Retourner n1 + n2
+Fin
+
+Var res : entier
+res ← somme(2, 3)
+ecrireLigne("2 + 3 = " + res)`,
+  'Jeu des formes (complet)': fullExalgoProgram() + GAME_RUN,
+  'Un éditeur vide': `// Écris ton ExAlgo ici
+`
+};
+
+/* app.js */
+/* Application : routage, navigation, progression, atelier, mémo */
+Runner = createRunner(Exalgo, REF, REF_ORDER);
+Store.load();
+
+const NAV = [
+  { group: 'Cours', items: LESSONS.map((l, i) => ({ id: l.id, label: l.title, n: i + 1 })) },
+  { group: 'Projet : le jeu', items: PROJECT.map((p, i) => ({ id: p.id, label: p.title.replace(/^Étape \d+ : /, ''), n: 'É' + (i + 1) })) },
+  { group: 'Outils', items: [{ id: 'atelier', label: 'Atelier ExAlgo', n: '›' }, { id: 'memo', label: 'Mémo ExAlgo ↔ Java', n: '≡' }] }
+];
+const ALL_IDS = ['accueil', ...NAV.flatMap(g => g.items.map(i => i.id))];
+const ORDER = [...LESSONS.map(l => l.id), ...PROJECT.map(p => p.id)];
+
+const main = () => $('#main');
+
+function exIdsAll() { return Object.keys(EXERCISES); }
+function progress() {
+  const all = exIdsAll();
+  const done = all.filter(id => Store.data.done[id]).length;
+  const lessons = LESSONS.filter(l => Store.data.lessons[l.id]).length;
+  return { done, total: all.length, lessons, nl: LESSONS.length };
+}
+window.updateProgress = function () {
+  const p = progress();
+  const pct = Math.round(100 * p.done / p.total);
+  const bar = $('#prog-bar'), txt = $('#prog-txt');
+  if (bar) { bar.style.width = pct + '%'; bar.parentElement.setAttribute('aria-valuenow', String(pct)); }
+  if (txt) txt.textContent = `${p.done}/${p.total} exercices`;
+  $$('.nav a').forEach(a => {
+    const id = a.dataset.id;
+    const l = LESSONS.find(x => x.id === id);
+    const pr = PROJECT.find(x => x.id === id);
+    const item = l || pr;
+    let ok = false;
+    if (item && item.ex && item.ex.length) ok = item.ex.every(e => Store.data.done[e]);
+    if (l) ok = ok && !!Store.data.lessons[id] || !!Store.data.lessons[id];
+    a.classList.toggle('is-done', ok);
+  });
+  $$('.fn-state').forEach(s => {
+    const ok = !!Store.data.done[s.dataset.state];
+    s.textContent = ok ? '✓ réussie' : '';
+  });
+  const sk = $$('.skill[data-l]');
+  sk.forEach(s => s.classList.toggle('is-done', !!Store.data.lessons[s.dataset.l]));
+  const sum = $('#home-sum');
+  if (sum) sum.innerHTML = homeSummary();
+};
+
+function navHTML() {
+  return NAV.map(g => `<div class="nav-g"><div class="nav-h">${g.group}</div>${g.items.map(i =>
+    `<a href="#${i.id}" data-id="${i.id}"><span class="nav-n">${i.n}</span><span class="nav-t">${esc(i.label)}</span></a>`).join('')}</div>`).join('');
+}
+
+function homeSummary() {
+  const p = progress();
+  const next = ORDER.find(id => {
+    const l = LESSONS.find(x => x.id === id);
+    if (l) return !Store.data.lessons[id];
+    const pr = PROJECT.find(x => x.id === id);
+    return pr.ex.some(e => !Store.data.done[e]);
+  });
+  const nx = next ? [...LESSONS, ...PROJECT].find(x => x.id === next) : null;
+  return `<p class="sum-line"><strong>${p.lessons}</strong> leçon${p.lessons > 1 ? 's' : ''} sur ${p.nl} terminée${p.lessons > 1 ? 's' : ''} · <strong>${p.done}</strong> exercice${p.done > 1 ? 's' : ''} réussi${p.done > 1 ? 's' : ''} sur ${p.total}</p>` +
+    (nx ? `<a class="btn" href="#${nx.id}">${p.done || p.lessons ? 'Continuer' : 'Commencer'} : ${esc(nx.title)}</a>` : '<p class="sum-line">Tout est fait. Passe au mémo et à l\'atelier pour t\'entraîner librement.</p>');
+}
+
+/* ---------- Pages ---------- */
+function pageAccueil() {
+  return `<div class="home">
+  <section class="hero">
+    <p class="kicker">Cycle 1 · variable, type, condition, trace, fonction</p>
+    <h1>Écrire de l'ExAlgo, puis le même programme en Java.</h1>
+    <p class="lead">Tout ce qu'il faut savoir pour le cycle 1, avec des exercices corrigés tout seuls et un éditeur qui exécute vraiment ton ExAlgo. À la fin : le jeu de révision géométrique, fonction par fonction.</p>
+    <div id="home-sum" class="home-sum">${homeSummary()}</div>
+  </section>
+  <figure class="anatomy hero-fig" aria-label="Anatomie d'une variable">
+    <div class="an-code"><span class="c-kw">Var</span> <span class="an-nom">saisie</span> : <span class="an-type">caractère</span><br><span class="an-nom">saisie</span> ← <span class="an-val">'r'</span></div>
+    <ul class="an-legend"><li><span class="dot nom"></span>un nom</li><li><span class="dot type"></span>un type</li><li><span class="dot val"></span>une valeur</li></ul>
+  </figure>
+  <h2>Ce que tu sauras faire</h2>
+  <p>Chaque compétence du cours est une case : elle se coche quand tu termines la leçon.</p>
+  <ul class="skills">
+    ${LESSONS.map((l, i) => `<li class="skill${Store.data.lessons[l.id] ? ' is-done' : ''}" data-l="${l.id}"><a href="#${l.id}"><span class="sk-n">${i + 1}</span><span class="sk-t">${esc(l.skill)}</span><span class="sk-l">${esc(l.title)}</span></a></li>`).join('')}
+  </ul>
+  <h2>Le projet</h2>
+  <p>Cinq étapes, du descriptif au niveau 5 « maison ». Tu écris chacune des 11 fonctions du jeu ; celles que tu n'as pas encore écrites sont complétées automatiquement pour que tes tests tournent quand même.</p>
+  <p><a class="btn ghost" href="#p1">Voir le projet</a> <a class="btn ghost" href="#atelier">Ouvrir l'atelier</a></p>
+</div>`;
+}
+
+function pageLesson(l, idx) {
+  const exs = (l.ex || []).map(exercise).join('');
+  const done = !!Store.data.lessons[l.id];
+  const pos = ORDER.indexOf(l.id);
+  const prev = pos > 0 ? ORDER[pos - 1] : null, next = pos < ORDER.length - 1 ? ORDER[pos + 1] : null;
+  const find = id => [...LESSONS, ...PROJECT].find(x => x.id === id);
+  const isLesson = idx !== undefined;
+  return `<article class="page">
+  <p class="kicker">${isLesson ? `Leçon ${idx + 1} sur ${LESSONS.length}` : `Projet · ${esc(l.title.split(' : ')[0])}`}</p>
+  <h1>${esc(isLesson ? l.title : l.title.replace(/^Étape \d+ : /, ''))}</h1>
+  <p class="lead">${esc(l.lead)}</p>
+  <div class="body">${l.body()}</div>
+  ${exs ? `<section class="practice"><h2>S'entraîner</h2>${exs}</section>` : ''}
+  ${isLesson ? `<div class="finish"><button type="button" class="btn${done ? ' ghost' : ''}" data-app="finish" data-l="${l.id}" aria-pressed="${done}">${done ? '✓ Leçon terminée' : 'Marquer la leçon comme terminée'}</button></div>` : ''}
+  <nav class="pager" aria-label="Navigation">
+    ${prev ? `<a href="#${prev}"><span>Précédent</span>${esc(find(prev).title)}</a>` : '<span></span>'}
+    ${next ? `<a class="next" href="#${next}"><span>Suivant</span>${esc(find(next).title)}</a>` : '<a class="next" href="#memo"><span>Pour finir</span>Mémo ExAlgo ↔ Java</a>'}
+  </nav>
+</article>`;
+}
+
+function pageMemo() {
+  return `<article class="page">
+  <p class="kicker">Aide-mémoire</p>
+  <h1>Mémo ExAlgo ↔ Java</h1>
+  <p class="lead">Tout le cycle 1 sur une page, avec les deux langages côte à côte.</p>
+  <div class="tbl-wrap"><table class="memo"><thead><tr><th scope="col">Pour…</th><th scope="col">ExAlgo</th><th scope="col">Java</th></tr></thead><tbody>
+  ${MEMO_ROWS.map(r => `<tr><th scope="row">${esc(r[0])}</th><td><pre>${hlEx(r[1])}</pre></td><td><pre>${hlJava(r[2])}</pre></td></tr>`).join('')}
+  </tbody></table></div>
+  <h2>Les pièges classiques</h2>
+  <ul class="pieges">${PIEGES.map(p => `<li><strong>${p[0]}</strong><span>${p[1]}</span></li>`).join('')}</ul>
+  <h2>Le programme Java complet du jeu</h2>
+  <p>Voici le jeu assemblé en Java, à partir des fonctions du projet. Ton TP a peut-être son propre code de base (afficheCar, afficheLigne) : garde le tien s'il diffère.</p>
+  ${cb({ ex: fullExalgoProgram(), java: fullJavaProgram(), noAtelier: false, run: true, runExtra: GAME_RUN })}
+</article>`;
+}
+
+const atelierState = { term: null };
+function pageAtelier() {
+  const names = Object.keys(SNIPPETS);
+  return `<article class="page wide">
+  <p class="kicker">Outil</p>
+  <h1>Atelier ExAlgo</h1>
+  <p class="lead">Écris du ExAlgo, exécute-le, réponds aux saisies dans le terminal, ou regarde la trace ligne par ligne. Ctrl + Entrée exécute.</p>
+  <div class="at-bar"><label>Exemple <select id="at-sel">${names.map(n => `<option>${esc(n)}</option>`).join('')}</select></label>
+    <button type="button" class="btn" data-app="at-run">▶ Exécuter</button>
+    <button type="button" class="btn ghost" data-app="at-trace">Trace</button>
+    <button type="button" class="btn ghost" data-app="at-reset">Exemple d'origine</button></div>
+  ${editorHTML('atelier', '')}
+  <div id="at-term" class="cb-term"></div>
+  <div id="at-trace" class="at-trace" hidden></div>
+</article>`;
+}
+function mountAtelier() {
+  const ed = $('[data-editor="atelier"]'), ta = $('.ta', ed), sel = $('#at-sel');
+  const pending = window.pendingAtelier;
+  window.pendingAtelier = null;
+  ta.value = pending != null ? pending : (Store.data.atelier || SNIPPETS[sel.value]);
+  const host = $('#at-term');
+  atelierState.term = mountTerm(host);
+  const trBox = $('#at-trace');
+  const run = async trace => {
+    Store.data.atelier = ta.value; Store.save();
+    trBox.hidden = true;
+    const t = atelierState.term;
+    if (t.pending) t.abort();
+    const r = await t.run(ta.value, { trace, onError: e => editorMark(ed, e.line) });
+    if (trace && r && r.trace) {
+      trBox.hidden = false;
+      trBox.innerHTML = `<h3>Trace</h3>` + (r.trace.rows.length ? traceTableHTML(r.trace, r.trace.rows.length) : '<p class="muted">Aucune ligne tracée au niveau principal.</p>');
+    }
+  };
+  initEditor(ed, { onChange: v => { Store.data.atelier = v; Store.save(); }, onRun: () => run(false) });
+  editorUpdate(ed);
+  sel.addEventListener('change', () => { ta.value = SNIPPETS[sel.value]; ta.dispatchEvent(new Event('input')); });
+  $('[data-app="at-run"]').addEventListener('click', () => run(false));
+  $('[data-app="at-trace"]').addEventListener('click', () => run(true));
+  $('[data-app="at-reset"]').addEventListener('click', () => { ta.value = SNIPPETS[sel.value]; ta.dispatchEvent(new Event('input')); });
+}
+
+/* ---------- Routeur ---------- */
+function route() {
+  let id = (location.hash || '').replace('#', '');
+  if (!ALL_IDS.includes(id)) id = 'accueil';
+  const m = main();
+  let html;
+  const li = LESSONS.findIndex(l => l.id === id);
+  if (id === 'accueil') html = pageAccueil();
+  else if (li >= 0) html = pageLesson(LESSONS[li], li);
+  else if (id === 'atelier') html = pageAtelier();
+  else if (id === 'memo') html = pageMemo();
+  else html = pageLesson(PROJECT.find(p => p.id === id));
+  m.innerHTML = html;
+  $$('.nav a').forEach(a => a.setAttribute('aria-current', a.dataset.id === id ? 'page' : 'false'));
+  document.title = (id === 'accueil' ? 'ExAlgo Cycle 1' : ((LESSONS.find(l => l.id === id) || PROJECT.find(p => p.id === id) || { title: id === 'atelier' ? 'Atelier' : 'Mémo' }).title + ' · ExAlgo Cycle 1'));
+  mountExercises(m);
+  if (id === 'atelier') mountAtelier();
+  window.updateProgress();
+  closeDrawer();
+  window.scrollTo(0, 0);
+  m.focus({ preventScroll: true });
+}
+
+function closeDrawer() { document.body.classList.remove('drawer-open'); const b = $('#menu-btn'); if (b) b.setAttribute('aria-expanded', 'false'); }
+
+function setTheme(t) { try { localStorage.setItem('cours-theme', t || ''); } catch (e) { /* indisponible */ }
+  if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+}
+function init() {
+  document.getElementById('app').innerHTML = `
+<a class="skip" href="#main">Aller au contenu</a>
+<header class="top">
+  <button type="button" id="menu-btn" class="icon-btn" aria-label="Menu" aria-expanded="false" aria-controls="side">☰</button>
+  <a class="back" href="index.html" title="Retour à la matière" aria-label="Retour à la matière">⌂</a><a class="brand" href="#accueil"><span class="brand-mark">Ex</span>Algo <small>cycle 1</small></a>
+  <div class="meter" role="progressbar" aria-label="Progression" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="prog-bar"></i></div>
+  <span id="prog-txt" class="prog-txt"></span>
+  <div class="tools">
+    <div class="seg" role="group" aria-label="Langage des exemples"><button type="button" data-app="lang" data-v="ex" aria-pressed="true">ExAlgo</button><button type="button" data-app="lang" data-v="java" aria-pressed="false">Java</button></div>
+    <button type="button" id="theme-btn" class="icon-btn" aria-label="Changer le thème" title="Thème clair / sombre">◐</button>
+  </div>
+</header>
+<div class="shell">
+  <nav id="side" class="side nav" aria-label="Sommaire">${navHTML()}</nav>
+  <div class="scrim" data-app="scrim"></div>
+  <main id="main" tabindex="-1"></main>
+</div>`;
+  const syncLang = () => $$('[data-app="lang"]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === Store.data.lang)));
+  syncLang();
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-app]');
+    if (!b) return;
+    const k = b.dataset.app;
+    if (k === 'lang') { Store.data.lang = b.dataset.v; Store.save(); syncLang(); applyGlobalLang(document); }
+    else if (k === 'finish') {
+      const id = b.dataset.l;
+      Store.data.lessons[id] = !Store.data.lessons[id]; Store.save();
+      const on = !!Store.data.lessons[id];
+      b.textContent = on ? '✓ Leçon terminée' : 'Marquer la leçon comme terminée';
+      b.classList.toggle('ghost', on); b.setAttribute('aria-pressed', String(on));
+      window.updateProgress();
+    } else if (k === 'scrim') closeDrawer();
+  });
+  $('#menu-btn').addEventListener('click', () => {
+    const o = document.body.classList.toggle('drawer-open');
+    $('#menu-btn').setAttribute('aria-expanded', String(o));
+  });
+  $('#theme-btn').addEventListener('click', () => {
+    const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    setTheme(dark ? 'light' : 'dark');
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+  window.addEventListener('hashchange', route);
+  route();
+}
+init();
+
+;(function(){var o=window.updateProgress;window.updateProgress=function(){if(o)o.apply(this,arguments);try{var ids=typeof EX_IDS!=='undefined'?EX_IDS:Object.keys(EXERCISES);var d=Store.data.done||{},l=Store.data.lessons||{};localStorage.setItem('hub:algo/cycle1',JSON.stringify({done:ids.filter(function(k){return d[k]}).length,total:ids.length,lessons:LESSONS.filter(function(x){return l[x.id]}).length,nl:LESSONS.length}))}catch(e){}};window.updateProgress()})();
+
+</script>
+</body>
+</html>

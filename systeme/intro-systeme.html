@@ -1,0 +1,1366 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Intro Système</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/systeme.css">
+</head>
+<body>
+<div id="app"></div>
+<script>
+try{var __t=localStorage.getItem('cours-theme');if(__t)document.documentElement.dataset.theme=__t}catch(e){}
+function qOrder(ch){var idx=ch.map(function(_,i){return i}),n=idx.length;
+  if(ch.every(function(x){return /^(vrai|faux|oui|non)$/i.test(String(x))}))return idx;
+  for(var i=n-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=idx[i];idx[i]=idx[j];idx[j]=t}
+  var pin=idx.filter(function(i){return /^Aucune?$/i.test(String(ch[i]))}),rest=idx.filter(function(i){return pin.indexOf(i)<0});
+  return rest.concat(pin)}
+/* util.js */
+/* Utilitaires */
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => [...(r || document).querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const Store = {
+  key: 'intro-systeme-v1',
+  data: { done: {}, lessons: {} },
+  load() { try { const s = localStorage.getItem(this.key); if (s) Object.assign(this.data, JSON.parse(s)); } catch (e) { /* indisponible */ } },
+  save() { try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) { /* indisponible */ } }
+};
+const note = (kind, title, html) => `<aside class="note ${kind}"><div class="note-h">${title}</div><div class="note-b">${html}</div></aside>`;
+
+/* shell.js */
+/* Mini-shell Linux simulé : système de fichiers en mémoire, droits rwx, umask */
+const Sh = (() => {
+  const USER = 'etudiant', GROUP = 'etudiant', HOME = ['home', USER];
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const fmtDate = d => `${MONTHS[d.getMonth()]} ${String(d.getDate()).padStart(2, ' ')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const SEED_DATE = new Date(2026, 8, 28, 14, 2);
+
+  const dir = (mode, owner, group) => ({ t: 'd', mode, owner: owner || USER, group: group || GROUP, mtime: SEED_DATE, kids: new Map() });
+  const file = (mode, data, owner, group) => ({ t: 'f', mode, owner: owner || USER, group: group || GROUP, mtime: SEED_DATE, data: data || '' });
+
+  /* Construit un arbre depuis une spec : { 'chemin/relatif': ['d', 0o755] | ['f', 0o644, 'contenu', owner] } */
+  function buildFS(spec) {
+    const root = dir(0o755, 'root', 'root');
+    const mk = (parts, node) => {
+      let cur = root;
+      parts.slice(0, -1).forEach(p => {
+        if (!cur.kids.has(p)) cur.kids.set(p, dir(0o755, p === 'home' || p === USER ? (p === USER ? USER : 'root') : 'root', p === USER ? GROUP : 'root'));
+        cur = cur.kids.get(p);
+      });
+      cur.kids.set(parts[parts.length - 1], node);
+    };
+    Object.entries(spec).forEach(([path, v]) => {
+      const parts = path.split('/').filter(Boolean);
+      const node = v[0] === 'd' ? dir(v[1], v[3], v[3]) : file(v[1], v[2], v[3], v[3]);
+      if (v[0] === 'd' && !v[3]) { node.owner = USER; node.group = GROUP; }
+      if (v[0] === 'f' && !v[3]) { node.owner = USER; node.group = GROUP; }
+      mk(parts, node);
+    });
+    return root;
+  }
+
+  const SEEDS = {
+    standard: () => buildFS({
+      'home': ['d', 0o755, '', 'root'],
+      'home/etudiant': ['d', 0o755],
+      'home/etudiant/Documents': ['d', 0o755],
+      'home/etudiant/Documents/notes.txt': ['f', 0o644, "Cours d'intro système\nCommandes de base et permissions\n"],
+      'home/etudiant/Documents/rapport.txt': ['f', 0o644, 'Brouillon du rapport\n'],
+      'home/etudiant/Projets': ['d', 0o755],
+      'home/etudiant/Projets/tp1': ['d', 0o755],
+      'home/etudiant/Projets/tp1/main.c': ['f', 0o644, '#include <stdio.h>\nint main(void) { return 0; }\n'],
+      'home/etudiant/Projets/tp1/Makefile': ['f', 0o644, 'all:\n\tgcc main.c\n'],
+      'home/etudiant/script.sh': ['f', 0o644, '#!/bin/bash\necho "Le script a bien été exécuté"\n'],
+      'home/etudiant/secret.txt': ['f', 0o644, 'mot de passe du wifi : ***\n'],
+      'home/etudiant/README.txt': ['f', 0o644, 'Bienvenue dans le terminal simulé.\nTape help pour la liste des commandes.\n'],
+      'home/etudiant/.bashrc': ['f', 0o644, '# configuration du shell\n'],
+      'tmp': ['d', 0o777, '', 'root'],
+      'etc': ['d', 0o755, '', 'root'],
+      'etc/passwd': ['f', 0o644, 'root:x:0:0:root:/root:/bin/bash\netudiant:x:1000:1000::/home/etudiant:/bin/bash\n', 'root']
+    }),
+    perms: () => buildFS({
+      'home': ['d', 0o755, '', 'root'],
+      'home/etudiant': ['d', 0o755],
+      'home/etudiant/script.sh': ['f', 0o644, '#!/bin/bash\necho "Le script a bien été exécuté"\n'],
+      'home/etudiant/secret.txt': ['f', 0o644, 'mot de passe du wifi : ***\n'],
+      'home/etudiant/Projets': ['d', 0o700],
+      'home/etudiant/Projets/idee.txt': ['f', 0o644, 'idée de projet\n'],
+      'home/etudiant/Documents': ['d', 0o755],
+      'home/etudiant/Documents/notes.txt': ['f', 0o644, 'notes\n'],
+      'home/etudiant/prive': ['d', 0o600],
+      'home/etudiant/prive/lettre.txt': ['f', 0o644, 'chère lettre\n'],
+      'home/etudiant/notes.txt': ['f', 0o600, 'notes personnelles\n']
+    }),
+    empty: () => buildFS({ 'home': ['d', 0o755, '', 'root'], 'home/etudiant': ['d', 0o755] })
+  };
+
+  const modeStr = (t, m) => {
+    let s = t === 'd' ? 'd' : '-';
+    for (let i = 2; i >= 0; i--) {
+      const b = (m >> (i * 3)) & 7;
+      s += (b & 4 ? 'r' : '-') + (b & 2 ? 'w' : '-') + (b & 1 ? 'x' : '-');
+    }
+    return s;
+  };
+  const symStr = m => ['u', 'g', 'o'].map((w, i) => { const b = (m >> ((2 - i) * 3)) & 7; return `${w}=${b & 4 ? 'r' : ''}${b & 2 ? 'w' : ''}${b & 1 ? 'x' : ''}`; }).join(',');
+  const octStr = m => (m & 0o777).toString(8).padStart(3, '0');
+
+  /* Découpe une ligne en commandes (séparées par ; ou &&) puis en mots */
+  function splitCommands(line) {
+    const cmds = [];
+    let cur = [], word = '', has = false, quoted = false, q = null;
+    const endWord = () => { if (has) cur.push({ s: word, quoted }); word = ''; has = false; quoted = false; };
+    const endCmd = () => { endWord(); if (cur.length) cmds.push(cur); cur = []; };
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (q) { if (ch === q) q = null; else word += ch; continue; }
+      if (ch === '"' || ch === "'") { q = ch; has = true; quoted = true; continue; }
+      if (ch === ' ' || ch === '\t') { endWord(); continue; }
+      if (ch === ';') { endCmd(); continue; }
+      if (ch === '&' && line[i + 1] === '&') { endCmd(); i++; continue; }
+      if (ch === '>') {
+        endWord();
+        if (line[i + 1] === '>') { cur.push({ s: '>>', op: true }); i++; } else cur.push({ s: '>', op: true });
+        continue;
+      }
+      word += ch; has = true;
+    }
+    if (q) throw new Error("bash: unexpected EOF while looking for matching quote");
+    endCmd();
+    return cmds;
+  }
+
+  class Shell {
+    constructor(seed) {
+      this.root = (SEEDS[seed || 'standard'])();
+      this.cwd = HOME.slice();
+      this.prev = null;
+      this.umask = 0o022;
+      this.history = [];
+      this.log = [];       // lignes de commandes saisies
+      this.ranScript = new Set();
+      this.cleared = false;
+    }
+
+    /* ----- chemins ----- */
+    normalize(path, base) {
+      let parts;
+      if (path === '~' || path.startsWith('~/')) parts = HOME.concat(path.slice(2).split('/'));
+      else if (path.startsWith('/')) parts = path.split('/');
+      else parts = (base || this.cwd).concat(path.split('/'));
+      const out = [];
+      parts.forEach(p => { if (p === '' || p === '.') return; if (p === '..') out.pop(); else out.push(p); });
+      return out;
+    }
+    can(node, bit) {
+      const cls = node.owner === USER ? 2 : (node.group === GROUP ? 1 : 0);
+      return !!(((node.mode >> (cls * 3)) & 7) & bit);
+    }
+    /* Retourne { node, err } : traverse les dossiers (x requis) */
+    lookup(parts) {
+      let cur = this.root;
+      for (let i = 0; i < parts.length; i++) {
+        if (cur.t !== 'd') return { err: 'Not a directory' };
+        if (!this.can(cur, 1)) return { err: 'Permission denied' };
+        const nx = cur.kids.get(parts[i]);
+        if (!nx) return { err: 'No such file or directory', missingAt: i };
+        cur = nx;
+      }
+      return { node: cur };
+    }
+    /* Parent + nom pour une création/suppression */
+    parentOf(parts) {
+      if (!parts.length) return { err: 'Invalid' };
+      const r = this.lookup(parts.slice(0, -1));
+      if (r.err) return { err: r.err };
+      if (r.node.t !== 'd') return { err: 'Not a directory' };
+      return { parent: r.node, name: parts[parts.length - 1] };
+    }
+    pathOf(parts) { return '/' + parts.join('/'); }
+    prettyCwd() {
+      const h = HOME.join('/'), c = this.cwd.join('/');
+      if (c === h) return '~';
+      if (c.startsWith(h + '/')) return '~/' + c.slice(h.length + 1);
+      return '/' + c;
+    }
+    prompt() { return `${USER}@intro:${this.prettyCwd()}$`; }
+    get(path) { const r = this.lookup(this.normalize(path)); return r.node || null; }
+    exists(path) { return !!this.get(path); }
+    modeOf(path) { const n = this.get(path); return n ? n.mode & 0o777 : null; }
+
+    /* ----- globs ----- */
+    expand(words) {
+      const out = [];
+      words.forEach(w => {
+        if (w.op || w.quoted || !/[*?]/.test(w.s)) { out.push(w); return; }
+        const i = w.s.lastIndexOf('/');
+        const dirPart = i >= 0 ? w.s.slice(0, i + 1) : '';
+        const pat = i >= 0 ? w.s.slice(i + 1) : w.s;
+        const r = this.lookup(this.normalize(dirPart || '.'));
+        if (!r.node || r.node.t !== 'd' || !this.can(r.node, 4)) { out.push(w); return; }
+        const re = new RegExp('^' + pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
+        const hit = [...r.node.kids.keys()].filter(k => re.test(k) && (!k.startsWith('.') || pat.startsWith('.'))).sort();
+        if (!hit.length) out.push(w); else hit.forEach(k => out.push({ s: dirPart + k }));
+      });
+      return out;
+    }
+
+    /* ----- exécution ----- */
+    run(line) {
+      const res = { out: '', err: '' };
+      this.log.push(line);
+      if (line.trim()) this.history.push(line);
+      let cmds;
+      try { cmds = splitCommands(line); } catch (e) { res.err = e.message + '\n'; return res; }
+      for (const words0 of cmds) {
+        let words = this.expand(words0);
+        let redirect = null;
+        const ri = words.findIndex(w => w.op);
+        if (ri >= 0) { redirect = { op: words[ri].s, target: words[ri + 1] && words[ri + 1].s }; words = words.slice(0, ri); if (!redirect.target) { res.err += 'bash: syntax error near unexpected token `newline\'\n'; break; } }
+        if (!words.length) continue;
+        const name = words[0].s, args = words.slice(1).map(w => w.s);
+        const r = this.exec(name, args, redirect);
+        res.out += r.out || ''; res.err += r.err || '';
+        if (r.fail) break;
+      }
+      return res;
+    }
+
+    exec(name, args, redirect) {
+      let out = '', err = '', fail = false;
+      const E = (cmd, msg) => { err += `${cmd}: ${msg}\n`; fail = true; };
+      const split = a => { const flags = [], rest = []; let done = false; a.forEach(x => { if (!done && x === '--') done = true; else if (!done && /^-[A-Za-z]+$/.test(x)) flags.push(...x.slice(1)); else rest.push(x); }); return { flags, rest }; };
+      switch (name) {
+        case 'pwd': out = this.pathOf(this.cwd) + '\n'; break;
+        case 'whoami': out = USER + '\n'; break;
+        case 'id': out = `uid=1000(${USER}) gid=1000(${GROUP}) groups=1000(${GROUP})\n`; break;
+        case 'clear': this.cleared = true; break;
+        case 'help': out = HELP; break;
+        case 'echo': {
+          const text = args.join(' ') + '\n';
+          if (redirect) {
+            const r = this.writeFile(redirect.target, redirect.op === '>>' ? 'append' : 'write', args.join(' ') + '\n');
+            if (r) { err += `bash: ${redirect.target}: ${r}\n`; fail = true; }
+          } else out = text;
+          break;
+        }
+        case 'cd': {
+          const t = args[0];
+          let target;
+          if (t === undefined || t === '~') target = HOME.slice();
+          else if (t === '-') { if (!this.prev) { E('bash: cd', 'OLDPWD not set'); break; } target = this.prev.slice(); out = this.pathOf(target) + '\n'; }
+          else target = this.normalize(t);
+          const r = this.lookup(target);
+          if (r.err) { E('bash: cd', `${t}: ${r.err}`); break; }
+          if (r.node.t !== 'd') { E('bash: cd', `${t}: Not a directory`); break; }
+          if (!this.can(r.node, 1)) { E('bash: cd', `${t}: Permission denied`); break; }
+          this.prev = this.cwd; this.cwd = target;
+          break;
+        }
+        case 'ls': {
+          const { flags, rest } = split(args);
+          const L = flags.includes('l'), A = flags.includes('a'), D = flags.includes('d');
+          const targets = rest.length ? rest : ['.'];
+          const blocks = [];
+          targets.forEach((t, ti) => {
+            const parts = this.normalize(t);
+            const r = this.lookup(parts);
+            if (r.err) { err += `ls: cannot access '${t}': ${r.err}\n`; fail = true; return; }
+            const n = r.node;
+            if (n.t === 'f' || D) { blocks.push({ head: null, body: this.lsLines([[t, n]], L, parts) }); return; }
+            if (!this.can(n, 4)) { err += `ls: cannot open directory '${t}': Permission denied\n`; fail = true; return; }
+            let names = [...n.kids.keys()].filter(k => A || !k.startsWith('.')).sort((a, b) => a.replace(/^\./, '').toLowerCase().localeCompare(b.replace(/^\./, '').toLowerCase()));
+            let entries = names.map(k => [k, n.kids.get(k)]);
+            if (A) entries = [['.', n], ['..', n]].concat(entries);
+            const noX = !this.can(n, 1);
+            const body = this.lsLines(entries, L, parts, noX, t);
+            blocks.push({ head: targets.length > 1 ? t + ':' : null, body, noX: L && noX });
+            if (L && noX) { fail = true; }
+          });
+          blocks.forEach((b, i) => {
+            if (b.head) out += (i ? '\n' : '') + esc(b.head) + '\n';
+            out += b.body.out;
+            if (b.body.err) err += b.body.err;
+          });
+          break;
+        }
+        case 'tree': {
+          const parts = this.normalize(args[0] || '.');
+          const r = this.lookup(parts);
+          if (r.err) { E('tree', `${args[0] || '.'}: ${r.err}`); break; }
+          const lines = [esc(args[0] || '.')];
+          const walk = (n, pre) => {
+            if (n.t !== 'd' || !this.can(n, 4)) return;
+            const ks = [...n.kids.keys()].filter(k => !k.startsWith('.')).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+            ks.forEach((k, i) => {
+              const last = i === ks.length - 1, c = n.kids.get(k);
+              lines.push(pre + (last ? '└── ' : '├── ') + (c.t === 'd' ? `<span class="ls-d">${esc(k)}</span>` : esc(k)));
+              walk(c, pre + (last ? '    ' : '│   '));
+            });
+          };
+          walk(r.node, '');
+          out = lines.join('\n') + '\n';
+          break;
+        }
+        case 'mkdir': {
+          const { flags, rest } = split(args);
+          if (!rest.length) { E('mkdir', 'missing operand'); break; }
+          const P = flags.includes('p');
+          rest.forEach(t => {
+            const parts = this.normalize(t);
+            if (P) {
+              let cur = this.root, ok = true;
+              for (let i = 0; i < parts.length; i++) {
+                let nx = cur.kids.get(parts[i]);
+                if (!nx) {
+                  if (!this.can(cur, 2) || !this.can(cur, 1)) { err += `mkdir: cannot create directory '${t}': Permission denied\n`; fail = true; ok = false; break; }
+                  nx = dir(0o777 & ~this.umask); nx.mtime = new Date(); cur.kids.set(parts[i], nx);
+                } else if (nx.t !== 'd') { err += `mkdir: cannot create directory '${t}': Not a directory\n`; fail = true; ok = false; break; }
+                else if (!this.can(nx, 1) && i < parts.length - 1) { err += `mkdir: cannot create directory '${t}': Permission denied\n`; fail = true; ok = false; break; }
+                cur = nx;
+              }
+              return;
+            }
+            const pp = this.parentOf(parts);
+            if (pp.err) { err += `mkdir: cannot create directory '${t}': ${pp.err}\n`; fail = true; return; }
+            if (pp.parent.kids.has(pp.name)) { err += `mkdir: cannot create directory '${t}': File exists\n`; fail = true; return; }
+            if (!this.can(pp.parent, 2) || !this.can(pp.parent, 1)) { err += `mkdir: cannot create directory '${t}': Permission denied\n`; fail = true; return; }
+            const d = dir(0o777 & ~this.umask); d.mtime = new Date();
+            pp.parent.kids.set(pp.name, d);
+          });
+          break;
+        }
+        case 'rmdir': {
+          if (!args.length) { E('rmdir', 'missing operand'); break; }
+          args.forEach(t => {
+            const parts = this.normalize(t);
+            const pp = this.parentOf(parts);
+            const n = pp.parent && pp.parent.kids.get(pp.name);
+            if (pp.err || !n) { err += `rmdir: failed to remove '${t}': ${pp.err || 'No such file or directory'}\n`; fail = true; return; }
+            if (n.t !== 'd') { err += `rmdir: failed to remove '${t}': Not a directory\n`; fail = true; return; }
+            if (n.kids.size) { err += `rmdir: failed to remove '${t}': Directory not empty\n`; fail = true; return; }
+            if (!this.can(pp.parent, 2) || !this.can(pp.parent, 1)) { err += `rmdir: failed to remove '${t}': Permission denied\n`; fail = true; return; }
+            pp.parent.kids.delete(pp.name);
+          });
+          break;
+        }
+        case 'touch': {
+          if (!args.length) { E('touch', 'missing file operand'); break; }
+          args.forEach(t => {
+            const parts = this.normalize(t);
+            const r = this.lookup(parts);
+            if (r.node) { r.node.mtime = new Date(); return; }
+            if (r.err !== 'No such file or directory') { err += `touch: cannot touch '${t}': ${r.err}\n`; fail = true; return; }
+            const pp = this.parentOf(parts);
+            if (pp.err) { err += `touch: cannot touch '${t}': ${pp.err}\n`; fail = true; return; }
+            if (!this.can(pp.parent, 2) || !this.can(pp.parent, 1)) { err += `touch: cannot touch '${t}': Permission denied\n`; fail = true; return; }
+            const f = file(0o666 & ~this.umask, ''); f.mtime = new Date();
+            pp.parent.kids.set(pp.name, f);
+          });
+          break;
+        }
+        case 'cat': {
+          if (!args.length) { E('cat', 'missing file operand'); break; }
+          args.forEach(t => {
+            const r = this.lookup(this.normalize(t));
+            if (r.err) { err += `cat: ${t}: ${r.err}\n`; fail = true; return; }
+            if (r.node.t === 'd') { err += `cat: ${t}: Is a directory\n`; fail = true; return; }
+            if (!this.can(r.node, 4)) { err += `cat: ${t}: Permission denied\n`; fail = true; return; }
+            out += esc(r.node.data);
+          });
+          break;
+        }
+        case 'cp': {
+          const { flags, rest } = split(args);
+          const R = flags.includes('R') || flags.includes('r');
+          if (rest.length < 2) { E('cp', rest.length ? `missing destination file operand after '${rest[0]}'` : 'missing file operand'); break; }
+          const dst = rest[rest.length - 1], srcs = rest.slice(0, -1);
+          const dparts = this.normalize(dst);
+          const dr = this.lookup(dparts);
+          const dstIsDir = dr.node && dr.node.t === 'd';
+          if (srcs.length > 1 && !dstIsDir) { E('cp', `target '${dst}' is not a directory`); break; }
+          srcs.forEach(s => {
+            const sparts = this.normalize(s);
+            const sr = this.lookup(sparts);
+            if (sr.err) { err += `cp: cannot stat '${s}': ${sr.err}\n`; fail = true; return; }
+            if (sr.node.t === 'd' && !R) { err += `cp: -r not specified; omitting directory '${s}'\n`; fail = true; return; }
+            let target = dstIsDir ? dparts.concat(sparts[sparts.length - 1] || '') : dparts;
+            if (sr.node.t === 'd' && target.slice(0, sparts.length).join('/') === sparts.join('/') && target.length >= sparts.length) { err += `cp: cannot copy a directory, '${s}', into itself, '${dst === '.' ? s : dst}${dstIsDir ? '/' + sparts[sparts.length - 1] : ''}'\n`; fail = true; return; }
+            const pp = this.parentOf(target);
+            if (pp.err) { err += `cp: cannot create regular file '${dst}': ${pp.err}\n`; fail = true; return; }
+            if (!this.can(pp.parent, 2) || !this.can(pp.parent, 1)) { err += `cp: cannot create ${sr.node.t === 'd' ? 'directory' : 'regular file'} '${dst}': Permission denied\n`; fail = true; return; }
+            const ex = pp.parent.kids.get(pp.name);
+            if (ex && ex.t === 'd' && sr.node.t !== 'd') { err += `cp: cannot overwrite directory '${dst}' with non-directory\n`; fail = true; return; }
+            const problem = this.copyNode(sr.node, pp.parent, pp.name, s);
+            if (problem) { err += problem; fail = true; }
+          });
+          break;
+        }
+        case 'mv': {
+          const { rest } = split(args);
+          if (rest.length < 2) { E('mv', rest.length ? `missing destination file operand after '${rest[0]}'` : 'missing file operand'); break; }
+          const dst = rest[rest.length - 1], srcs = rest.slice(0, -1);
+          const dparts = this.normalize(dst);
+          const dr = this.lookup(dparts);
+          const dstIsDir = dr.node && dr.node.t === 'd';
+          if (srcs.length > 1 && !dstIsDir) { E('mv', `target '${dst}' is not a directory`); break; }
+          srcs.forEach(s => {
+            const sparts = this.normalize(s);
+            const sp = this.parentOf(sparts);
+            const sn = sp.parent && sp.parent.kids.get(sp.name);
+            if (sp.err || !sn) { err += `mv: cannot stat '${s}': ${sp.err || 'No such file or directory'}\n`; fail = true; return; }
+            const target = dstIsDir ? dparts.concat(sparts[sparts.length - 1]) : dparts;
+            if (sn.t === 'd' && target.length > sparts.length && target.slice(0, sparts.length).join('/') === sparts.join('/')) { err += `mv: cannot move '${s}' to a subdirectory of itself, '${dst}/${sparts[sparts.length - 1]}'\n`; fail = true; return; }
+            if (target.join('/') === sparts.join('/')) { err += `mv: '${s}' and '${dst}' are the same file\n`; fail = true; return; }
+            const tp = this.parentOf(target);
+            if (tp.err) { err += `mv: cannot move '${s}' to '${dst}': ${tp.err}\n`; fail = true; return; }
+            if (!this.can(sp.parent, 2) || !this.can(sp.parent, 1) || !this.can(tp.parent, 2) || !this.can(tp.parent, 1)) { err += `mv: cannot move '${s}' to '${dst}': Permission denied\n`; fail = true; return; }
+            const ex = tp.parent.kids.get(tp.name);
+            if (ex && ex.t === 'd' && sn.t !== 'd') { err += `mv: cannot overwrite directory '${dst}' with non-directory\n`; fail = true; return; }
+            if (ex && ex.t === 'd' && ex.kids.size) { err += `mv: cannot move '${s}' to '${dst}': Directory not empty\n`; fail = true; return; }
+            sp.parent.kids.delete(sp.name);
+            tp.parent.kids.set(tp.name, sn);
+          });
+          break;
+        }
+        case 'rm': {
+          const { flags, rest } = split(args);
+          const R = flags.includes('r') || flags.includes('R'), F = flags.includes('f');
+          if (!rest.length) { if (!F) E('rm', 'missing operand'); break; }
+          rest.forEach(t => {
+            const parts = this.normalize(t);
+            if (['.', '..'].includes(t.split('/').pop())) { err += `rm: refusing to remove '.' or '..' directory: skipping '${t}'\n`; fail = true; return; }
+            if (!parts.length) { err += `rm: it is dangerous to operate recursively on '/'\n`; fail = true; return; }
+            const pp = this.parentOf(parts);
+            const n = pp.parent && pp.parent.kids.get(pp.name);
+            if (pp.err || !n) { if (!F) { err += `rm: cannot remove '${t}': ${pp.err || 'No such file or directory'}\n`; fail = true; } return; }
+            if (n.t === 'd' && !R) { err += `rm: cannot remove '${t}': Is a directory\n`; fail = true; return; }
+            if (!this.can(pp.parent, 2) || !this.can(pp.parent, 1)) { err += `rm: cannot remove '${t}': Permission denied\n`; fail = true; return; }
+            pp.parent.kids.delete(pp.name);
+            if (this.cwd.join('/').startsWith(parts.join('/')) && this.cwd.length >= parts.length) { /* le dossier courant disparaît : on reste, comme un vrai shell */ }
+          });
+          break;
+        }
+        case 'chmod': {
+          const R = args.some(a => /^-[A-Za-z]*R[A-Za-z]*$/.test(a));
+          const modeArg = args.find(a => !/^-[A-Za-z]+$/.test(a) || /^-[rwxX]+$/.test(a));
+          const files = args.filter(a => a !== modeArg && !/^-R$/.test(a));
+          if (modeArg === undefined) { E('chmod', 'missing operand'); break; }
+          if (!files.length) { E('chmod', `missing operand after '${modeArg}'`); break; }
+          if (!validMode(modeArg)) { E('chmod', `invalid mode: '${modeArg}'`); break; }
+          files.forEach(t => {
+            const r = this.lookup(this.normalize(t));
+            if (r.err) { err += `chmod: cannot access '${t}': ${r.err}\n`; fail = true; return; }
+            const apply = n => {
+              if (n.owner !== USER) { err += `chmod: changing permissions of '${t}': Operation not permitted\n`; fail = true; return; }
+              n.mode = applyMode(modeArg, n.mode, n.t === 'd', this.umask);
+              if (R && n.t === 'd') n.kids.forEach(apply);
+            };
+            apply(r.node);
+          });
+          break;
+        }
+        case 'umask': {
+          const S = args.includes('-S');
+          const v = args.find(a => a !== '-S');
+          if (v === undefined) { out = (S ? symStr(0o777 & ~this.umask) : '0' + octStr(this.umask)) + '\n'; break; }
+          if (!/^[0-7]{1,4}$/.test(v)) { E('bash: umask', `${v}: octal number out of range`); break; }
+          this.umask = parseInt(v, 8) & 0o777;
+          break;
+        }
+        default: {
+          if (name.startsWith('./') || name.startsWith('/') || name.includes('/')) {
+            const r = this.lookup(this.normalize(name));
+            if (r.err) { err += `bash: ${name}: ${r.err}\n`; fail = true; break; }
+            if (r.node.t === 'd') { err += `bash: ${name}: Is a directory\n`; fail = true; break; }
+            if (!this.can(r.node, 1)) { err += `bash: ${name}: Permission denied\n`; fail = true; break; }
+            this.ranScript.add(this.pathOf(this.normalize(name)));
+            r.node.data.split('\n').forEach(l => { const m = l.match(/^echo\s+"(.*)"$/); if (m) out += esc(m[1]) + '\n'; });
+            break;
+          }
+          err += `bash: ${name}: command not found\n`; fail = true;
+        }
+      }
+      return { out, err, fail };
+    }
+
+    writeFile(path, mode, text) {
+      const parts = this.normalize(path);
+      const r = this.lookup(parts);
+      if (r.node) {
+        if (r.node.t === 'd') return 'Is a directory';
+        if (!this.can(r.node, 2)) return 'Permission denied';
+        r.node.data = mode === 'append' ? r.node.data + text : text;
+        r.node.mtime = new Date();
+        return null;
+      }
+      if (r.err !== 'No such file or directory') return r.err;
+      const pp = this.parentOf(parts);
+      if (pp.err) return pp.err;
+      if (!this.can(pp.parent, 2) || !this.can(pp.parent, 1)) return 'Permission denied';
+      const f = file(0o666 & ~this.umask, text); f.mtime = new Date();
+      pp.parent.kids.set(pp.name, f);
+      return null;
+    }
+
+    copyNode(src, parent, name, label) {
+      if (src.t === 'f') {
+        if (!this.can(src, 4)) return `cp: cannot open '${label}' for reading: Permission denied\n`;
+        const ex = parent.kids.get(name);
+        const f = { t: 'f', mode: src.mode & ~this.umask & 0o777, owner: USER, group: GROUP, mtime: new Date(), data: src.data };
+        if (ex && ex.t === 'f') { if (!this.can(ex, 2)) return `cp: cannot create regular file '${label}': Permission denied\n`; f.mode = ex.mode; f.owner = ex.owner; f.group = ex.group; }
+        parent.kids.set(name, f);
+        return '';
+      }
+      if (!this.can(src, 4) || !this.can(src, 1)) return `cp: cannot access '${label}': Permission denied\n`;
+      let d = parent.kids.get(name);
+      if (!d) { d = { t: 'd', mode: src.mode & ~this.umask & 0o777, owner: USER, group: GROUP, mtime: new Date(), kids: new Map() }; parent.kids.set(name, d); }
+      let problem = '';
+      src.kids.forEach((k, kn) => { problem += this.copyNode(k, d, kn, label + '/' + kn); });
+      return problem;
+    }
+
+    lsLines(entries, L, baseParts, noX, label) {
+      let out = '', err = '';
+      if (!L) {
+        out = entries.map(([n, node]) => node.t === 'd' ? `<span class="ls-d">${esc(n)}</span>` : (node.mode & 0o111 ? `<span class="ls-x">${esc(n)}</span>` : esc(n))).join('  ') + (entries.length ? '\n' : '');
+        return { out, err };
+      }
+      if (noX) {
+        entries.forEach(([n]) => { if (n !== '.' && n !== '..') err += `ls: cannot access '${(label === '.' ? '' : label + '/') + n}': Permission denied\n`; });
+        return { out: 'total 0\n', err };
+      }
+      const links = node => (node.t === 'd' ? String(2 + [...node.kids.values()].filter(k => k.t === 'd').length) : '1');
+      const rows = entries.map(([n, node]) => [modeStr(node.t, node.mode), links(node), node.owner, node.group, String(node.t === 'd' ? 4096 : node.data.length), fmtDate(node.mtime), node.t === 'd' ? `<span class="ls-d">${esc(n)}</span>` : (node.mode & 0o111 ? `<span class="ls-x">${esc(n)}</span>` : esc(n))]);
+      const w = [1, 2, 3, 4].map(i => Math.max(...rows.map(r => r[i].length), 0));
+      const total = entries.reduce((a, [, node]) => a + (node.t === 'd' ? 4 : (node.data.length ? 4 * Math.ceil(node.data.length / 4096) : 0)), 0);
+      const showTotal = entries.length && !(entries.length === 1 && label !== undefined && false);
+      if (label !== undefined) out += `total ${total}\n`;
+      rows.forEach(r => { out += `${r[0]} ${r[1].padStart(w[0])} ${r[2].padEnd(w[1])} ${r[3].padEnd(w[2])} ${r[4].padStart(w[3])} ${r[5]} ${r[6]}\n`; });
+      return { out, err };
+    }
+  }
+
+  const HELP = `Commandes disponibles :
+  pwd  cd  ls [-l] [-a] [-d]  tree  mkdir [-p]  rmdir  touch
+  cp [-R]  mv  rm [-r] [-f]  cat  echo  chmod [-R]  umask  whoami  clear
+Astuces : flèche haut = commande précédente ; * et ? fonctionnent ; ./fichier lance un script.
+`;
+
+  /* ----- chmod ----- */
+  function validMode(m) {
+    return /^[0-7]{3,4}$/.test(m) || /^[ugoa]*([-+=][rwxX]*)+(,[ugoa]*([-+=][rwxX]*)+)*$/.test(m) && /[-+=]/.test(m);
+  }
+  function applyMode(m, cur, isDir, umask) {
+    if (/^[0-7]{3,4}$/.test(m)) return parseInt(m.slice(-3), 8);
+    let mode = cur & 0o777;
+    m.split(',').forEach(clause => {
+      const mm = clause.match(/^([ugoa]*)((?:[-+=][rwxX]*)+)$/);
+      let who = mm[1];
+      const noWho = !who;
+      if (!who || who.includes('a')) who = 'ugo';
+      const ops = mm[2].match(/[-+=][rwxX]*/g);
+      ops.forEach(op => {
+        const sign = op[0];
+        let bits = 0;
+        for (const ch of op.slice(1)) {
+          if (ch === 'r') bits |= 4; else if (ch === 'w') bits |= 2; else if (ch === 'x') bits |= 1;
+          else if (ch === 'X' && (isDir || (cur & 0o111))) bits |= 1;
+        }
+        let mask = 0, val = 0;
+        'ugo'.split('').forEach((w, i) => {
+          if (!who.includes(w)) return;
+          const sh = (2 - i) * 3;
+          mask |= 7 << sh; val |= bits << sh;
+        });
+        if (noWho) val &= ~umask;
+        if (sign === '+') mode |= val;
+        else if (sign === '-') mode &= ~(noWho ? val | 0 : val);
+        else { mode = (mode & ~mask) | (noWho ? val : val); }
+      });
+    });
+    return mode & 0o777;
+  }
+
+  return { Shell, modeStr, symStr, octStr, applyMode, validMode, SEEDS, esc, USER };
+})();
+if (typeof module !== 'undefined' && module.exports) module.exports = Sh;
+
+/* content.js */
+/* Contenu du cours Intro système : leçons, exercices, mémo */
+const c = s => `<code>${esc(s)}</code>`;
+const tbl = (head, rows, cls) => `<div class="tbl-wrap"><table class="tbl ${cls || ''}"><thead><tr>${head.map(h => `<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+
+/* Bloc de commandes : lignes "$ cmd" = commandes (copiables et exécutables dans le terminal), le reste = sortie */
+function sh(block, opts) {
+  opts = opts || {};
+  const lines = block.split('\n');
+  const cmds = lines.filter(l => l.startsWith('$ ')).map(l => l.slice(2));
+  const html = lines.map(l => l.startsWith('$ ')
+    ? `<span class="sh-p">$</span> <span class="sh-c">${esc(l.slice(2))}</span>`
+    : `<span class="sh-o">${esc(l)}</span>`).join('\n');
+  return `<figure class="cb sh"><pre class="cb-code"><code>${html}</code></pre>${cmds.length && !opts.noTry ? `<div class="cb-bar"><span class="cb-lang">bash</span><div class="cb-actions"><button type="button" class="btn mini" data-act="try" data-cmds="${esc(JSON.stringify(cmds))}">▶ Essayer dans le terminal</button></div></div>` : ''}</figure>`;
+}
+/* Anatomie d'une chaîne ls -l */
+function lsFig(str) {
+  const t = str[0], u = str.slice(1, 4), g = str.slice(4, 7), o = str.slice(7, 10);
+  return `<figure class="lsfig" aria-label="Anatomie de ${esc(str)}">
+  <div class="ls-str" aria-hidden="true"><span class="seg-t">${esc(t)}</span><span class="seg-u">${esc(u)}</span><span class="seg-g">${esc(g)}</span><span class="seg-o">${esc(o)}</span></div>
+  <ul class="ls-leg">
+    <li><i class="seg-t"></i><strong>type</strong> : <code>-</code> fichier, <code>d</code> répertoire</li>
+    <li><i class="seg-u"></i><strong>u</strong> (user) : le propriétaire</li>
+    <li><i class="seg-g"></i><strong>g</strong> (group) : le groupe</li>
+    <li><i class="seg-o"></i><strong>o</strong> (others) : tous les autres</li>
+  </ul></figure>`;
+}
+const permLab = () => '<div class="widget permlab" data-widget="permlab"></div>';
+const drillW = (kind, title) => `<div class="widget drill" data-widget="drill" data-kind="${kind}" data-title="${esc(title)}"></div>`;
+
+const LESSONS = [
+  {
+    id: 'l1', title: 'Se repérer : pwd et cd', skill: 'Savoir où je suis et me déplacer dans l\'arborescence',
+    lead: "Un terminal est toujours « quelque part » dans l'arborescence. Deux commandes suffisent pour s'y repérer : pwd pour savoir où l'on est, cd pour aller ailleurs.",
+    ex: ['l1-q1', 'l1-q2', 'l1-q3', 'l1-q4', 'l1-t1', 'l1-t2', 'l1-t3'],
+    body: () => `
+<h2>Les deux commandes</h2>
+${tbl(['Commande', 'Rôle'], [[c('pwd'), '<strong>P</strong>rint <strong>W</strong>orking <strong>D</strong>irectory : affiche le chemin <strong>absolu</strong> du répertoire où tu te trouves.'], [c('cd'), '<strong>C</strong>hange <strong>D</strong>irectory : permet de changer de répertoire courant.']])}
+${sh(`$ pwd
+/home/etudiant
+$ cd Documents
+$ pwd
+/home/etudiant/Documents`)}
+<p>Le bouton <em>Essayer dans le terminal</em> envoie ces commandes dans le terminal simulé de ce site : tu peux tout tester sans rien risquer.</p>
+<h2>L'arborescence</h2>
+<p>Les fichiers sont rangés dans une arborescence de répertoires qui part de la <strong>racine</strong>, notée <code>/</code>. Voici celle du terminal simulé :</p>
+${sh(`$ tree
+.
+├── Documents
+│   ├── notes.txt
+│   └── rapport.txt
+├── Projets
+│   └── tp1
+│       ├── main.c
+│       └── Makefile
+├── README.txt
+└── script.sh`, { noTry: false })}
+<h3>Chemin absolu, chemin relatif</h3>
+${tbl(['Type', 'Commence par', 'Exemple'], [['absolu', c('/'), c('cd /home/etudiant/Documents')], ['relatif', 'un nom (depuis le répertoire courant)', c('cd Documents')]])}
+<h3>Raccourcis utiles</h3>
+${tbl(['Écriture', 'Signification'], [[c('.'), 'le répertoire courant'], [c('..'), 'le répertoire parent'], [c('~'), 'ton répertoire personnel (ici /home/etudiant)'], [c('cd'), 'sans argument : retour au répertoire personnel'], [c('cd -'), 'retour au répertoire précédent']])}
+${sh(`$ cd Projets/tp1
+$ pwd
+/home/etudiant/Projets/tp1
+$ cd ../..
+$ pwd
+/home/etudiant
+$ cd ~/Documents
+$ cd
+$ pwd
+/home/etudiant`)}
+${note('retenir', 'À retenir', `<ul><li>${c('pwd')} répond à « où suis-je ? » par un chemin absolu.</li><li>${c('cd chemin')} change de répertoire ; le chemin peut être absolu ou relatif.</li><li>${c('..')} remonte d'un niveau, ${c('~')} désigne ton répertoire personnel.</li></ul>`)}
+`
+  },
+  {
+    id: 'l2', title: 'Lister et créer : ls, mkdir, touch', skill: 'Lister le contenu et créer fichiers et répertoires',
+    lead: "Voir ce qu'il y a dans un répertoire, puis créer des répertoires et des fichiers.",
+    ex: ['l2-q1', 'l2-q2', 'l2-q3', 'l2-q4', 'l2-t1', 'l2-t2', 'l2-t3'],
+    body: () => `
+<h2>Lister et créer</h2>
+${tbl(['Commande', 'Rôle'], [
+    [c('ls'), '<strong>List</strong> : liste les fichiers et dossiers. L\'option <code>-l</code> donne une vue détaillée avec les droits, le propriétaire, la taille, etc.'],
+    [c('mkdir'), '<strong>Make Directory</strong> : crée un ou plusieurs répertoires. L\'option <code>-p</code> permet de créer toute une arborescence.'],
+    [c('touch'), 'crée un fichier vide ou met à jour sa date de modification.']])}
+<h3>ls</h3>
+${sh(`$ ls
+Documents  Projets  README.txt  script.sh  secret.txt
+$ ls -l
+total 16
+drwxr-xr-x 2 etudiant etudiant 4096 Sep 28 14:02 Documents
+drwxr-xr-x 3 etudiant etudiant 4096 Sep 28 14:02 Projets
+-rw-r--r-- 1 etudiant etudiant   55 Sep 28 14:02 README.txt`, { noTry: true })}
+<p>Essaie dans le terminal : ${c('ls')}, ${c('ls -l')}, ${c('ls Documents')}. L'option ${c('-a')} (all) montre aussi les fichiers cachés, ceux dont le nom commence par un point, comme ${c('.bashrc')}. On peut combiner les options : ${c('ls -la')}.</p>
+${sh(`$ ls -l
+$ ls -a
+$ ls -la Documents`)}
+<h3>mkdir</h3>
+${sh(`$ mkdir cours
+$ mkdir tp1 tp2
+$ mkdir projet/src
+mkdir: cannot create directory 'projet/src': No such file or directory
+$ mkdir -p projet/src/utils
+$ tree projet`)}
+<p>Sans ${c('-p')}, le répertoire parent doit déjà exister. Avec ${c('-p')}, toute l'arborescence est créée d'un coup (et ce n'est pas une erreur si elle existe déjà).</p>
+<h3>touch</h3>
+${sh(`$ touch notes.txt
+$ ls -l notes.txt
+-rw-r--r-- 1 etudiant etudiant 0 Oct 13 08:00 notes.txt
+$ touch notes.txt       # le fichier existe : seule sa date change`)}
+${note('retenir', 'À retenir', `<ul><li>${c('ls -l')} : détails, ${c('ls -a')} : fichiers cachés.</li><li>${c('mkdir -p a/b/c')} crée toute la chaîne de répertoires.</li><li>${c('touch')} crée un fichier <strong>vide</strong> s'il n'existe pas, sinon met à jour sa date.</li></ul>`)}
+`
+  },
+  {
+    id: 'l3', title: 'Copier, déplacer, supprimer', skill: 'Copier, déplacer, renommer et supprimer fichiers et répertoires',
+    lead: "Trois commandes pour organiser ses fichiers. La troisième, rm, est définitive : pas de corbeille.",
+    ex: ['l3-q1', 'l3-q2', 'l3-q3', 'l3-q4', 'l3-q5', 'l3-t1', 'l3-t2', 'l3-t3', 'l3-t4'],
+    body: () => `
+<h2>Les trois commandes</h2>
+${tbl(['Commande', 'Rôle'], [
+    [c('cp'), '<strong>Copy</strong> : copie des fichiers. L\'option <code>-R</code> est nécessaire pour copier des répertoires entiers.'],
+    [c('mv'), '<strong>Move</strong> : déplace ou renomme des fichiers et répertoires.'],
+    [c('rm'), '<strong>Remove</strong> : supprime des fichiers. L\'option <code>-r</code> est requise pour supprimer un répertoire et son contenu.']])}
+<h3>cp</h3>
+${sh(`$ cp README.txt copie.txt
+$ cp Documents Sauvegarde
+cp: -r not specified; omitting directory 'Documents'
+$ cp -R Documents Sauvegarde
+$ cp notes.txt rapport.txt Projets`, { noTry: true })}
+<p>La syntaxe est ${c('cp source destination')}. Si la destination est un répertoire existant, la copie est placée dedans. Sinon, c'est le nom de la copie.</p>
+<h3>mv</h3>
+<p>${c('mv')} sert à deux choses, avec la même commande : <strong>renommer</strong> et <strong>déplacer</strong>.</p>
+${sh(`$ mv README.txt LISEZMOI.txt        # renommer
+$ mv LISEZMOI.txt Documents           # déplacer dans Documents
+$ mv script.sh Projets/tp1/run.sh     # déplacer ET renommer`)}
+<h3>rm</h3>
+${sh(`$ rm secret.txt
+$ rm Projets
+rm: cannot remove 'Projets': Is a directory
+$ rm -r Projets`)}
+${note('attention', 'Attention', `<p>Il n'y a <strong>pas de corbeille</strong> en ligne de commande : ${c('rm')} supprime pour de bon. Relis toujours la commande avant d'appuyer sur Entrée, surtout avec ${c('-r')} et les jokers (${c('*')}).</p>`)}
+<p>Les jokers fonctionnent dans le terminal simulé : ${c('rm *.txt')} supprime tous les fichiers dont le nom finit par .txt.</p>
+${note('retenir', 'À retenir', `<ul><li>${c('cp -R')} pour copier un répertoire, ${c('rm -r')} pour en supprimer un.</li><li>${c('mv')} déplace <em>et</em> renomme.</li><li>Pas d'annulation après ${c('rm')}.</li></ul>`)}
+`
+  },
+  {
+    id: 'l4', title: 'Les permissions : le système rwx', skill: 'Expliquer qui peut faire quoi (u, g, o ; r, w, x)',
+    lead: "Chaque fichier et répertoire possède un ensemble de permissions qui définissent qui peut faire quoi.",
+    ex: ['l4-q1', 'l4-q2', 'l4-q3', 'l4-q4', 'l4-q5'],
+    body: () => `
+<h2>Les 3 catégories d'utilisateurs</h2>
+<p>Les permissions sont définies séparément pour trois entités :</p>
+${tbl(['Lettre', 'Nom', 'Qui ?'], [[c('u'), 'User', 'le propriétaire du fichier'], [c('g'), 'Group', 'les membres du groupe auquel appartient le fichier'], [c('o'), 'Others', 'tous les autres utilisateurs']])}
+<h2>Les 3 types de droits</h2>
+<p>Pour chaque catégorie, trois droits peuvent être accordés ou non. Leur sens dépend de ce qu'on regarde : un fichier ou un répertoire.</p>
+${tbl(['Droit', 'Sur un fichier', 'Sur un répertoire'], [
+    [c('r') + ' Read', 'ouvrir et lire son contenu', 'lister son contenu (les noms des fichiers)'],
+    [c('w') + ' Write', 'modifier son contenu', 'créer, renommer ou supprimer des fichiers à l\'intérieur'],
+    [c('x') + ' Execute', 'lancer le fichier comme un programme ou un script', 'y entrer (par exemple avec cd) et accéder à ses fichiers']])}
+${note('attention', 'Piège classique', `<p>Pour <strong>supprimer</strong> un fichier, c'est le droit <code>w</code> du <strong>répertoire</strong> qui compte, pas celui du fichier. Et sans <code>x</code> sur un répertoire, impossible d'y faire ${c('cd')}.</p>`)}
+<h3>Explore avec le laboratoire</h3>
+<p>Coche des cases : le laboratoire écrit la chaîne ${c('ls -l')}, la valeur octale et la commande ${c('chmod')} correspondantes, et décrit en français ce que chacun peut faire. Tu peux aussi taper une valeur octale.</p>
+${permLab()}
+<h3>Voir les droits en action</h3>
+<p>Dans cette mini-session, un script sans droit d'exécution refuse de se lancer, puis fonctionne une fois le droit <code>x</code> ajouté (la commande ${c('chmod')} est détaillée plus loin).</p>
+${sh(`$ ./script.sh
+bash: ./script.sh: Permission denied
+$ chmod u+x script.sh
+$ ./script.sh
+Le script a bien été exécuté`, { noTry: true })}
+`
+  },
+  {
+    id: 'l5', title: 'Lire les permissions avec ls -l', skill: 'Lire une chaîne comme -rwxr-xr--',
+    lead: "La commande ls -l affiche les permissions sous la forme d'une chaîne de 10 caractères. Il suffit de savoir la découper.",
+    ex: ['l5-q1', 'l5-q2', 'l5-q3', 'l5-q4', 'l5-d1'],
+    body: () => `
+<h2>Une chaîne de 10 caractères</h2>
+<p>La commande ${c('ls -l')} affiche les permissions sous la forme d'une chaîne de 10 caractères, comme ${c('-rwxr-xr--')}.</p>
+${lsFig('-rwxr-xr--')}
+<ul>
+<li>Le <strong>1er caractère</strong> indique le type (${c('-')} pour un fichier, ${c('d')} pour un répertoire).</li>
+<li>Les <strong>9 suivants</strong> sont divisés en 3 groupes de 3, représentant les droits pour <strong>u</strong>, <strong>g</strong>, puis <strong>o</strong>.</li>
+<li>Un tiret ${c('-')} signifie que le droit n'est pas accordé.</li>
+</ul>
+<h3>Exemple</h3>
+<p>${c('-rwxr-xr--')} signifie que :</p>
+${tbl(['Catégorie', 'Droits', 'Ce que ça autorise'], [['u (propriétaire)', c('rwx'), 'tous les droits : lire, écrire, exécuter'], ['g (groupe)', c('r-x'), 'lire et exécuter'], ['o (autres)', c('r--'), 'lire seulement']])}
+${sh(`$ ls -l script.sh
+-rwxr-xr-- 1 etudiant etudiant 55 Oct 13 08:00 script.sh`, { noTry: true })}
+<p>Les autres colonnes de ${c('ls -l')} sont, dans l'ordre : le nombre de liens, le <strong>propriétaire</strong>, le <strong>groupe</strong>, la taille en octets, la date de modification et le nom.</p>
+<h3>Dans un répertoire</h3>
+${lsFig('drwxr-x---')}
+<p>${c('drwxr-x---')} : un <strong>répertoire</strong> ; son propriétaire peut lister, modifier et entrer ; le groupe peut lister et entrer (mais pas créer ni supprimer) ; les autres n'ont aucun droit.</p>
+<h2>Entraîne-toi</h2>
+${drillW('who', 'Qui peut faire quoi ?')}
+`
+  },
+  {
+    id: 'l6', title: 'chmod : la méthode symbolique', skill: 'Modifier des droits avec chmod u+x, go-rw, a=r',
+    lead: "La commande chmod (change mode) modifie les droits. La méthode symbolique décrit le changement avec des lettres.",
+    ex: ['l6-q1', 'l6-q2', 'l6-q3', 'l6-q4', 'l6-t1', 'l6-t2', 'l6-t3', 'l6-d1'],
+    body: () => `
+<h2>La méthode symbolique</h2>
+<p>Elle utilise les lettres <strong>u</strong>, <strong>g</strong>, <strong>o</strong>, <strong>a</strong> (<em>all</em>, pour tout le monde) et les opérateurs :</p>
+${tbl(['Opérateur', 'Effet'], [[c('+'), 'ajouter les droits'], [c('-'), 'retirer les droits'], [c('='), 'définir exactement les droits (remplace ce qui existait)']])}
+<p>Syntaxe : ${c('chmod [qui][opérateur][droits] fichier')}.</p>
+<h3>Exemples</h3>
+${sh(`$ chmod u+x script.sh
+$ chmod go-rw secret.txt
+$ chmod a=r secret.txt`)}
+${tbl(['Commande', 'Effet'], [
+    [c('chmod u+x script.sh'), "ajoute le droit d'exécution au propriétaire"],
+    [c('chmod go-rw fichier.txt'), "retire les droits de lecture et d'écriture au groupe et aux autres"],
+    [c('chmod a=r fichier.txt'), 'définit le droit de lecture seule pour tout le monde (propriétaire, groupe et autres)']])}
+<p>Observe l'effet avec ${c('ls -l')} avant et après chaque commande :</p>
+${sh(`$ ls -l secret.txt
+$ chmod go-rw secret.txt
+$ ls -l secret.txt
+$ chmod a=r secret.txt
+$ ls -l secret.txt`)}
+<h3>Plusieurs changements à la fois</h3>
+<p>On sépare les clauses par une virgule, sans espace : ${c('chmod u=rwx,g=rx,o= dossier')} donne tous les droits au propriétaire, lecture et exécution au groupe, et rien aux autres. ${c('chmod -R')} applique le changement à un répertoire et à tout son contenu.</p>
+${note('convention', 'Sans lettre devant', `${c('chmod +x fichier')} sans préciser qui équivaut ici à <code>a+x</code> : tout le monde reçoit le droit d'exécution.`)}
+<h2>Entraîne-toi</h2>
+<p>Voici un fichier avec ses droits actuels et une commande ${c('chmod')} symbolique : quels sont ses droits après ?</p>
+${drillW('sym', 'Résultat d\'un chmod symbolique')}
+`
+  },
+  {
+    id: 'l7', title: 'chmod : la méthode octale', skill: 'Convertir des droits en valeur octale et utiliser chmod 755',
+    lead: "Chaque droit vaut un nombre : r = 4, w = 2, x = 1. En additionnant, on obtient un chiffre par catégorie.",
+    ex: ['l7-q1', 'l7-q2', 'l7-q3', 'l7-q4', 'l7-t1', 'l7-t2', 'l7-d1', 'l7-d2'],
+    body: () => `
+<h2>La méthode octale (ou numérique)</h2>
+<p>Chaque droit se voit attribuer une valeur : <strong>r = 4</strong>, <strong>w = 2</strong>, <strong>x = 1</strong>. Pour chaque catégorie (u, g, o), on additionne ces valeurs pour obtenir un chiffre de 0 à 7.</p>
+${tbl(['Droits', 'Calcul', 'Chiffre'], [[c('rwx'), '4 + 2 + 1', '<strong>7</strong>'], [c('rw-'), '4 + 2 + 0', '<strong>6</strong>'], [c('r-x'), '4 + 0 + 1', '<strong>5</strong>'], [c('r--'), '4 + 0 + 0', '<strong>4</strong>'], [c('-wx'), '0 + 2 + 1', '<strong>3</strong>'], [c('-w-'), '0 + 2 + 0', '<strong>2</strong>'], [c('--x'), '0 + 0 + 1', '<strong>1</strong>'], [c('---'), '0 + 0 + 0', '<strong>0</strong>']])}
+<p>On forme ensuite un nombre à <strong>trois chiffres</strong> (un pour chaque catégorie : u, g, o), comme 755 ou 644.</p>
+<h3>Exemples</h3>
+${tbl(['Commande', 'Lecture'], [
+    [c('chmod 755 dossier'), 'tous les droits au propriétaire (7), et le droit de lire et d\'exécuter au groupe (5) et aux autres (5)'],
+    [c('chmod 644 fichier.txt'), 'droit de lire et d\'écrire au propriétaire (6), et seulement le droit de lire au groupe (4) et aux autres (4)']])}
+<p>Décompose toujours chiffre par chiffre :</p>
+${sh(`$ chmod 754 script.sh
+$ ls -l script.sh`)}
+<p>7 → ${c('rwx')}, 5 → ${c('r-x')}, 4 → ${c('r--')} : ${c('-rwxr-xr--')}.</p>
+<h3>Valeurs courantes</h3>
+${tbl(['Octal', 'Chaîne', 'Usage typique'], [[c('644'), c('-rw-r--r--'), 'fichier ordinaire, lisible par tous'], [c('600'), c('-rw-------'), 'fichier privé'], [c('755'), c('-rwxr-xr-x'), 'programme ou répertoire public'], [c('700'), c('-rwx------'), 'répertoire privé'], [c('750'), c('-rwxr-x---'), 'partagé avec le groupe uniquement'], [c('444'), c('-r--r--r--'), 'lecture seule pour tous']])}
+<h2>Symbolique ou octal ?</h2>
+<p>L'octal fixe <strong>tous</strong> les droits d'un coup (comme <code>=</code>). Le symbolique est pratique pour changer <strong>un seul</strong> droit sans toucher aux autres.</p>
+<h2>Entraîne-toi</h2>
+<p>Deux entraînements sans fin : de la chaîne vers l'octal, puis l'inverse.</p>
+${drillW('str2oct', 'De rwx vers l\'octal')}
+${drillW('oct2str', 'De l\'octal vers rwx')}
+`
+  },
+  {
+    id: 'l8', title: 'Pour aller plus loin : umask', skill: 'Prévoir les droits d\'un nouveau fichier grâce à umask',
+    lead: "Pourquoi un nouveau fichier est-il en 644 et un nouveau répertoire en 755 ? À cause d'un masque.",
+    ex: ['l8-q1', 'l8-q2', 'l8-q3', 'l8-t1', 'l8-d1'],
+    body: () => `
+<h2>Le masque umask</h2>
+<p>La commande ${c('umask')} définit les permissions <strong>par défaut</strong> appliquées aux nouveaux fichiers et répertoires. Elle fonctionne comme un « masque » qui <strong>retire</strong> des droits.</p>
+<p>Un <code>umask</code> de <strong>022</strong> conduit à la création de fichiers avec les droits <strong>644</strong> et de répertoires avec les droits <strong>755</strong>.</p>
+<h3>Comment on le calcule</h3>
+<p>On part de droits maximaux : <strong>666</strong> pour un fichier (on n'accorde pas x par défaut) et <strong>777</strong> pour un répertoire. On retire ensuite, chiffre par chiffre, les droits du masque.</p>
+${tbl(['', 'Fichier', 'Répertoire'], [['Départ', '666', '777'], ['Moins umask 022', '644', '755'], ['Moins umask 077', '600', '700'], ['Moins umask 002', '664', '775']])}
+<p>Détail pour 022 sur un fichier : ${c('rw-')} − ${c('---')} = ${c('rw-')} (6) pour u ; ${c('rw-')} − ${c('-w-')} = ${c('r--')} (4) pour g ; idem pour o. D'où 644.</p>
+${sh(`$ umask
+0022
+$ touch a.txt
+$ mkdir d
+$ ls -ld a.txt d
+$ umask 077
+$ touch b.txt
+$ mkdir e
+$ ls -ld b.txt e`)}
+${note('retenir', 'À retenir', "<ul><li><code>umask</code> retire des droits aux nouveaux fichiers et répertoires.</li><li>022 → 644 (fichiers) et 755 (répertoires).</li><li>Il n'affecte que les <strong>futurs</strong> fichiers, pas ceux qui existent déjà.</li></ul>")}
+<h2>Entraîne-toi</h2>
+${drillW('umask', 'Droits par défaut avec umask')}
+`
+  }
+];
+
+/* ================================================================== EXERCICES */
+const T = (id, o) => Object.assign({ type: 'shell', id }, o);
+const hasCmd = (sh, re) => sh.log.some(l => re.test(l));
+const EX = {
+  /* --- Leçon 1 --- */
+  'l1-q1': { type: 'qcm', q: 'Que fait la commande pwd ?', choices: ["Elle affiche le chemin absolu du répertoire courant", "Elle change de répertoire", "Elle liste les fichiers", "Elle crée un répertoire"], answer: 0, why: 'pwd = Print Working Directory : elle affiche où tu te trouves, avec un chemin absolu.' },
+  'l1-q2': { type: 'qcm', q: 'Quelle commande permet de changer de répertoire courant ?', choices: ['cd', 'pwd', 'ls', 'mv'], answer: 0, codeChoices: true, why: 'cd = Change Directory.' },
+  'l1-q3': { type: 'qcm', q: 'Depuis /home/etudiant/Documents, où mène « cd .. » ?', choices: ['/home/etudiant', '/home', '/', 'Nulle part : erreur'], answer: 0, codeChoices: true, why: '.. désigne le répertoire parent : on remonte d\'un niveau.' },
+  'l1-q4': { type: 'qcm', q: 'Lequel de ces chemins est absolu ?', choices: ['/home/etudiant/Projets', 'Projets/tp1', '../Documents', './script.sh'], answer: 0, codeChoices: true, why: 'Un chemin absolu commence par / (la racine). Les autres sont relatifs au répertoire courant.' },
+  'l1-t1': T('l1-t1', { seed: 'standard', title: 'Aller dans Documents', prompt: 'Va dans le dossier Documents, puis affiche son chemin absolu.', hint: 'cd Documents puis pwd.', solution: ['cd Documents', 'pwd'],
+    check: sh => sh.pathOf(sh.cwd) === '/home/etudiant/Documents' && hasCmd(sh, /^\s*pwd\s*$/) ? [true, 'Tu es dans Documents et tu as vérifié ta position.'] : [false, 'Il faut être dans /home/etudiant/Documents et avoir lancé pwd.'] }),
+  'l1-t2': T('l1-t2', { seed: 'standard', start: 'Documents', title: 'Un chemin relatif qui remonte', prompt: 'Tu es dans Documents. Rends-toi dans Projets/tp1 en une seule commande cd, avec un chemin relatif (sans écrire /home).', hint: 'cd ../Projets/tp1', solution: ['cd ../Projets/tp1'],
+    check: sh => sh.pathOf(sh.cwd) === '/home/etudiant/Projets/tp1' && !sh.log.some(l => /^cd\s+\/|^cd\s+~/.test(l)) ? [true, 'Parfait : .. pour remonter, puis on redescend.'] : [false, 'Utilise un chemin relatif avec .. et arrive dans Projets/tp1.'] }),
+  'l1-t3': T('l1-t3', { seed: 'standard', start: 'Projets/tp1', title: 'Rentrer à la maison', prompt: 'Tu es dans Projets/tp1. Reviens dans ton répertoire personnel sans écrire son chemin complet.', hint: 'cd tout seul, ou cd ~', solution: ['cd'],
+    check: sh => sh.pathOf(sh.cwd) === '/home/etudiant' && !sh.log.some(l => /home/.test(l)) ? [true, 'cd sans argument ramène au répertoire personnel.'] : [false, 'Va dans /home/etudiant sans taper « home ».'] }),
+
+  /* --- Leçon 2 --- */
+  'l2-q1': { type: 'qcm', q: "Que montre l'option -l de ls ?", choices: ['Une vue détaillée : droits, propriétaire, taille, date', 'Seulement les fichiers cachés', 'Les fichiers triés par taille', 'Le contenu des fichiers'], answer: 0, why: 'ls -l (long) affiche une ligne par fichier avec ses droits, son propriétaire, sa taille, etc.' },
+  'l2-q2': { type: 'qcm', q: 'À quoi sert mkdir -p a/b/c ?', choices: ["À créer toute l'arborescence a/b/c d'un coup", 'À protéger le répertoire par un mot de passe', 'À afficher le contenu de a/b/c', 'À créer un fichier c'], answer: 0, why: "-p crée aussi les répertoires parents manquants." },
+  'l2-q3': { type: 'qcm', q: 'Que fait touch sur un fichier qui existe déjà ?', choices: ['Il met à jour sa date de modification', 'Il le vide', 'Il le supprime', 'Il affiche une erreur'], answer: 0, why: 'touch crée un fichier vide s\'il n\'existe pas, sinon il met à jour sa date de modification.' },
+  'l2-q4': { type: 'qcm', q: 'Quelle commande affiche aussi les fichiers cachés avec les détails ?', choices: ['ls -la', 'ls -p', 'ls -d', 'ls --hidden'], answer: 0, codeChoices: true, why: "-a (all) montre les fichiers dont le nom commence par un point, -l donne les détails : ls -la combine les deux." },
+  'l2-t1': T('l2-t1', { seed: 'empty', title: 'Créer des fichiers dans un répertoire', prompt: 'Dans ton répertoire personnel, crée le répertoire cours, puis dedans les fichiers td1.txt et td2.txt (sans changer de répertoire courant).', hint: 'mkdir cours puis touch cours/td1.txt cours/td2.txt', solution: ['mkdir cours', 'touch cours/td1.txt cours/td2.txt'],
+    check: sh => { const d = sh.get('~/cours'); return d && d.t === 'd' && sh.exists('~/cours/td1.txt') && sh.exists('~/cours/td2.txt') ? [true, 'Arborescence créée.'] : [false, 'Il manque cours/, cours/td1.txt ou cours/td2.txt.']; } }),
+  'l2-t2': T('l2-t2', { seed: 'empty', title: 'Toute une arborescence', prompt: 'Crée en une seule commande l\'arborescence projet/src/utils.', hint: 'mkdir -p projet/src/utils', solution: ['mkdir -p projet/src/utils'],
+    check: sh => sh.exists('~/projet/src/utils') && hasCmd(sh, /^\s*mkdir\s+(-\w*p\w*)\s/) && sh.log.filter(l => /^\s*mkdir/.test(l)).length === 1 ? [true, 'Une seule commande grâce à -p.'] : [false, 'Utilise mkdir -p, en une seule commande mkdir.'] }),
+  'l2-t3': T('l2-t3', { seed: 'standard', title: 'Voir les fichiers cachés', prompt: 'Affiche le contenu de ton répertoire personnel avec les détails ET les fichiers cachés.', hint: 'ls -la', solution: ['ls -la'],
+    check: sh => hasCmd(sh, /^\s*ls\s+(-\w*l\w*a\w*|-\w*a\w*l\w*|-l\s+-a|-a\s+-l)\s*$/) ? [true, 'Tu as vu .bashrc et les autres fichiers cachés.'] : [false, 'Lance ls avec les options -l et -a.'] }),
+
+  /* --- Leçon 3 --- */
+  'l3-q1': { type: 'qcm', q: 'Quelle option de cp faut-il pour copier un répertoire entier ?', choices: ['-R', '-p', '-l', 'Aucune'], answer: 0, codeChoices: true, why: 'Sans -R, cp refuse de copier un répertoire : « omitting directory ».' },
+  'l3-q2': { type: 'qcm', q: 'Comment renomme-t-on un fichier ?', choices: ['mv ancien nouveau', 'cp ancien nouveau', 'rm ancien nouveau', 'touch ancien nouveau'], answer: 0, codeChoices: true, why: 'mv déplace ou renomme : renommer, c\'est déplacer vers un autre nom.' },
+  'l3-q3': { type: 'qcm', q: 'Quelle option de rm est requise pour supprimer un répertoire et son contenu ?', choices: ['-r', '-R seulement si le répertoire est vide', '-d', 'Aucune'], answer: 0, codeChoices: true, why: "rm -r supprime récursivement. Sans -r : « Is a directory »." },
+  'l3-q4': { type: 'qcm', q: 'Après rm fichier.txt, comment récupérer le fichier dans la corbeille ?', choices: ["On ne peut pas : il n'y a pas de corbeille en ligne de commande", 'cd ~/.Trash', 'rm --undo', 'ls -a'], answer: 0, why: 'rm est définitif. Vérifie toujours avant de valider.' },
+  'l3-q5': { type: 'qcm', q: 'Que fait « mv script.sh Projets » si Projets est un répertoire existant ?', choices: ['Il déplace script.sh dans Projets', 'Il renomme script.sh en Projets', 'Il copie script.sh dans Projets', 'Il efface Projets'], answer: 0, why: 'Quand la destination est un répertoire existant, la source est placée dedans.' },
+  'l3-t1': T('l3-t1', { seed: 'standard', title: 'Copier un fichier', prompt: 'Fais une copie de README.txt nommée README.bak (dans le même répertoire).', hint: 'cp README.txt README.bak', solution: ['cp README.txt README.bak'],
+    check: sh => sh.exists('~/README.bak') && sh.exists('~/README.txt') && sh.get('~/README.bak').data === sh.get('~/README.txt').data ? [true, 'La copie existe et le fichier d\'origine aussi.'] : [false, 'README.bak doit exister avec le même contenu, et README.txt aussi.'] }),
+  'l3-t2': T('l3-t2', { seed: 'standard', title: 'Copier un répertoire', prompt: 'Sauvegarde le répertoire Documents dans un nouveau répertoire Sauvegarde (avec son contenu).', hint: 'cp -R Documents Sauvegarde', solution: ['cp -R Documents Sauvegarde'],
+    check: sh => sh.exists('~/Sauvegarde/notes.txt') && sh.exists('~/Sauvegarde/rapport.txt') && sh.exists('~/Documents/notes.txt') ? [true, 'Copie récursive réussie, l\'original est intact.'] : [false, 'Sauvegarde doit contenir notes.txt et rapport.txt ; Documents reste en place.'] }),
+  'l3-t3': T('l3-t3', { seed: 'standard', title: 'Déplacer et renommer', prompt: 'Déplace script.sh dans Projets/tp1 en le renommant run.sh, en une seule commande.', hint: 'mv script.sh Projets/tp1/run.sh', solution: ['mv script.sh Projets/tp1/run.sh'],
+    check: sh => sh.exists('~/Projets/tp1/run.sh') && !sh.exists('~/script.sh') ? [true, 'mv a fait les deux : déplacer et renommer.'] : [false, 'Il faut Projets/tp1/run.sh, et plus de script.sh dans ton répertoire personnel.'] }),
+  'l3-t4': T('l3-t4', { seed: 'standard', title: 'Supprimer un répertoire', prompt: 'Supprime le répertoire Projets/tp1 et tout son contenu, mais garde Projets.', hint: 'rm -r Projets/tp1', solution: ['rm -r Projets/tp1'],
+    check: sh => !sh.exists('~/Projets/tp1') && sh.exists('~/Projets') ? [true, 'tp1 a disparu, Projets est resté.'] : [false, 'Supprime tp1 (avec rm -r) sans toucher à Projets.'] }),
+
+  /* --- Leçon 4 --- */
+  'l4-q1': { type: 'qcm', q: 'Que permet le droit r sur un répertoire ?', choices: ['Lister son contenu (les noms des fichiers)', 'Y créer des fichiers', "L'exécuter comme un programme", "Y entrer avec cd"], answer: 0, why: "r = lister. Créer/supprimer = w. Entrer = x." },
+  'l4-q2': { type: 'qcm', q: 'Quel droit faut-il sur un répertoire pour y entrer avec cd ?', choices: ['x', 'r', 'w', 'Aucun'], answer: 0, codeChoices: true, why: "Sur un répertoire, x signifie « y entrer et accéder à ses fichiers »." },
+  'l4-q3': { type: 'qcm', q: 'Que signifie la catégorie « o » ?', choices: ['Others : tous les autres utilisateurs', 'Owner : le propriétaire', 'Organisation', 'Output'], answer: 0, why: 'u = user (propriétaire), g = group, o = others.' },
+  'l4-q4': { type: 'qcm', q: 'Pour créer ou supprimer des fichiers dans un répertoire, quel droit faut-il sur ce répertoire ?', choices: ['w', 'r', 'x seulement', 'Le droit du fichier suffit'], answer: 0, codeChoices: true, why: "w sur un répertoire : créer, renommer ou supprimer des fichiers à l'intérieur (en général avec x en plus pour y accéder)." },
+  'l4-q5': { type: 'qcm', q: 'Que permet le droit x sur un fichier ?', choices: ['Le lancer comme un programme ou un script', 'Le lire', 'Le modifier', 'Le supprimer'], answer: 0, why: 'x sur un fichier = exécuter.' },
+
+  /* --- Leçon 5 --- */
+  'l5-q1': { type: 'qcm', q: 'Dans -rwxr-xr--, que représente le premier caractère « - » ?', choices: ['Un fichier ordinaire', 'Un répertoire', 'Un droit refusé au propriétaire', 'Un lien'], answer: 0, why: "Le 1er caractère donne le type : - pour un fichier, d pour un répertoire." },
+  'l5-q2': { type: 'qcm', q: 'Que peut faire le groupe sur -rwxr-xr-- ?', choices: ['Lire et exécuter', 'Lire seulement', 'Tout faire', 'Rien'], answer: 0, why: 'Le groupe correspond au 2e bloc de trois : r-x, donc lire et exécuter.' },
+  'l5-q3': { type: 'qcm', q: 'Que peuvent faire les autres sur -rwxr-xr-- ?', choices: ['Lire seulement', 'Lire et exécuter', 'Rien', 'Lire et écrire'], answer: 0, why: 'Le dernier bloc est r-- : lecture seule.' },
+  'l5-q4': { type: 'qcm', q: 'Que signifie drwx------ ?', choices: ["Un répertoire accessible uniquement par son propriétaire", "Un fichier privé", "Un répertoire public", "Un répertoire vide"], answer: 0, why: 'd = répertoire ; rwx pour u ; --- pour g et --- pour o.' },
+  'l5-d1': { type: 'drill', kind: 'who', need: 6 },
+
+  /* --- Leçon 6 --- */
+  'l6-q1': { type: 'qcm', q: 'Que fait chmod u+x script.sh ?', choices: ["Ajoute le droit d'exécution au propriétaire", "Retire le droit d'exécution à tout le monde", "Donne tous les droits à tout le monde", "Exécute le script"], answer: 0, why: 'u = propriétaire, + = ajouter, x = exécuter. Le script n\'est pas lancé : seuls ses droits changent.' },
+  'l6-q2': { type: 'qcm', q: 'Que fait chmod go-rw fichier.txt ?', choices: ["Retire lecture et écriture au groupe et aux autres", "Donne lecture et écriture au groupe et aux autres", "Retire tout au propriétaire", "Rien"], answer: 0, why: 'g et o sont les cibles, - retire, rw sont les droits retirés.' },
+  'l6-q3': { type: 'qcm', q: 'Que fait chmod a=r fichier.txt ?', choices: ["Définit la lecture seule pour tout le monde", "Ajoute la lecture à tout le monde, sans toucher au reste", "Retire la lecture à tout le monde", "Rend le fichier exécutable"], answer: 0, why: "= définit exactement : après la commande, tout le monde a r-- et rien d'autre." },
+  'l6-q4': { type: 'qcm', q: "Quelle est la différence entre « + » et « = » ?", choices: ["+ ajoute des droits ; = remplace tous les droits de la catégorie", "Aucune", "+ remplace ; = ajoute", "= retire des droits"], answer: 0, why: "chmod g+w ajoute w au groupe en gardant le reste ; chmod g=w ne laisse que w." },
+  'l6-t1': T('l6-t1', { seed: 'perms', title: 'Rendre un script exécutable', prompt: 'script.sh n\'a pas le droit d\'exécution : ./script.sh échoue. Ajoute le droit x au propriétaire, puis lance le script.', hint: 'chmod u+x script.sh puis ./script.sh', solution: ['chmod u+x script.sh', './script.sh'],
+    check: sh => (sh.modeOf('~/script.sh') & 0o100) && sh.ranScript.has('/home/etudiant/script.sh') ? [true, 'Le script s\'est exécuté.'] : [false, 'Ajoute x au propriétaire, puis lance ./script.sh avec succès.'] }),
+  'l6-t2': T('l6-t2', { seed: 'perms', title: 'Fichier privé', prompt: 'Retire à secret.txt tous les droits du groupe et des autres (garde ceux du propriétaire).', hint: 'chmod go-rwx secret.txt', solution: ['chmod go-rwx secret.txt'],
+    check: sh => sh.modeOf('~/secret.txt') === 0o600 ? [true, 'secret.txt est en rw-------.'] : [false, 'Le groupe et les autres ne doivent plus avoir aucun droit : rw------- (600).'] }),
+  'l6-t3': T('l6-t3', { seed: 'perms', title: 'Entrer dans un répertoire', prompt: 'cd prive échoue : le répertoire est en 600. Corrige ses droits avec chmod symbolique (un seul droit à ajouter), puis entre dedans.', hint: 'chmod u+x prive puis cd prive', solution: ['chmod u+x prive', 'cd prive'],
+    check: sh => sh.pathOf(sh.cwd) === '/home/etudiant/prive' ? [true, 'x sur un répertoire permet d\'y entrer.'] : [false, 'Il faut être dans /home/etudiant/prive.'] }),
+  'l6-d1': { type: 'drill', kind: 'sym', need: 6 },
+
+  /* --- Leçon 7 --- */
+  'l7-q1': { type: 'qcm', q: 'Quelle valeur octale correspond à rwx ?', choices: ['7', '6', '5', '4'], answer: 0, why: '4 + 2 + 1 = 7.' },
+  'l7-q2': { type: 'qcm', q: 'Que signifie chmod 644 fichier.txt ?', choices: ['Lecture/écriture pour le propriétaire, lecture seule pour les autres', 'Tous les droits pour tout le monde', 'Lecture seule pour tout le monde', 'Lecture/écriture pour tout le monde'], answer: 0, why: '6 = rw-, 4 = r--, 4 = r-- : -rw-r--r--.' },
+  'l7-q3': { type: 'qcm', q: 'Quelle valeur octale pour -rwxr-x---  ?', choices: ['750', '755', '740', '570'], answer: 0, why: 'rwx = 7, r-x = 5, --- = 0.' },
+  'l7-q4': { type: 'qcm', q: 'Pour obtenir -rw------- avec la méthode octale, on écrit :', choices: ['chmod 600', 'chmod 700', 'chmod 006', 'chmod 660'], answer: 0, codeChoices: true, why: 'rw- = 6 pour u, puis 0 et 0.' },
+  'l7-t1': T('l7-t1', { seed: 'perms', title: 'Deux chmod octaux', prompt: 'Donne les droits 755 au répertoire Projets (il est en 700) et 644 au fichier notes.txt (il est en 600).', hint: 'chmod 755 Projets puis chmod 644 notes.txt (ou en une commande)', solution: ['chmod 755 Projets', 'chmod 644 notes.txt'],
+    check: sh => sh.modeOf('~/Projets') === 0o755 && sh.modeOf('~/notes.txt') === 0o644 ? [true, 'Projets en 755, notes.txt en 644.'] : [false, 'Projets doit être en 755 et notes.txt en 644.'] }),
+  'l7-t2': T('l7-t2', { seed: 'perms', title: 'Partager avec le groupe seulement', prompt: 'Mets le répertoire Documents en rwxr-x--- (propriétaire : tout ; groupe : lire et entrer ; autres : rien) avec la méthode octale.', hint: '7 pour u, 5 pour g, 0 pour o : chmod 750 Documents', solution: ['chmod 750 Documents'],
+    check: sh => sh.modeOf('~/Documents') === 0o750 ? [true, 'rwxr-x--- = 750.'] : [false, 'Le résultat attendu est 750.'] }),
+  'l7-d1': { type: 'drill', kind: 'str2oct', need: 6 },
+  'l7-d2': { type: 'drill', kind: 'oct2str', need: 6 },
+
+  /* --- Leçon 8 --- */
+  'l8-q1': { type: 'qcm', q: 'Avec umask 022, quels droits ont les nouveaux fichiers ?', choices: ['644', '755', '666', '600'], answer: 0, why: '666 − 022 = 644.' },
+  'l8-q2': { type: 'qcm', q: 'Avec umask 022, quels droits ont les nouveaux répertoires ?', choices: ['755', '644', '777', '700'], answer: 0, why: '777 − 022 = 755.' },
+  'l8-q3': { type: 'qcm', q: 'Que fait umask 077 ?', choices: ['Les nouveaux fichiers seront privés : 600 (et les répertoires 700)', 'Il rend les fichiers existants privés', 'Il donne tous les droits aux autres', 'Il supprime les droits du propriétaire'], answer: 0, why: "umask n'agit que sur les futures créations : 666 − 077 = 600 et 777 − 077 = 700." },
+  'l8-t1': T('l8-t1', { seed: 'empty', title: 'Créer en privé', prompt: 'Règle umask à 077, puis crée le fichier prive.txt et le répertoire prive2. Ils doivent être en 600 et 700.', hint: 'umask 077 puis touch prive.txt et mkdir prive2', solution: ['umask 077', 'touch prive.txt', 'mkdir prive2'],
+    check: sh => sh.modeOf('~/prive.txt') === 0o600 && sh.modeOf('~/prive2') === 0o700 ? [true, 'Le masque 077 a retiré tous les droits au groupe et aux autres.'] : [false, 'prive.txt doit être en 600 et prive2 en 700 : règle d\'abord umask.'] }),
+  'l8-d1': { type: 'drill', kind: 'umask', need: 6 }
+};
+const EX_IDS = Object.keys(EX);
+
+/* ================================================================== MÉMO */
+const MEMO = {
+  cmds: [
+    ['pwd', 'affiche le chemin absolu du répertoire courant', 'pwd'],
+    ['cd', 'change de répertoire courant', 'cd Documents'],
+    ['ls', 'liste les fichiers et dossiers (-l détails, -a cachés)', 'ls -la'],
+    ['mkdir', 'crée des répertoires (-p toute une arborescence)', 'mkdir -p a/b/c'],
+    ['touch', 'crée un fichier vide ou met à jour sa date', 'touch notes.txt'],
+    ['cp', 'copie (-R pour les répertoires)', 'cp -R Documents Sauvegarde'],
+    ['mv', 'déplace ou renomme', 'mv ancien nouveau'],
+    ['rm', 'supprime (-r pour un répertoire et son contenu)', 'rm -r dossier'],
+    ['chmod', 'modifie les permissions', 'chmod 755 dossier'],
+    ['umask', 'définit les permissions par défaut des nouveaux fichiers', 'umask 022']
+  ],
+  errors: [
+    ['No such file or directory', "Le fichier ou répertoire n'existe pas (vérifie le nom et le chemin)."],
+    ['Permission denied', "Tu n'as pas le droit nécessaire (r, w ou x) : regarde ls -l."],
+    ['Is a directory', 'Tu as utilisé rm sur un répertoire : il faut -r.'],
+    ["cp: -r not specified; omitting directory", 'Tu copies un répertoire : il faut -R.'],
+    ['File exists', 'mkdir sur un répertoire qui existe déjà.'],
+    ['command not found', 'Faute de frappe dans le nom de la commande.'],
+    ['Not a directory', 'Tu utilises un fichier comme s\'il était un répertoire.']
+  ]
+};
+
+/* app.js */
+/* Application : routage, terminal, exercices, widgets */
+const { Shell, modeStr, symStr, octStr, applyMode } = Sh;
+Store.load();
+
+const NAV = [
+  { group: 'Cours', items: LESSONS.map((l, i) => ({ id: l.id, label: l.title, n: i + 1 })) },
+  { group: 'Outils', items: [{ id: 'terminal', label: 'Terminal', n: '$' }, { id: 'memo', label: 'Mémo', n: '≡' }] }
+];
+const ALL_IDS = ['accueil', ...NAV.flatMap(g => g.items.map(i => i.id))];
+const ORDER = LESSONS.map(l => l.id);
+const main = () => $('#main');
+const rnd = n => Math.floor(Math.random() * n);
+const pick = a => a[rnd(a.length)];
+
+/* ---------- Terminal ---------- */
+function mountTerm(host, shell, opts) {
+  opts = opts || {};
+  host.innerHTML = `<div class="term"><div class="term-out" aria-live="polite" tabindex="0" role="log" aria-label="Sortie du terminal"></div><form class="term-in"><label class="prompt"></label><input class="term-input" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Commande"></form></div>`;
+  const out = $('.term-out', host), form = $('.term-in', host), input = $('.term-input', host), pr = $('.prompt', host);
+  const T = { shell, out, input, hist: 0 };
+  const sync = () => { pr.textContent = shell.prompt() + ' '; };
+  T.sync = sync;
+  T.print = html => { out.insertAdjacentHTML('beforeend', html); out.scrollTop = out.scrollHeight; };
+  T.exec = line => {
+    T.print(`<div class="t-echo">${esc(shell.prompt())} ${esc(line)}</div>`);
+    const r = shell.run(line);
+    if (shell.cleared) { out.innerHTML = ''; shell.cleared = false; }
+    if (r.out) T.print(`<div class="t-out">${r.out}</div>`);
+    if (r.err) T.print(`<div class="t-err">${esc(r.err)}</div>`);
+    sync();
+    if (opts.onRun) opts.onRun(line, r);
+    if (opts.save) opts.save(out.innerHTML);
+  };
+  T.runAll = async cmds => { for (const c of cmds) { T.exec(c); await new Promise(r => setTimeout(r, 120)); } };
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const v = input.value; input.value = ''; T.hist = 0;
+    if (!v.trim()) { T.print(`<div class="t-echo">${esc(shell.prompt())}</div>`); return; }
+    T.exec(v);
+  });
+  input.addEventListener('keydown', e => {
+    const h = shell.history;
+    if (e.key === 'ArrowUp' && h.length) { T.hist = Math.min(T.hist + 1, h.length); input.value = h[h.length - T.hist]; e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { T.hist = Math.max(T.hist - 1, 0); input.value = T.hist ? h[h.length - T.hist] : ''; e.preventDefault(); }
+    else if (e.key === 'l' && e.ctrlKey) { out.innerHTML = ''; e.preventDefault(); }
+  });
+  host.addEventListener('click', e => { if (!e.target.closest('.term-out') || !getSelection().toString()) input.focus({ preventScroll: true }); });
+  sync();
+  return T;
+}
+
+/* terminal de la page Terminal : l'état persiste quand on change de page */
+const Main = { shell: new Shell('standard'), html: '', seed: 'standard', back: null, term: null };
+function pageTerminal() {
+  return `<article class="page wide">
+  <p class="kicker">Outil</p>
+  <h1>Terminal simulé</h1>
+  <p class="lead">Un petit Linux dans ton navigateur, avec de vraies permissions. Tape <code>help</code> pour la liste des commandes. Flèches haut/bas : historique. Tout se passe ici, rien n'est risqué.</p>
+  <div class="at-bar"><label>Dossier de départ <select id="seed-sel"><option value="standard">Standard</option><option value="perms">Permissions à corriger</option><option value="empty">Vide</option></select></label>
+  <button type="button" class="btn ghost" data-app="term-reset">Réinitialiser</button>
+  ${Main.back ? `<a class="btn ghost" href="#${Main.back}">← Retour à la leçon</a>` : ''}</div>
+  <div id="main-term" class="term-box"></div>
+  <p class="note-line">Les messages d'erreur sont en anglais, comme sur un vrai système : « Permission denied » veut dire que tu n'as pas le droit.</p>
+</article>`;
+}
+function mountTerminal() {
+  const sel = $('#seed-sel'); sel.value = Main.seed;
+  const start = (reset) => {
+    if (reset) { Main.shell = new Shell(Main.seed); Main.html = ''; }
+    Main.term = mountTerm($('#main-term'), Main.shell, { save: h => { Main.html = h; } });
+    Main.term.out.innerHTML = Main.html || '<div class="t-out t-hint">Bienvenue ! Essaie : <b>ls -l</b></div>';
+    Main.term.sync();
+  };
+  sel.addEventListener('change', () => { Main.seed = sel.value; start(true); });
+  start(false);
+  const pend = window.pendingCmds; window.pendingCmds = null;
+  if (pend) Main.term.runAll(pend);
+  if (!pend) Main.term.input.focus({ preventScroll: true });
+}
+
+/* ---------- Exercices ---------- */
+const TASKS = {};
+function exercise(id) {
+  const def = EX[id]; const done = !!Store.data.done[id];
+  const head = k => `<header class="ex-h"><span class="ex-kind">${k}</span><span class="ex-badge" ${done ? '' : 'hidden'}>✓ Réussi</span></header>`;
+  if (def.type === 'qcm') {
+    return `<section class="ex ex-qcm${done ? ' is-done' : ''}" data-ex="${id}">${head('Question')}
+  <p class="ex-q">${esc(def.q)}</p>
+  <div class="choices" role="group" aria-label="Réponses">${qOrder(def.choices).map(i => [def.choices[i], i]).map(([ch, i]) => `<button type="button" class="choice" data-act="qcm" data-i="${i}"><span class="mark" aria-hidden="true"></span><span class="ct">${def.codeChoices ? `<code>${esc(ch)}</code>` : esc(ch)}</span></button>`).join('')}</div>
+  <p class="ex-fb" role="status"></p></section>`;
+  }
+  if (def.type === 'shell') {
+    return `<section class="ex ex-shell${done ? ' is-done' : ''}" data-ex="${id}">${head('À toi de taper')}
+  <h4 class="ex-title">${esc(def.title)}</h4>
+  <p class="ex-q">${esc(def.prompt)}</p>
+  <div class="task-term"></div>
+  <div class="ex-actions"><button type="button" class="btn" data-act="sh-check">Vérifier</button>
+  <button type="button" class="btn ghost" data-act="sh-hint">Indice</button>
+  <button type="button" class="btn ghost" data-act="sh-sol">Solution</button>
+  <button type="button" class="btn ghost" data-act="sh-reset">Recommencer</button></div>
+  <p class="hint" hidden>${esc(def.hint)}</p>
+  <div class="sol" hidden><p>Une solution possible :</p>${sh(def.solution.map(s => '$ ' + s).join('\n'), { noTry: true })}</div>
+  <p class="ex-fb" role="status"></p></section>`;
+  }
+  if (def.type === 'drill') {
+    return `<section class="ex ex-drill${done ? ' is-done' : ''}" data-ex="${id}" data-kind="${def.kind}" data-need="${def.need}">${head('Entraînement')}
+  <div class="drill-host"></div></section>`;
+  }
+  return '';
+}
+function markDone(id) {
+  if (!Store.data.done[id]) { Store.data.done[id] = 1; Store.save(); }
+  const sec = $(`[data-ex="${id}"]`);
+  if (sec) { sec.classList.add('is-done'); const b = $('.ex-badge', sec); if (b) b.hidden = false; }
+  window.updateProgress();
+}
+function setFb(sec, text, cls) { const fb = $('.ex-fb', sec); if (fb) { fb.textContent = text; fb.className = 'ex-fb ' + (cls || ''); } }
+
+function startTask(sec) {
+  const id = sec.dataset.ex, def = EX[id];
+  const shell = new Shell(def.seed);
+  const t = mountTerm($('.task-term', sec), shell);
+  if (def.start) { shell.run('cd ' + def.start); shell.log = []; shell.history = []; }
+  t.sync();
+  TASKS[id] = t;
+  t.print(`<div class="t-out t-hint">${def.start ? 'Tu es dans ~/' + esc(def.start) + '. ' : ''}Tape tes commandes ici.</div>`);
+}
+
+/* ---------- Drills ---------- */
+const MODES = ['rwx', 'rw-', 'r-x', 'r--', '-wx', '-w-', '--x', '---'];
+const randStr = () => { let s = ''; for (let i = 0; i < 3; i++) s += pick(i === 0 ? ['rwx', 'rw-', 'r-x', 'r--'] : MODES); return s; };
+const strToMode = s => { let m = 0; for (let i = 0; i < 9; i++) if (s[i] !== '-') m |= 1 << (8 - i); return m; };
+const normStr = v => { v = v.trim(); return v.length === 10 && /^[-d]/.test(v) ? v.slice(1) : v; };
+const DRILLS = {
+  who() {
+    const s = randStr(), who = rnd(3), r = rnd(3);
+    const names = ['le propriétaire', 'le groupe', 'les autres'], rights = ['lire', 'écrire', 'exécuter'];
+    const truth = s[who * 3 + r] !== '-';
+    return { q: `Avec les droits <code>-${s}</code> sur un fichier : ${names[who]} peut-il ${rights[r]} ?`, bool: true, ok: v => (v === 'vrai') === truth, show: truth ? 'Oui' : 'Non', why: `Regarde le bloc de ${names[who]} : ${s.slice(who * 3, who * 3 + 3)}.` };
+  },
+  sym() {
+    const start = pick([0o644, 0o755, 0o600, 0o640, 0o700, 0o444, 0o750]);
+    const who = pick(['u', 'g', 'o', 'a', 'go', 'ug']), op = pick(['+', '-', '=']), rt = pick(['r', 'w', 'x', 'rw', 'rx', 'wx', 'rwx']);
+    const spec = who + op + rt, res = applyMode(spec, start, false, 0o022);
+    const rs = modeStr('-', res).slice(1);
+    return { q: `Un fichier est en <code>${modeStr('-', start)}</code> (${octStr(start)}). Que devient-il après <code>chmod ${spec}</code> ?`, ph: 'ex : rw-r--r-- ou 644', ok: v => { v = normStr(v); return v === rs || v === octStr(res); }, show: `${rs} (${octStr(res)})`, why: 'Applique la lettre à chaque catégorie visée : + ajoute, - retire, = remplace tout.' };
+  },
+  str2oct() {
+    const s = randStr(); const o = octStr(strToMode(s));
+    return { q: `Convertis <code>${s}</code> en notation octale (3 chiffres).`, ph: 'ex : 754', ok: v => v.trim() === o, show: o, why: 'r=4, w=2, x=1 : additionne pour chaque bloc de trois.' };
+  },
+  oct2str() {
+    const o = pick(['755', '644', '600', '640', '750', '700', '444', '666', '754', '711', '555', '620']);
+    const s = modeStr('-', parseInt(o, 8)).slice(1);
+    return { q: `Convertis <code>${o}</code> en chaîne de droits (rwx).`, ph: 'ex : rwxr-xr-x', ok: v => normStr(v) === s, show: s, why: 'Chaque chiffre donne un bloc : 7=rwx, 6=rw-, 5=r-x, 4=r--, 0=---.' };
+  },
+  umask() {
+    const u = pick(['022', '027', '077', '002', '007', '037', '026']), um = parseInt(u, 8), dir = rnd(2) === 1;
+    const o = octStr((dir ? 0o777 : 0o666) & ~um);
+    return { q: `Avec <code>umask ${u}</code>, quels droits (en octal) reçoit un nouveau ${dir ? 'répertoire' : 'fichier'} ?`, ph: 'ex : 644', ok: v => v.trim() === o, show: o, why: `${dir ? '777' : '666'} moins le masque ${u}.` };
+  }
+};
+function mountDrill(host, kind, need, onDone, title) {
+  let streak = 0, cur = null, answered = false;
+  const render = () => {
+    cur = DRILLS[kind](); answered = false;
+    host.innerHTML = `${title ? `<h4 class="ex-title">${esc(title)}</h4>` : ''}<p class="ex-q">${cur.q}</p>
+    ${cur.bool ? `<div class="bool-btns" role="group"><button type="button" class="choice" data-d="vrai"><span class="mark"></span>Oui</button><button type="button" class="choice" data-d="faux"><span class="mark"></span>Non</button></div>`
+      : `<form class="drill-form"><input class="drill-in" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(cur.ph)}" aria-label="Ta réponse"><button class="btn" type="submit">Valider</button></form>`}
+    <p class="ex-fb" role="status"></p>
+    <p class="streak" aria-live="polite">Série : <strong>${streak}</strong> / ${need}</p>`;
+  };
+  const answer = v => {
+    if (answered) return; answered = true;
+    const ok = cur.ok(v);
+    streak = ok ? streak + 1 : 0;
+    const fb = $('.ex-fb', host);
+    fb.className = 'ex-fb ' + (ok ? 'ok' : 'ko');
+    fb.textContent = ok ? 'Juste !' : `Pas tout à fait : ${cur.show}. ${cur.why}`;
+    $('.streak', host).innerHTML = `Série : <strong>${streak}</strong> / ${need}`;
+    if (streak >= need) { fb.textContent = 'Série complète, bravo !'; if (onDone) onDone(); }
+    const nxt = document.createElement('button'); nxt.type = 'button'; nxt.className = 'btn ghost'; nxt.textContent = 'Question suivante'; nxt.onclick = render; fb.after(nxt); nxt.focus();
+    $$('.choice, .drill-in', host).forEach(x => { x.disabled = true; });
+    const sb = $('.drill-form .btn', host); if (sb) sb.disabled = true;
+  };
+  host.addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (b) answer(b.dataset.d); });
+  host.addEventListener('submit', e => { e.preventDefault(); const i = $('.drill-in', host); if (i && i.value.trim()) answer(i.value); });
+  render();
+}
+
+/* ---------- Laboratoire de permissions ---------- */
+function mountPermLab(host) {
+  let isDir = false, m = 0o754;
+  const rows = ['Propriétaire (u)', 'Groupe (g)', 'Autres (o)'], cols = ['r lire', 'w écrire', 'x exécuter'];
+  const draw = () => {
+    host.innerHTML = `<h4 class="ex-title">Laboratoire de permissions</h4>
+    <p>Coche les droits : tout se met à jour (chaîne <code>ls -l</code>, octal, <code>chmod</code>).</p>
+    <div class="seg" role="group" aria-label="Type"><button type="button" data-t="f" aria-pressed="${!isDir}">Fichier</button><button type="button" data-t="d" aria-pressed="${isDir}">Répertoire</button></div>
+    <div class="pl-grid" role="group" aria-label="Droits"><span></span>${cols.map(x => `<strong class="pl-h">${x}</strong>`).join('')}
+    ${rows.map((r, i) => `<span class="pl-r">${r}</span>${[0, 1, 2].map(j => { const bit = 1 << (8 - i * 3 - j); return `<label class="pl-c"><input type="checkbox" data-b="${bit}" ${m & bit ? 'checked' : ''} aria-label="${r} ${cols[j]}"><i></i></label>`; }).join('')}`).join('')}</div>
+    <div class="pl-out">
+      <div><span>ls -l</span><code class="pl-ls">${modeStr(isDir ? 'd' : '-', m)}</code></div>
+      <div><span>Octal</span><code>${octStr(m)}</code></div>
+      <div><span>Commande</span><code>chmod ${octStr(m)} ${isDir ? 'dossier' : 'fichier.txt'}</code></div>
+      <div><span>Symbolique</span><code>chmod ${symStr(m)} ${isDir ? 'dossier' : 'fichier.txt'}</code></div>
+    </div><p class="pl-fr">${explain()}</p>`;
+  };
+  const explain = () => {
+    const names = ['Le propriétaire', 'Le groupe', 'Les autres'];
+    const vr = isDir ? ['lister le contenu', 'créer, renommer ou supprimer dedans', 'entrer dedans (cd)'] : ['lire le fichier', 'le modifier', "l'exécuter"];
+    return names.map((n, i) => { const b = (m >> ((2 - i) * 3)) & 7; const l = vr.filter((_, j) => b & (4 >> j)); return `${n} : ${l.length ? 'peut ' + l.join(', ') : 'aucun droit'}.`; }).join(' ');
+  };
+  host.addEventListener('change', e => { const cb = e.target.closest('[data-b]'); if (!cb) return; m = cb.checked ? m | +cb.dataset.b : m & ~+cb.dataset.b; draw(); const f = $(`[data-b="${cb.dataset.b}"]`, host); if (f) f.focus(); });
+  host.addEventListener('click', e => { const t = e.target.closest('[data-t]'); if (!t) return; isDir = t.dataset.t === 'd'; draw(); });
+  draw();
+}
+
+function mountWidgets(root) {
+  $$('[data-widget]', root).forEach(w => {
+    if (w.dataset.widget === 'permlab') mountPermLab(w);
+    else if (w.dataset.widget === 'drill') mountDrill(w, w.dataset.kind, 99, null, w.dataset.title);
+  });
+  $$('.ex-shell', root).forEach(startTask);
+  $$('.ex-drill', root).forEach(sec => mountDrill($('.drill-host', sec), sec.dataset.kind, +sec.dataset.need, () => markDone(sec.dataset.ex)));
+}
+
+/* ---------- Pages ---------- */
+function progress() {
+  const done = EX_IDS.filter(id => Store.data.done[id]).length;
+  const lessons = LESSONS.filter(l => Store.data.lessons[l.id]).length;
+  return { done, total: EX_IDS.length, lessons, nl: LESSONS.length };
+}
+function homeSummary() {
+  const p = progress();
+  const nx = LESSONS.find(l => !Store.data.lessons[l.id]);
+  return `<p class="sum-line"><strong>${p.lessons}</strong> leçon${p.lessons > 1 ? 's' : ''} sur ${p.nl} terminée${p.lessons > 1 ? 's' : ''} · <strong>${p.done}</strong> exercice${p.done > 1 ? 's' : ''} réussi${p.done > 1 ? 's' : ''} sur ${p.total}</p>` +
+    (nx ? `<a class="btn" href="#${nx.id}">${p.done || p.lessons ? 'Continuer' : 'Commencer'} : ${esc(nx.title)}</a>` : '<p class="sum-line">Tout est fait. Le terminal et le mémo sont là pour t\'entraîner librement.</p>');
+}
+window.updateProgress = function () {
+  const p = progress(), pct = Math.round(100 * p.done / p.total);
+  const bar = $('#prog-bar'), txt = $('#prog-txt');
+  if (bar) { bar.style.width = pct + '%'; bar.parentElement.setAttribute('aria-valuenow', String(pct)); }
+  if (txt) txt.textContent = `${p.done}/${p.total} exercices`;
+  $$('.nav a').forEach(a => a.classList.toggle('is-done', !!Store.data.lessons[a.dataset.id]));
+  $$('.skill[data-l]').forEach(s => s.classList.toggle('is-done', !!Store.data.lessons[s.dataset.l]));
+  const sum = $('#home-sum'); if (sum) sum.innerHTML = homeSummary();
+};
+function navHTML() {
+  return NAV.map(g => `<div class="nav-g"><div class="nav-h">${g.group}</div>${g.items.map(i => `<a href="#${i.id}" data-id="${i.id}"><span class="nav-n">${i.n}</span><span class="nav-t">${esc(i.label)}</span></a>`).join('')}</div>`).join('');
+}
+function pageAccueil() {
+  return `<div class="home">
+  <section class="hero"><p class="kicker">Intro système</p>
+  <h1>Le terminal et les permissions Linux.</h1>
+  <p class="lead">Se déplacer, créer, copier, supprimer, puis comprendre et modifier les droits <code>rwx</code> avec <code>chmod</code>. Un vrai terminal simulé t'attend pour pratiquer sans risque.</p>
+  <div id="home-sum" class="home-sum">${homeSummary()}</div></section>
+  ${lsFig('-rwxr-xr--')}
+  <h2>Ce que tu sauras faire</h2>
+  <p>Chaque compétence se coche quand tu termines la leçon.</p>
+  <ul class="skills">${LESSONS.map((l, i) => `<li class="skill${Store.data.lessons[l.id] ? ' is-done' : ''}" data-l="${l.id}"><a href="#${l.id}"><span class="sk-n">${i + 1}</span><span class="sk-t">${esc(l.skill)}</span><span class="sk-l">${esc(l.title)}</span></a></li>`).join('')}</ul>
+  <p><a class="btn ghost" href="#terminal">Ouvrir le terminal</a> <a class="btn ghost" href="#memo">Voir le mémo</a></p></div>`;
+}
+function pageLesson(l, idx) {
+  const done = !!Store.data.lessons[l.id];
+  const prev = ORDER[idx - 1], next = ORDER[idx + 1];
+  const t = id => LESSONS.find(x => x.id === id).title;
+  return `<article class="page"><p class="kicker">Leçon ${idx + 1} sur ${LESSONS.length}</p><h1>${esc(l.title)}</h1><p class="lead">${esc(l.lead)}</p>
+  <div class="body">${l.body()}</div>
+  <section class="practice"><h2>S'entraîner</h2>${l.ex.map(exercise).join('')}</section>
+  <div class="finish"><button type="button" class="btn${done ? ' ghost' : ''}" data-app="finish" data-l="${l.id}" aria-pressed="${done}">${done ? '✓ Leçon terminée' : 'Marquer la leçon comme terminée'}</button></div>
+  <nav class="pager" aria-label="Navigation">${prev ? `<a href="#${prev}"><span>Précédent</span>${esc(t(prev))}</a>` : '<span></span>'}${next ? `<a class="next" href="#${next}"><span>Suivant</span>${esc(t(next))}</a>` : '<a class="next" href="#memo"><span>Pour finir</span>Mémo</a>'}</nav></article>`;
+}
+function pageMemo() {
+  const bits = tbl(['Chiffre', 'Droits', 'Calcul'], [['7', c('rwx'), '4+2+1'], ['6', c('rw-'), '4+2'], ['5', c('r-x'), '4+1'], ['4', c('r--'), '4'], ['3', c('-wx'), '2+1'], ['2', c('-w-'), '2'], ['1', c('--x'), '1'], ['0', c('---'), '0']]);
+  const common = tbl(['Octal', 'ls -l', 'Usage typique'], [[c('755'), c('rwxr-xr-x'), 'répertoire, programme'], [c('644'), c('rw-r--r--'), 'fichier ordinaire'], [c('600'), c('rw-------'), 'fichier privé'], [c('700'), c('rwx------'), 'répertoire privé'], [c('750'), c('rwxr-x---'), 'partagé avec le groupe'], [c('777'), c('rwxrwxrwx'), 'tout le monde fait tout (à éviter)']]);
+  return `<article class="page"><p class="kicker">Aide-mémoire</p><h1>Mémo</h1><p class="lead">Tout le cours sur une page.</p>
+  <h2>Les commandes</h2>${tbl(['Commande', 'Rôle', 'Exemple'], MEMO.cmds.map(r => [c(r[0]), esc(r[1]), c(r[2])]))}
+  <h2>Les droits</h2>${tbl(['', 'Fichier', 'Répertoire'], [[c('r'), 'lire le contenu', 'lister les noms'], [c('w'), 'modifier le contenu', 'créer, renommer, supprimer dedans'], [c('x'), 'exécuter', 'entrer (cd) et accéder aux fichiers']])}
+  ${tbl(['', 'Qui'], [[c('u'), 'user : le propriétaire'], [c('g'), 'group : le groupe'], [c('o'), 'others : les autres'], [c('a'), 'all : tout le monde']])}
+  <h2>chmod</h2>${tbl(['Méthode', 'Exemple', 'Effet'], [['symbolique', c('chmod u+x script.sh'), 'ajoute x au propriétaire'], ['symbolique', c('chmod go-rw fichier.txt'), 'retire r et w au groupe et aux autres'], ['symbolique', c('chmod a=r fichier.txt'), 'lecture seule pour tous'], ['octale', c('chmod 755 dossier'), 'rwxr-xr-x'], ['octale', c('chmod 644 fichier.txt'), 'rw-r--r--']])}
+  <h2>Octal</h2><p>r = 4, w = 2, x = 1. On additionne par catégorie.</p>${bits}${common}
+  <h2>umask</h2><p>Le masque retire des droits aux nouveaux éléments : fichiers = 666 − umask, répertoires = 777 − umask. Avec <code>022</code> : 644 et 755.</p>
+  <h2>Messages d'erreur</h2>${tbl(['Message', 'Signification'], MEMO.errors.map(r => [c(r[0]), esc(r[1])]))}</article>`;
+}
+
+/* ---------- Routage ---------- */
+function route() {
+  let id = (location.hash || '').replace('#', '');
+  if (!ALL_IDS.includes(id)) id = 'accueil';
+  const li = LESSONS.findIndex(l => l.id === id);
+  if (li >= 0 && !(Main.back === id)) { /* mémorise la leçon courante */ }
+  let html;
+  if (id === 'accueil') html = pageAccueil();
+  else if (li >= 0) html = pageLesson(LESSONS[li], li);
+  else if (id === 'terminal') html = pageTerminal();
+  else html = pageMemo();
+  const m = main(); m.innerHTML = html;
+  $$('.nav a').forEach(a => a.setAttribute('aria-current', a.dataset.id === id ? 'page' : 'false'));
+  document.title = id === 'accueil' ? 'Intro Système' : ((li >= 0 ? LESSONS[li].title : id === 'terminal' ? 'Terminal' : 'Mémo') + ' · Intro Système');
+  mountWidgets(m);
+  if (id === 'terminal') mountTerminal();
+  if (li >= 0) Main.cur = id;
+  window.updateProgress(); closeDrawer(); window.scrollTo(0, 0); m.focus({ preventScroll: true });
+}
+function closeDrawer() { document.body.classList.remove('drawer-open'); const b = $('#menu-btn'); if (b) b.setAttribute('aria-expanded', 'false'); }
+function setTheme(t) { try { localStorage.setItem('cours-theme', t || ''); } catch (e) { /* indisponible */ } if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
+
+function init() {
+  document.getElementById('app').innerHTML = `
+<a class="skip" href="#main">Aller au contenu</a>
+<header class="top">
+  <button type="button" id="menu-btn" class="icon-btn" aria-label="Menu" aria-expanded="false" aria-controls="side">☰</button>
+  <a class="back" href="index.html" title="Retour à la matière" aria-label="Retour à la matière">⌂</a><a class="brand" href="#accueil"><span class="brand-mark">$</span>Intro <small>système</small></a>
+  <div class="meter" role="progressbar" aria-label="Progression" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="prog-bar"></i></div>
+  <span id="prog-txt" class="prog-txt"></span>
+  <div class="tools"><button type="button" id="theme-btn" class="icon-btn" aria-label="Changer le thème" title="Thème clair / sombre">◐</button></div>
+</header>
+<div class="shell"><nav id="side" class="side nav" aria-label="Sommaire">${navHTML()}</nav><div class="scrim" data-app="scrim"></div><main id="main" tabindex="-1"></main></div>`;
+  document.addEventListener('click', e => {
+    const a = e.target.closest('[data-act]');
+    if (a) act(a);
+    const b = e.target.closest('[data-app]');
+    if (!b) return;
+    const k = b.dataset.app;
+    if (k === 'finish') {
+      const id = b.dataset.l; Store.data.lessons[id] = !Store.data.lessons[id]; Store.save();
+      const on = !!Store.data.lessons[id];
+      b.textContent = on ? '✓ Leçon terminée' : 'Marquer la leçon comme terminée';
+      b.classList.toggle('ghost', on); b.setAttribute('aria-pressed', String(on)); window.updateProgress();
+    } else if (k === 'scrim') closeDrawer();
+    else if (k === 'term-reset') { Main.shell = new Shell(Main.seed); Main.html = ''; mountTerminal(); }
+  });
+  $('#menu-btn').addEventListener('click', () => { const o = document.body.classList.toggle('drawer-open'); $('#menu-btn').setAttribute('aria-expanded', String(o)); });
+  $('#theme-btn').addEventListener('click', () => {
+    const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    setTheme(dark ? 'light' : 'dark');
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+  window.addEventListener('hashchange', route);
+  route();
+}
+
+function act(b) {
+  const k = b.dataset.act, sec = b.closest('.ex');
+  if (k === 'try') {
+    window.pendingCmds = JSON.parse(b.dataset.cmds);
+    Main.back = Main.cur || null;
+    location.hash = '#terminal';
+  } else if (k === 'qcm') {
+    if (sec.classList.contains('is-done') && $('.choice.ok', sec)) return;
+    const def = EX[sec.dataset.ex], i = +b.dataset.i;
+    if (i === def.answer) {
+      b.classList.add('ok'); $$('.choice', sec).forEach(x => { x.disabled = true; });
+      setFb(sec, 'Exact. ' + def.why, 'ok'); markDone(sec.dataset.ex);
+    } else { b.classList.add('ko'); b.disabled = true; setFb(sec, "Ce n'est pas celle-là. Relis le cours et essaie une autre réponse.", 'ko'); }
+  } else if (k === 'sh-check') {
+    const id = sec.dataset.ex, def = EX[id], t = TASKS[id];
+    const [ok, msg] = def.check(t.shell);
+    setFb(sec, ok ? 'Réussi. ' + msg : msg, ok ? 'ok' : 'ko');
+    if (ok) markDone(id);
+  } else if (k === 'sh-hint') { $('.hint', sec).hidden = false; }
+  else if (k === 'sh-sol') { $('.sol', sec).hidden = false; }
+  else if (k === 'sh-reset') { startTask(sec); setFb(sec, '', ''); }
+}
+init();
+
+;(function(){var o=window.updateProgress;window.updateProgress=function(){if(o)o.apply(this,arguments);try{var ids=typeof EX_IDS!=='undefined'?EX_IDS:Object.keys(EXERCISES);var d=Store.data.done||{},l=Store.data.lessons||{};localStorage.setItem('hub:systeme/intro-systeme',JSON.stringify({done:ids.filter(function(k){return d[k]}).length,total:ids.length,lessons:LESSONS.filter(function(x){return l[x.id]}).length,nl:LESSONS.length}))}catch(e){}};window.updateProgress()})();
+
+</script>
+</body>
+</html>

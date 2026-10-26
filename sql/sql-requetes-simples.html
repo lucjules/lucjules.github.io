@@ -1,0 +1,984 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>SQL R1.05</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/sql.css">
+</head>
+<body>
+<div id="app"></div>
+<script>
+try{var __t=localStorage.getItem('cours-theme');if(__t)document.documentElement.dataset.theme=__t}catch(e){}
+function qOrder(ch){var idx=ch.map(function(_,i){return i}),n=idx.length;
+  if(ch.every(function(x){return /^(vrai|faux|oui|non)$/i.test(String(x))}))return idx;
+  for(var i=n-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=idx[i];idx[i]=idx[j];idx[j]=t}
+  var pin=idx.filter(function(i){return /^Aucune?$/i.test(String(ch[i]))}),rest=idx.filter(function(i){return pin.indexOf(i)<0});
+  return rest.concat(pin)}
+/* util.js */
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => [...(r || document).querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const Store = {
+  key: 'sql-r105-v1',
+  data: { done: {}, lessons: {}, atelier: '', notes: {} },
+  load() { try { const s = localStorage.getItem(this.key); if (s) Object.assign(this.data, JSON.parse(s)); } catch (e) { /* indisponible */ } },
+  save() { try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) { /* indisponible */ } }
+};
+const note = (kind, title, html) => `<aside class="note ${kind}"><div class="note-h">${title}</div><div class="note-b">${html}</div></aside>`;
+if (typeof module !== 'undefined') module.exports = { esc, note };
+
+/* engine.js */
+/* Mini-moteur SQL (sous-ensemble de T-SQL) : SELECT [DISTINCT] [TOP n] ... FROM ... [INNER JOIN ... ON ...] [WHERE ...] [ORDER BY ...] */
+const SQLE = (() => {
+  class F { constructor(v) { this.v = v; } }
+  const norm = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  class SqlError extends Error {}
+  const KW = new Set(['select', 'distinct', 'top', 'from', 'where', 'order', 'by', 'asc', 'desc', 'inner', 'join', 'on', 'and', 'or', 'not', 'like', 'is', 'null', 'between', 'in', 'as', 'cross', 'left', 'right', 'group', 'having']);
+
+  function tokenize(src) {
+    const t = []; let i = 0;
+    while (i < src.length) {
+      const ch = src[i];
+      if (/\s/.test(ch)) { i++; continue; }
+      if (src.startsWith('--', i)) { while (i < src.length && src[i] !== '\n') i++; continue; }
+      if (src.startsWith('/*', i)) { const e = src.indexOf('*/', i + 2); i = e < 0 ? src.length : e + 2; continue; }
+      if (ch === "'") {
+        let s = ''; i++;
+        for (;;) {
+          if (i >= src.length) throw new SqlError("Chaîne de caractères non terminée : il manque une apostrophe fermante (').");
+          if (src[i] === "'") { if (src[i + 1] === "'") { s += "'"; i += 2; continue; } i++; break; }
+          s += src[i++];
+        }
+        t.push({ k: 'str', v: s }); continue;
+      }
+      if (ch === '"' || ch === '[') {
+        const close = ch === '[' ? ']' : '"'; const e = src.indexOf(close, i + 1);
+        if (e < 0) throw new SqlError('Identifiant non terminé.');
+        t.push({ k: 'id', v: src.slice(i + 1, e) }); i = e + 1; continue;
+      }
+      if (/[0-9]/.test(ch)) {
+        const m = /^[0-9]+(\.[0-9]+)?/.exec(src.slice(i));
+        t.push({ k: 'num', v: m[1] ? new F(parseFloat(m[0])) : parseInt(m[0], 10) }); i += m[0].length; continue;
+      }
+      if (/[A-Za-zÀ-ÿ_@#]/.test(ch)) {
+        const m = /^[A-Za-zÀ-ÿ_@#][A-Za-zÀ-ÿ0-9_@#$]*/.exec(src.slice(i));
+        const low = norm(m[0]);
+        t.push(KW.has(low) ? { k: 'kw', v: low } : { k: 'id', v: m[0], bare: true }); i += m[0].length; continue;
+      }
+      const two = src.slice(i, i + 2);
+      if (['<=', '>=', '<>', '!='].includes(two)) { t.push({ k: 'op', v: two === '!=' ? '<>' : two }); i += 2; continue; }
+      if ('=<>+-*/%(),.;'.includes(ch)) { t.push({ k: 'op', v: ch }); i++; continue; }
+      throw new SqlError(`Caractère inattendu : « ${ch} ».`);
+    }
+    return t;
+  }
+
+  function parse(src) {
+    const t = tokenize(src); let p = 0;
+    const peek = () => t[p], next = () => t[p++];
+    const isKw = v => t[p] && t[p].k === 'kw' && t[p].v === v;
+    const isOp = v => t[p] && t[p].k === 'op' && t[p].v === v;
+    const eatKw = v => isKw(v) ? (p++, true) : false;
+    const eatOp = v => isOp(v) ? (p++, true) : false;
+    const where = () => { const x = t[p]; return x ? `près de « ${x.k === 'str' ? "'" + x.v + "'" : x.k === 'num' ? (x.v instanceof F ? x.v.v : x.v) : x.v} »` : 'à la fin de la requête'; };
+    const need = (v, what) => { if (!eatKw(v)) throw new SqlError(`Syntaxe incorrecte ${where()} : ${what || 'il manque ' + v.toUpperCase()}.`); };
+
+    function primary() {
+      const x = peek();
+      if (!x) throw new SqlError('Syntaxe incorrecte : l\'expression est incomplète.');
+      if (x.k === 'num') { p++; return { t: 'lit', v: x.v }; }
+      if (x.k === 'str') { p++; return { t: 'lit', v: x.v }; }
+      if (x.k === 'kw' && x.v === 'null') { p++; return { t: 'lit', v: null }; }
+      if (isOp('(')) { p++; const e = expr(); if (!eatOp(')')) throw new SqlError('Il manque une parenthèse fermante « ) ».'); return e; }
+      if (isOp('-')) { p++; return { t: 'neg', e: primary() }; }
+      if (isOp('+')) { p++; return primary(); }
+      if (x.k === 'id') {
+        p++;
+        if (isOp('(')) {
+          p++; const args = [];
+          if (!isOp(')')) { do { args.push(expr()); } while (eatOp(',')); }
+          if (!eatOp(')')) throw new SqlError('Il manque une parenthèse fermante « ) ».');
+          return { t: 'fn', n: norm(x.v), args };
+        }
+        if (isOp('.')) { p++; const y = next(); if (!y || y.k !== 'id') throw new SqlError('Nom de colonne attendu après le point.'); return { t: 'col', tbl: x.v, n: y.v }; }
+        return { t: 'col', n: x.v };
+      }
+      throw new SqlError(`Syntaxe incorrecte ${where()}.`);
+    }
+    function mul() { let l = primary(); while (isOp('*') || isOp('/') || isOp('%')) { const o = next().v; l = { t: 'bin', o, l, r: primary() }; } return l; }
+    function add() { let l = mul(); while (isOp('+') || isOp('-')) { const o = next().v; l = { t: 'bin', o, l, r: mul() }; } return l; }
+    function cmp() {
+      const l = add();
+      if (t[p] && t[p].k === 'op' && ['=', '<>', '<', '>', '<=', '>='].includes(t[p].v)) { const o = next().v; return { t: 'cmp', o, l, r: add() }; }
+      let neg = false; const save = p;
+      if (isKw('not')) { p++; neg = true; }
+      if (eatKw('like')) { return { t: 'like', neg, l, r: add() }; }
+      if (eatKw('between')) { const a = add(); need('and', 'BETWEEN a AND b'); const b = add(); return { t: 'between', neg, l, a, b }; }
+      if (eatKw('in')) {
+        if (!eatOp('(')) throw new SqlError('IN doit être suivi d\'une liste entre parenthèses.');
+        const list = []; do { list.push(add()); } while (eatOp(','));
+        if (!eatOp(')')) throw new SqlError('Il manque une parenthèse fermante « ) ».');
+        return { t: 'in', neg, l, list };
+      }
+      if (neg) p = save;
+      if (eatKw('is')) { const n = eatKw('not'); need('null', 'IS [NOT] NULL'); return { t: 'isnull', neg: n, l }; }
+      return l;
+    }
+    function not() { if (eatKw('not')) return { t: 'not', e: not() }; return cmp(); }
+    function and() { let l = not(); while (eatKw('and')) l = { t: 'and', l, r: not() }; return l; }
+    function expr() { let l = and(); while (eatKw('or')) l = { t: 'or', l, r: and() }; return l; }
+
+    if (!isKw('select')) throw new SqlError('Cette version ne comprend que des requêtes SELECT : la requête doit commencer par SELECT.');
+    p++;
+    const q = { distinct: false, top: null, items: [], from: null, joins: [], where: null, order: [] };
+    if (eatKw('distinct')) q.distinct = true;
+    if (eatKw('top')) { const n = next(); if (!n || n.k !== 'num') throw new SqlError('TOP doit être suivi d\'un nombre.'); q.top = n.v; }
+    do {
+      if (isOp('*')) { p++; q.items.push({ star: true }); continue; }
+      if (t[p] && t[p].k === 'id' && t[p + 1] && t[p + 1].v === '.' && t[p + 2] && t[p + 2].v === '*') { q.items.push({ star: true, tbl: t[p].v }); p += 3; continue; }
+      const e = expr(); let alias = null;
+      if (eatKw('as')) { const a = next(); if (!a || (a.k !== 'id' && a.k !== 'str')) throw new SqlError('Nom attendu après AS.'); alias = a.v; }
+      else if (t[p] && t[p].k === 'id') alias = next().v;
+      q.items.push({ e, alias });
+    } while (eatOp(','));
+    if (eatKw('from')) {
+      const tbl = () => { const n = next(); if (!n || n.k !== 'id') throw new SqlError(`Nom de table attendu ${where()}.`); let a = null; if (eatKw('as')) a = next().v; else if (t[p] && t[p].k === 'id') a = next().v; return { name: n.v, alias: a || n.v }; };
+      q.from = tbl();
+      for (;;) {
+        if (eatOp(',')) { q.joins.push({ ...tbl(), on: null }); continue; }
+        if (isKw('inner') || isKw('join') || isKw('cross')) {
+          const cross = isKw('cross'); if (!isKw('join')) p++; need('join', 'JOIN attendu');
+          const tb = tbl(); let on = null;
+          if (!cross) { need('on', 'une jointure INNER JOIN doit avoir une condition ON'); on = expr(); }
+          q.joins.push({ ...tb, on }); continue;
+        }
+        break;
+      }
+    } else if (t[p] && t[p].k === 'id' && !t[p].bare === false && t[p + 1] === undefined) {
+      /* ex. SELECT nom prénom : géré plus bas */
+    }
+    if (eatKw('where')) q.where = expr();
+    if (isKw('group') || isKw('having')) throw new SqlError('GROUP BY et HAVING ne sont pas encore au programme de cette séquence.');
+    if (eatKw('order')) { need('by', 'ORDER doit être suivi de BY'); do { const e = expr(); let d = false; if (eatKw('desc')) d = true; else eatKw('asc'); q.order.push({ e, d }); } while (eatOp(',')); }
+    eatOp(';');
+    if (p < t.length) {
+      const h = (t[p].k === 'id' && q.items.length) ? ' Astuce : les attributs sont séparés par des virgules, et l\'ordre des clauses est SELECT, FROM, WHERE, ORDER BY.' : '';
+      throw new SqlError(`Syntaxe incorrecte ${where()}.${h}`);
+    }
+    return q;
+  }
+
+  /* ---------- évaluation ---------- */
+  const isF = x => x instanceof F, nv = x => isF(x) ? x.v : x;
+  const isDateStr = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s);
+  function cmpVals(a, b) {
+    if (typeof a === 'string' && typeof b === 'string') { const x = norm(a), y = norm(b); return x < y ? -1 : x > y ? 1 : 0; }
+    if (typeof a === 'string' || typeof b === 'string') {
+      const n = typeof a === 'string' ? a : b;
+      if (!isNaN(parseFloat(n)) && isFinite(n)) { const x = parseFloat(nv(a)), y = parseFloat(nv(b)); return x < y ? -1 : x > y ? 1 : 0; }
+      throw new SqlError(`Impossible de comparer du texte et un nombre (« ${n} »).`);
+    }
+    const x = nv(a), y = nv(b); return x < y ? -1 : x > y ? 1 : 0;
+  }
+  function like(s, pat) {
+    const re = '^' + norm(pat).replace(/[.*+?^${}()|\\]/g, '\\$&').replace(/%/g, '[\\s\\S]*').replace(/_/g, '[\\s\\S]') + '$';
+    return new RegExp(re).test(norm(s));
+  }
+  function arith(o, a, b) {
+    if (a === null || b === null) return null;
+    if (typeof a === 'string' || typeof b === 'string') {
+      if (o === '+' && typeof a === 'string' && typeof b === 'string') return a + b;
+      throw new SqlError('Opération arithmétique impossible sur du texte.');
+    }
+    const fl = isF(a) || isF(b), x = nv(a), y = nv(b);
+    if ((o === '/' || o === '%') && y === 0) throw new SqlError('Division par zéro.');
+    let r;
+    if (o === '+') r = x + y; else if (o === '-') r = x - y; else if (o === '*') r = x * y;
+    else if (o === '/') r = fl ? x / y : Math.trunc(x / y); else r = x % y;
+    return fl ? new F(r) : r;
+  }
+  const dparts = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s); return m ? [+m[1], +m[2], +m[3]] : null; };
+  const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  function callFn(n, a) {
+    const need = k => { if (a.length !== k) throw new SqlError(`La fonction ${n.toUpperCase()} attend ${k} argument${k > 1 ? 's' : ''}.`); };
+    if (n === 'getdate') { need(0); return today(); }
+    if (n === 'datediff') {
+      need(3); const part = norm(a[0] === null ? '' : String(a[0])); const x = dparts(a[1]), y = dparts(a[2]);
+      if (!x || !y) return null;
+      if (part === 'year' || part === 'yy' || part === 'yyyy') return y[0] - x[0];
+      if (part === 'month' || part === 'mm') return (y[0] - x[0]) * 12 + y[1] - x[1];
+      if (part === 'day' || part === 'dd') return Math.round((Date.UTC(...[y[0], y[1] - 1, y[2]]) - Date.UTC(x[0], x[1] - 1, x[2])) / 864e5);
+      throw new SqlError('DATEDIFF : unité acceptée : year, month ou day.');
+    }
+    if (a.some(v => v === null)) return null;
+    if (n === 'upper') { need(1); return String(a[0]).toUpperCase(); }
+    if (n === 'lower') { need(1); return String(a[0]).toLowerCase(); }
+    if (n === 'len') { need(1); return String(a[0]).length; }
+    if (n === 'abs') { need(1); return isF(a[0]) ? new F(Math.abs(a[0].v)) : Math.abs(a[0]); }
+    if (n === 'round') { const d = a.length > 1 ? nv(a[1]) : 0; const m = Math.pow(10, d); return new F(Math.round(nv(a[0]) * m) / m); }
+    if (n === 'year' || n === 'month' || n === 'day') { need(1); const d = dparts(a[0]); return d ? d[n === 'year' ? 0 : n === 'month' ? 1 : 2] : null; }
+    throw new SqlError(`Fonction inconnue : ${n.toUpperCase()}.`);
+  }
+  /* logique à trois valeurs : true / false / null (inconnu) */
+  function ev(e, row, ctx) {
+    switch (e.t) {
+      case 'lit': return e.v;
+      case 'neg': { const v = ev(e.e, row, ctx); return v === null ? null : isF(v) ? new F(-v.v) : -v; }
+      case 'col': return ctx.lookup(row, e);
+      case 'bin': return arith(e.o, ev(e.l, row, ctx), ev(e.r, row, ctx));
+      case 'fn': return callFn(e.n, e.args.map((a, i) => (e.n === 'datediff' && i === 0 && a.t === 'col' && !a.tbl) ? a.n : ev(a, row, ctx)));
+      case 'cmp': {
+        const a = ev(e.l, row, ctx), b = ev(e.r, row, ctx); if (a === null || b === null) return null;
+        const c = cmpVals(a, b);
+        return { '=': c === 0, '<>': c !== 0, '<': c < 0, '>': c > 0, '<=': c <= 0, '>=': c >= 0 }[e.o];
+      }
+      case 'like': { const a = ev(e.l, row, ctx), b = ev(e.r, row, ctx); if (a === null || b === null) return null; const r = like(String(nv(a)), String(b)); return e.neg ? !r : r; }
+      case 'between': { const a = ev(e.l, row, ctx), lo = ev(e.a, row, ctx), hi = ev(e.b, row, ctx); if (a === null || lo === null || hi === null) return null; const r = cmpVals(a, lo) >= 0 && cmpVals(a, hi) <= 0; return e.neg ? !r : r; }
+      case 'in': { const a = ev(e.l, row, ctx); if (a === null) return null; let unk = false, found = false; for (const x of e.list) { const v = ev(x, row, ctx); if (v === null) unk = true; else if (cmpVals(a, v) === 0) { found = true; break; } } const r = found ? true : unk ? null : false; return r === null ? null : e.neg ? !r : r; }
+      case 'isnull': { const a = ev(e.l, row, ctx); const r = a === null; return e.neg ? !r : r; }
+      case 'not': { const v = ev(e.e, row, ctx); return v === null ? null : !v; }
+      case 'and': { const a = ev(e.l, row, ctx); if (a === false) return false; const b = ev(e.r, row, ctx); if (b === false) return false; return a === null || b === null ? null : true; }
+      case 'or': { const a = ev(e.l, row, ctx); if (a === true) return true; const b = ev(e.r, row, ctx); if (b === true) return true; return a === null || b === null ? null : false; }
+    }
+    throw new SqlError('Expression non gérée.');
+  }
+  const asBool = (v, what) => { if (v !== null && v !== true && v !== false) throw new SqlError(`Une condition ${what} doit être une expression booléenne (une comparaison, par exemple).`); return v === true; };
+
+  function run(db, src) {
+    const q = parse(src);
+    const getTable = n => { const t = db.tables.find(x => norm(x.name) === norm(n)); if (!t) throw new SqlError(`Nom d'objet « ${n} » non valide : cette table n'existe pas dans la base.`); return t; };
+    /* sources : liste de {alias, table} ; ligne = tableau de tableaux de valeurs */
+    const srcs = [];
+    let rows = [[]];
+    if (q.from) {
+      const t0 = getTable(q.from.name); srcs.push({ alias: q.from.alias, t: t0 });
+      rows = t0.rows.map(r => [r]);
+      for (const j of q.joins) {
+        const tj = getTable(j.name); srcs.push({ alias: j.alias, t: tj });
+        const out = [];
+        for (const r of rows) for (const rr of tj.rows) {
+          const nr = [...r, rr];
+          if (j.on) { const ctx0 = mkctx(srcs); if (!asBool(ev(j.on, nr, ctx0), 'ON')) continue; }
+          out.push(nr);
+        }
+        rows = out;
+      }
+    }
+    function mkctx(ss) {
+      return {
+        lookup(row, e) {
+          const hits = [];
+          ss.forEach((s, si) => {
+            if (e.tbl && norm(s.alias) !== norm(e.tbl) && norm(s.t.name) !== norm(e.tbl)) return;
+            s.t.cols.forEach((c, ci) => { if (norm(c) === norm(e.n)) hits.push([si, ci]); });
+          });
+          if (!hits.length) {
+            if (e.tbl && !ss.some(s => norm(s.alias) === norm(e.tbl) || norm(s.t.name) === norm(e.tbl))) throw new SqlError(`Le préfixe « ${e.tbl} » ne correspond à aucune table de la clause FROM.`);
+            throw new SqlError(`Nom de colonne « ${e.n} » non valide.${ss.length ? ' Colonnes disponibles : ' + ss.flatMap(s => s.t.cols).join(', ') + '.' : ''}`);
+          }
+          if (hits.length > 1) throw new SqlError(`Nom de colonne « ${e.n} » ambigu : précise la table (par exemple ${ss[hits[0][0]].alias}.${e.n}).`);
+          return row[hits[0][0]][hits[0][1]];
+        }
+      };
+    }
+    const ctx = mkctx(srcs);
+    if (q.where) rows = rows.filter(r => asBool(ev(q.where, r, ctx), 'WHERE'));
+    /* projection */
+    const cols = [], projs = [];
+    for (const it of q.items) {
+      if (it.star) {
+        if (!srcs.length) throw new SqlError('SELECT * n\'a pas de sens sans clause FROM.');
+        srcs.forEach((s, si) => { if (it.tbl && norm(s.alias) !== norm(it.tbl) && norm(s.t.name) !== norm(it.tbl)) return; s.t.cols.forEach((c, ci) => { cols.push(c); projs.push(r => r[si][ci]); }); });
+      } else {
+        cols.push(it.alias || (it.e.t === 'col' ? it.e.n : '(Aucun nom de colonne)'));
+        projs.push(r => ev(it.e, r, ctx));
+      }
+    }
+    if (!q.from) rows = [[]];
+    let out = rows.map(r => ({ src: r, vals: projs.map(f => f(r)) }));
+    /* tri : alias de SELECT prioritaires, sinon colonnes des tables */
+    if (q.order.length) {
+      const keyOf = (o, rec) => {
+        if (o.e.t === 'col' && !o.e.tbl) { const k = cols.findIndex(c => norm(c) === norm(o.e.n)); const isAlias = q.items.some(it => !it.star && it.alias && norm(it.alias) === norm(o.e.n)); if (isAlias) return rec.vals[k]; }
+        if (o.e.t === 'lit' && typeof o.e.v === 'number') { if (o.e.v < 1 || o.e.v > cols.length) throw new SqlError('Position ORDER BY hors limites.'); return rec.vals[o.e.v - 1]; }
+        return ev(o.e, rec.src, ctx);
+      };
+      const keyed = out.map((rec, i) => ({ rec, i, keys: q.order.map(o => keyOf(o, rec)) }));
+      keyed.sort((a, b) => {
+        for (let k = 0; k < q.order.length; k++) {
+          const x = a.keys[k], y = b.keys[k]; let c;
+          if (x === null && y === null) c = 0; else if (x === null) c = -1; else if (y === null) c = 1; else c = cmpVals(x, y);
+          if (c) return q.order[k].d ? -c : c;
+        }
+        return a.i - b.i;
+      });
+      out = keyed.map(k => k.rec);
+    }
+    let res = out.map(r => r.vals);
+    if (q.distinct) { const seen = new Set(); res = res.filter(r => { const k = JSON.stringify(r.map(v => v === null ? null : typeof v === 'string' ? norm(v) : nv(v))); if (seen.has(k)) return false; seen.add(k); return true; }); }
+    if (q.top !== null) res = res.slice(0, q.top);
+    return { cols, rows: res, ordered: q.order.length > 0 };
+  }
+
+  const fmt = v => v === null ? 'NULL' : isF(v) ? (Number.isInteger(v.v) ? v.v.toFixed(1) : String(+v.v.toFixed(6))) : String(v);
+  const keyRow = r => JSON.stringify(r.map(v => v === null ? null : typeof v === 'string' ? norm(v) : nv(v)));
+
+  /* compare le résultat d'un élève à celui de la requête de référence */
+  function compare(got, exp, ordered) {
+    if (got.cols.length !== exp.cols.length) return [false, `Ton résultat a ${got.cols.length} colonne${got.cols.length > 1 ? 's' : ''}, on en attend ${exp.cols.length}.`];
+    const g = got.rows.map(keyRow), e = exp.rows.map(keyRow);
+    if (g.length !== e.length) {
+      const diff = g.length > e.length ? 'trop de lignes' : 'pas assez de lignes';
+      return [false, `Ton résultat contient ${got.rows.length} ligne${got.rows.length > 1 ? 's' : ''} (${diff}) : on en attend ${exp.rows.length}.`];
+    }
+    const sg = [...g].sort(), se = [...e].sort();
+    for (let i = 0; i < sg.length; i++) if (sg[i] !== se[i]) return [false, 'Le nombre de lignes est bon, mais le contenu ne correspond pas : vérifie les colonnes choisies et ta condition.'];
+    if (ordered) for (let i = 0; i < g.length; i++) if (g[i] !== e[i]) return [false, 'Les bonnes lignes sont là, mais pas dans le bon ordre : vérifie ORDER BY (ASC ou DESC).'];
+    return [true, 'Le résultat correspond exactement à celui attendu.'];
+  }
+  return { run, parse, fmt, compare, norm, SqlError, like, F };
+})();
+if (typeof module !== 'undefined' && module.exports) module.exports = SQLE;
+
+/* data.js */
+/* Bases de démonstration : Bibliothèque (Livre, Pays, Auteur, Ecrire) et Personne */
+const DB = {
+  tables: [
+    { name: 'Pays', cols: ['codePays', 'nomPays'], key: ['codePays'], fk: {}, rows: [
+      [1, 'Allemagne'], [2, 'Cameroun'], [3, 'Canada'], [4, 'Colombie'], [5, 'Danemark'], [6, 'Espagne'], [7, 'États-Unis'], [8, 'France'], [9, 'Irlande'], [10, 'Italie'], [11, 'Japon'], [12, 'Malaisie'], [13, 'Norvège'], [14, 'Royaume-Uni'], [15, 'Russie']] },
+    { name: 'Auteur', cols: ['codeAuteur', 'nom', 'prénom', 'codePays'], key: ['codeAuteur'], fk: { codePays: 'Pays' }, rows: [
+      [1, 'Hugo', 'Victor', 8], [2, 'Dumas', 'Alexandre', 8], [3, 'Dumas', 'Alexandre', 8], [4, 'Zola', 'Émile', 8], [5, 'Sand', 'George', 8],
+      [6, 'Colette', null, 8], [7, 'Wilde', 'Oscar', 9], [8, 'Tolstoï', 'Léon', 15], [9, 'Murakami', 'Haruki', 11], [10, 'Eco', 'Umberto', 10],
+      [11, 'NDiaye', 'Marie', 8], [12, 'Segalen', 'Victor', 8], [13, 'Ernaux', 'Annie', 8], [14, 'Orwell', 'George', 14], [15, 'Ferrante', 'Elena', null],
+      [16, 'Marx', 'Karl', 1], [17, 'Engels', 'Friedrich', 1], [18, "O'Farrell", 'Maggie', 9], [19, 'Le Tellier', 'Hervé', 8], [20, 'Amal', 'Djaïli', 2]] },
+    { name: 'Livre', cols: ['cote', 'titre', 'annéeParution'], key: ['cote'], fk: {}, rows: [
+      ['L01', 'Les Misérables', 1862], ['L02', 'Le Comte de Monte-Cristo', 1844], ['L03', 'Germinal', 1885], ['L04', 'Indiana', 1832],
+      ['L05', 'Le Portrait de Dorian Gray', 1890], ['L06', 'Anna Karénine', 1877], ['L07', 'Kafka sur le rivage', 2002], ['L08', 'Le Nom de la rose', 1980],
+      ['L09', '1984', 1949], ['L10', 'La Ferme des animaux', 1945], ['L11', "L'Amie prodigieuse", 2011], ['L12', 'Manifeste du parti communiste', 1848],
+      ['L13', 'Hamnet', 2020], ['L14', "L'Anomalie", 2020], ['L15', 'Les Impatientes', 2020], ['L16', 'Les Années', 2008], ['L17', 'Les Trois Mousquetaires', 1844]] },
+    { name: 'Ecrire', cols: ['cote', 'codeAuteur'], key: ['cote', 'codeAuteur'], fk: { cote: 'Livre', codeAuteur: 'Auteur' }, rows: [
+      ['L01', 1], ['L02', 2], ['L03', 4], ['L04', 5], ['L05', 7], ['L06', 8], ['L07', 9], ['L08', 10], ['L09', 14], ['L10', 14], ['L11', 15], ['L12', 16], ['L12', 17],
+      ['L13', 18], ['L14', 19], ['L15', 20], ['L16', 13], ['L17', 2]] },
+    { name: 'Personne', cols: ['codePersonne', 'nom', 'prénom', 'dateNaissance', 'codePays'], key: ['codePersonne'], fk: { codePays: 'Pays' }, rows: [
+      [1, 'Baudelaire', 'Charles', '1821-04-09', 8], [2, 'Zola', 'Émile', '1840-04-02', 8], [3, 'Zola', 'Jean', '1982-06-15', 8], [4, 'Hugo', 'Victor', '1802-02-26', 8],
+      [5, 'Dumas', 'Alexandre', '1802-07-24', 8], [6, 'Wilde', 'Oscar', '1854-10-16', 9], [7, 'Tolstoï', 'Léon', '1828-09-09', 15], [8, 'García Márquez', 'Gabriel', '1927-03-06', 4],
+      [9, 'Murakami', 'Haruki', '1949-01-12', 11], [10, 'Ibsen', 'Henrik', '1828-03-20', 13], [11, 'Cervantes', 'Miguel', '1547-09-29', 6], [12, 'Eco', 'Umberto', '1932-01-05', 10],
+      [13, 'Colette', null, '1873-01-28', 8], [14, 'Baudelaire', 'Claire', '1991-05-03', 8], [15, 'Martin', 'Chloé', '2001-03-14', 8], [16, 'Durand', 'Luc', '1996-07-02', 8],
+      [17, 'Bernard', 'Zoé', '1988-11-23', 8], [18, 'Petit', 'Luc', '2008-05-30', 8], [19, 'Lefèvre', 'Zoé', '2005-09-01', null], [20, 'Andersen', 'Hans', '1805-04-02', 5],
+      [21, 'Mahathir', 'Aziz', '1984-12-01', 12], [22, 'Moreau', 'Hugo', '1985-02-17', 8]] }
+  ]
+};
+/* Schémas affichés (clé soulignée) */
+const SCHEMA_TXT = {
+  Pays: ['codePays', 'nomPays'], Auteur: ['codeAuteur', 'nom', 'prénom', 'codePays'], Livre: ['cote', 'titre', 'annéeParution'], Ecrire: ['cote', 'codeAuteur'], Personne: ['codePersonne', 'nom', 'prénom', 'dateNaissance', 'codePays']
+};
+const REFS = ['Auteur.codePays référence Pays.codePays', 'Ecrire.cote référence Livre.cote', 'Ecrire.codeAuteur référence Auteur.codeAuteur', 'Personne.codePays référence Pays.codePays', 'Unicité de Pays.nomPays'];
+if (typeof module !== 'undefined') module.exports = { DB, SCHEMA_TXT, REFS };
+
+/* content.js */
+/* Contenu du cours R1.05 : leçons, exercices, mémo */
+const c = s => `<code>${esc(s)}</code>`;
+const tbl = (head, rows, cls) => `<div class="tbl-wrap"><table class="tbl ${cls || ''}"><thead><tr>${head.map(h => `<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+const SQL_KW = /\b(SELECT|DISTINCT|TOP|FROM|WHERE|ORDER BY|ORDER|BY|ASC|DESC|INNER JOIN|JOIN|ON|AND|OR|NOT|LIKE|IS NULL|IS NOT NULL|IS|NULL|BETWEEN|IN|AS)\b/gi;
+function hlSql(code) {
+  const re = /(--[^\n]*)|('(?:[^']|'')*')|(\b\d+(?:\.\d+)?\b)|(\b(?:SELECT|DISTINCT|TOP|FROM|WHERE|ORDER|BY|ASC|DESC|INNER|JOIN|ON|AND|OR|NOT|LIKE|IS|NULL|BETWEEN|IN|AS)\b)/gi;
+  let out = '', last = 0, m;
+  while ((m = re.exec(code))) {
+    out += esc(code.slice(last, m.index));
+    const cls = m[1] ? 'c-com' : m[2] ? 'c-str' : m[3] ? 'c-num' : 'c-kw';
+    out += `<span class="${cls}">${esc(m[0])}</span>`; last = m.index + m[0].length;
+  }
+  return out + esc(code.slice(last));
+}
+/* bloc SQL exécutable */
+const sqlb = (code, o) => { o = o || {}; return `<figure class="cb sql" data-sql="${esc(code)}"><pre class="cb-code"><code>${hlSql(code)}</code></pre>${o.noRun ? '' : `<div class="cb-bar"><span class="cb-lang">SQL</span><div class="cb-actions"><button type="button" class="btn mini" data-act="sql-run">▶ Exécuter</button><button type="button" class="btn mini ghost" data-act="sql-open">Ouvrir dans l'atelier</button></div></div><div class="sql-res" aria-live="polite"></div>`}</figure>`; };
+/* schéma relationnel visuel */
+function schemaFig(names) {
+  const keyOf = n => DB.tables.find(t => t.name === n);
+  return `<div class="schema" role="group" aria-label="Schéma de la base">${names.map(n => { const t = keyOf(n); return `<div class="stbl"><div class="stbl-h">${n}</div><ul>${t.cols.map(col => `<li>${t.key.includes(col) ? '<span class="key" title="clé primaire" aria-label="clé primaire">🔑</span><u>' + esc(col) + '</u>' : '<span class="key"></span>' + esc(col)}${t.fk[col] ? `<span class="fk" title="clé étrangère vers ${t.fk[col]}">→ ${t.fk[col]}</span>` : ''}</li>`).join('')}</ul></div>`; }).join('')}</div>`;
+}
+const likeLab = () => '<div class="widget likelab" data-widget="likelab"></div>';
+const drillW = (kind, title) => `<div class="widget drill" data-widget="drill" data-kind="${kind}" data-title="${esc(title)}"></div>`;
+const anatomy = () => `<figure class="anatomy" aria-label="Structure d'une requête SELECT"><pre class="an-sql"><span class="a1">SELECT</span> nom, prénom
+<span class="a2">FROM</span>   Auteur
+<span class="a3">WHERE</span>  codePays = 8
+<span class="a4">ORDER BY</span> nom</pre>
+<ul class="an-legend"><li><span class="dot d1"></span><strong>SELECT</strong> : les attributs qui nous intéressent</li><li><span class="dot d2"></span><strong>FROM</strong> : la table où les trouver</li><li><span class="dot d3"></span><strong>WHERE</strong> : (facultatif) la condition à satisfaire</li><li><span class="dot d4"></span><strong>ORDER BY</strong> : (facultatif) le tri du résultat</li></ul></figure>`;
+
+const LESSONS = [
+  {
+    id: 'l1', title: 'Les bases de données', skill: 'Expliquer ce qu\'est une base de données et un SGBD',
+    lead: "Une base de données gère des données persistantes, c'est-à-dire qui survivent aux programmes qui les utilisent. Un SGBD est le logiciel qui les crée et les manipule.",
+    ex: ['l1-q1', 'l1-q2', 'l1-q3', 'l1-q4', 'l1-q5'],
+    body: () => `
+<h2>Des bases de données partout</h2>
+<p>Sites de vente en ligne, plateformes de musique et de vidéo, réservations, Pronote Campus… derrière chacun, il y a une base de données.</p>
+<h2>Définitions</h2>
+${note('retenir', 'À retenir', `<p>Une <strong>base de données</strong> est une structure de données permettant de gérer des données <strong>persistantes</strong> (dont la durée de vie est supérieure à celle des programmes qui les utilisent).</p><p>Un <strong>système de gestion de bases de données</strong> (<strong>SGBD</strong>, DBMS en anglais) est un logiciel permettant de créer et manipuler de telles données.</p>`)}
+<p>Comme toute structure de données, elle a besoin de primitives d'accès, de constructeurs, de destructeurs, et de mécanismes assurant la persistance.</p>
+<h2>Un peu d'histoire</h2>
+${tbl(['Étape', 'Principe', 'Limite'], [['fichiers séquentiels', 'on lit dans l\'ordre', 'pour la 18e information, il faut passer par les 17 précédentes'], ['fichiers relatifs', 'accès direct par la position', 'il faut connaître la position (Italie = 3)'], ['fichiers à accès direct', 'accès direct par une clé (identifiant)', 'la clé caractérise l\'information']])}
+<p>Les disques durs apparaissent en 1956 ; le terme <em>database</em> en 1964. En 1970, <strong>Edgar F. Codd</strong> (IBM) publie la thèse sur l'algèbre relationnelle à l'origine des bases de données relationnelles (prix Turing en 1981).</p>
+<h2>Trois niveaux d'abstraction</h2>
+${tbl(['Niveau', 'Ce qu\'il décrit', 'Pour qui ?'], [['<strong>physique</strong> (interne)', 'l\'inscription des données sur le support : sauvegardes, réorganisations, statistiques', 'l\'ingénieur système'], ['<strong>logique</strong> (conceptuel)', 'toute l\'information et sa structure (langage de définition de données)', 'l\'administrateur, le concepteur'], ['<strong>externe</strong> (vue)', 'une façon de « voir » la base, simplifiée ou limitée (langage de manipulation de données)', 'le développeur, l\'utilisateur']])}
+<ul><li><strong>Indépendance physique</strong> : modifier la structure physique sans toucher à la structure logique.</li><li><strong>Indépendance logique</strong> : modifier le schéma conceptuel sans altérer les vues, ou créer de nouvelles vues sans modifier le schéma conceptuel.</li></ul>
+<h2>Les défis d'un SGBD</h2>
+${tbl(['Défi', 'Idée'], [['<strong>Sécurité</strong>', 'gérer les autorisations d\'accès aux informations protégées'], ['<strong>Intégrité</strong>', 'assurer la cohérence via le respect des contraintes d\'intégrité (prédicats à satisfaire)'], ['<strong>Accès concurrents</strong>', 'éviter la corruption d\'information en cas d\'accès simultanés']])}`
+  },
+  {
+    id: 'l2', title: 'Le modèle relationnel', skill: 'Utiliser le vocabulaire : relation, attribut, tuple, schéma',
+    lead: "Le modèle relationnel repose sur les mathématiques : un tableau est une relation, c'est-à-dire un sous-ensemble d'un produit cartésien.",
+    ex: ['l2-q1', 'l2-q2', 'l2-q3', 'l2-q4', 'l2-q5', 'l2-q6'],
+    body: () => `
+<h2>Quelques bases mathématiques</h2>
+<p>Un <strong>ensemble</strong> est une collection d'objets distincts. On le décrit <em>en extension</em> (par la liste de ses éléments, <code>A = {a, b, c}</code>) ou <em>en compréhension</em> (par une propriété, <code>P = { x ∈ ℕ / x est pair }</code>).</p>
+<p>Le <strong>produit cartésien</strong> A × B est l'ensemble des couples (a, b) avec a ∈ A et b ∈ B :</p>
+<p class="math">{ Chloé, Luc, Zoé } × {1, 2} = { (Chloé,1), (Chloé,2), (Luc,1), (Luc,2), (Zoé,1), (Zoé,2) }</p>
+<p>Une <strong>relation</strong> R entre A et B est un sous-ensemble de leur produit cartésien : <code>nombreDeVéhicules = { (Chloé,2), (Luc,1) }</code>. Cela s'étend à plus de deux ensembles.</p>
+<h2>Le lien avec les bases de données</h2>
+<p>La table ci-dessous est un sous-ensemble de CH × CH × ℕ (chaînes × chaînes × entiers) : c'est une relation.</p>
+<div class="tbl-wrap"><table class="tbl"><caption>ArtistePeintre</caption><thead><tr><th>nom</th><th>prénom</th><th>nationalité</th></tr></thead><tbody><tr><td>de Vinci</td><td>Léonard</td><td>3</td></tr><tr><td>Kahlo</td><td>Frida</td><td>1</td></tr><tr><td>Claudel</td><td>Camille</td><td>2</td></tr></tbody></table></div>
+<h2>Le vocabulaire</h2>
+${tbl(['Terme', 'Synonyme', 'Définition', 'Exemple'], [
+  ['<strong>domaine</strong>', 'type', 'ensemble des valeurs possibles d\'un composant (entier, flottant, date, chaîne…). Le nombre de domaines est le <em>degré</em> (ou arité).', 'chaîne de caractères'],
+  ['<strong>attribut</strong>', 'colonne', 'un composant d\'une relation, caractérisé par son nom et son domaine', c('prénom')],
+  ['<strong>schéma de relation</strong>', 'structure de table', 'le nom de la relation + la liste de ses attributs et domaines : une description abstraite', c('ArtistePeintre (nom : chaîne, prénom : chaîne, nationalité : entier)')],
+  ['<strong>relation</strong>', 'table', 'une instance d\'un schéma de relation : le schéma reste stable, le contenu évolue', 'la table ci-dessus'],
+  ['<strong>tuple</strong>', 'ligne', 'un élément de la relation', c('(Kahlo, Frida, 1)')],
+  ['<strong>schéma relationnel</strong>', 'structure de base de données', 'un ensemble de schémas de relations + des contraintes d\'intégrité', 'ArtistePeintre + Pays + contraintes'],
+  ['<strong>base de données relationnelle</strong>', '', 'un ensemble de relations satisfaisant le schéma relationnel', 'les deux tables remplies']])}
+${note('retenir', 'À retenir', '<p>Attribut = titre de colonne. Tuple = ligne. Le <strong>schéma</strong> est la description, la <strong>relation</strong> est son contenu à un instant donné.</p>')}`
+  },
+  {
+    id: 'l3', title: 'Clés et contraintes d\'intégrité', skill: 'Identifier clés primaires, clés étrangères et contraintes',
+    lead: "La clé primaire identifie chaque ligne, la clé étrangère relie les tables, et les contraintes d'intégrité empêchent d'introduire des données incohérentes.",
+    ex: ['l3-q1', 'l3-q2', 'l3-q3', 'l3-q4', 'l3-q5', 'l3-q6', 'l3-q7', 'l3-dA', 'l3-dB', 'l3-dC', 'l3-dD'],
+    body: () => `
+<h2>La clé primaire</h2>
+${note('retenir', 'Définition', '<p>La <strong>clé primaire</strong> (ou clé) d\'une relation est un ensemble <strong>minimal</strong> d\'attributs dont la connaissance permet d\'identifier de manière <strong>unique</strong> chaque tuple. Toute relation doit posséder une clé (soulignée par convention).</p>')}
+<p>Dans <code>ArtistePeintre (nom, prénom, nationalité)</code>, que se passe-t-il si deux artistes ont le même nom ? <code>nom</code> ne peut pas être la clé. <code>{nom, prénom}</code> non plus, ni même <code>{nom, prénom, nationalité}</code>. On crée donc une clé « artificielle » :</p>
+<p class="schema-line"><code>ArtistePeintre (<u>numArtiste</u> : entier, nom : chaîne, prénom : chaîne, nationalité : entier)</code><br><code>Pays (<u>numéroPays</u> : entier, nomPays : chaîne, capitale : chaîne)</code></p>
+<h2>La clé étrangère</h2>
+<p>L'attribut <code>nationalité</code> permet de retrouver la ligne correspondante dans <code>Pays</code> : c'est une <strong>clé étrangère</strong> (clé primaire d'une autre table).</p>
+<div class="two-tbl">
+<div class="tbl-wrap"><table class="tbl"><caption>ArtistePeintre</caption><thead><tr><th><u>numArtiste</u></th><th>nom</th><th>prénom</th><th>nationalité</th></tr></thead><tbody><tr><td>1</td><td>de Vinci</td><td>Léonard</td><td>3</td></tr><tr><td>2</td><td>Kahlo</td><td>Frida</td><td>1</td></tr><tr><td>3</td><td>Claudel</td><td>Camille</td><td>2</td></tr></tbody></table></div>
+<div class="tbl-wrap"><table class="tbl"><caption>Pays</caption><thead><tr><th><u>numéroPays</u></th><th>nomPays</th><th>capitale</th></tr></thead><tbody><tr><td>1</td><td>Mexique</td><td>Mexico</td></tr><tr><td>2</td><td>France</td><td>Paris</td></tr><tr><td>3</td><td>Italie</td><td>Rome</td></tr></tbody></table></div></div>
+<p>Si une ligne d'<code>ArtistePeintre</code> contient une nationalité qui ne correspond à aucun pays, la base est <strong>incohérente</strong> (non intègre).</p>
+<h2>Les contraintes d'intégrité</h2>
+<p>Une <strong>contrainte d'intégrité</strong> est un prédicat qui doit être satisfait pour que la base soit considérée comme cohérente. Elle fait partie du schéma relationnel. Attention : le SGBD ne peut pas savoir que le prénom de Monet n'est pas Albert (erreur de saisie ≠ incohérence).</p>
+${tbl(['Contrainte', 'Ce qu\'elle impose', 'Notation'], [
+  ['<strong>référence</strong>', 'toute valeur d\'une clé étrangère doit exister comme clé primaire dans l\'autre table. Le SGBD interdit de créer une telle ligne, et de supprimer un pays tant que des artistes y font référence.', c('ArtistePeintre.nationalité référence Pays.numéroPays')],
+  ['<strong>attribut obligatoire</strong>', 'l\'attribut doit toujours être renseigné (la « * » des formulaires)', c('Tous les attributs, excepté ArtistePeintre.prénom, sont obligatoires')],
+  ['<strong>unicité</strong>', 'deux lignes distinctes ne peuvent avoir la même valeur pour un attribut (ou un groupe d\'attributs)', c('Unicité de Pays.nomPays')]])}
+<p>Ces trois contraintes sont gérées par le SGBD lui-même. Les autres (contraintes « contextuelles ») sont à la charge des développeurs, qui doivent les vérifier avant tout ajout ou modification.</p>
+<h2>Les schémas des TD en un coup d'œil</h2>
+<p>Voici les tables utilisées dans la suite du cours (🔑 clé primaire, → clé étrangère) :</p>
+${schemaFig(['Pays', 'Auteur', 'Livre', 'Ecrire'])}
+<ul class="refs">${REFS.map(r => `<li><code>${esc(r)}</code></li>`).join('')}</ul>
+<h2>Interludes de conception</h2>
+<p>Pour chaque situation, propose un schéma relationnel (schéma des relations et contraintes d'intégrité) dans les exercices en bas de page, puis compare avec la correction proposée.</p>`
+  },
+  {
+    id: 'l4', title: 'SQL : SELECT, FROM et la projection', skill: 'Écrire une requête de projection avec tri et DISTINCT',
+    lead: "SQL est un langage déclaratif : on décrit le résultat souhaité, le SGBD choisit comment l'obtenir. Une unique instruction, SELECT, suffit pour interroger.",
+    ex: ['l4-q1', 'l4-q2', 'l4-q3', 'l4-s1', 'l4-s2', 'l4-s3', 'l4-s4', 'l4-s5', 'l4-q4'],
+    body: () => `
+<h2>Le langage SQL</h2>
+<p>SEQUEL (inspiré par Codd, 1970) devient <strong>SQL</strong> en 1975. Première version commerciale en 1979 (Oracle), norme ANSI en 1986, ISO en 1987. SQL couvre quatre domaines : <strong>définition</strong> des données (structure), <strong>manipulation</strong> (interrogation et mise à jour), <strong>contrôle</strong> des données (droits d'accès) et contrôle des <strong>transactions</strong>.</p>
+<h2>Une seule instruction : SELECT</h2>
+${anatomy()}
+<p>Un commentaire commence par <code>--</code>. La casse n'a pas d'importance : <code>SELECT</code>, <code>select</code> et <code>SelECt</code> sont équivalents.</p>
+<h2>Notre base de travail</h2>
+<p>Les exemples utilisent la mini-base Bibliothèque. Tu peux exécuter chaque requête avec le bouton ▶.</p>
+${schemaFig(['Pays', 'Auteur', 'Livre', 'Ecrire'])}
+<h2>La projection</h2>
+<p>La <strong>projection</strong> conserve seulement certains attributs d'une table. Exemple : nom et prénom des auteurs.</p>
+${sqlb('SELECT nom, prénom\nFROM Auteur')}
+<p>Format général : <code>SELECT &lt;liste d'attributs séparés par des virgules&gt; FROM &lt;nom de la table&gt;</code>. Pour obtenir <strong>tous</strong> les attributs : <code>SELECT *</code>.</p>
+${sqlb('SELECT *\nFROM Pays')}
+<h3>Trier le résultat</h3>
+<p>Par ordre croissant des noms et, pour les auteurs de même nom, par ordre décroissant des prénoms :</p>
+${sqlb('SELECT nom, prénom\nFROM Auteur\nORDER BY nom ASC, prénom DESC')}
+<p>Les critères de tri sont séparés par des virgules, du plus important au moins important. <code>ASC</code> (croissant) est le choix par défaut.</p>
+<h3>Et les doublons ?</h3>
+<p>Un résultat peut contenir des doublons (auteurs homonymes, prénoms identiques…). Pour n'avoir jamais deux lignes identiques, on ajoute <code>DISTINCT</code>.</p>
+${sqlb('SELECT prénom\nFROM Auteur')}
+${sqlb('SELECT DISTINCT prénom\nFROM Auteur')}
+${note('attention', 'Piège', `<p>Dans <code>SELECT nom prénom FROM Auteur</code>, il manque la virgule : SQL comprend que <code>prénom</code> est un <em>nom donné à la colonne</em> <code>nom</code> (alias). Le résultat n'a qu'une colonne ! Essaie :</p>${sqlb('SELECT nom prénom\nFROM Auteur')}`)}
+<h2>Avec l'atelier</h2>
+<p>Tu peux tester toutes tes requêtes dans l'<a href="#atelier">atelier SQL</a> : il contient les tables Pays, Auteur, Livre, Ecrire et Personne.</p>`
+  },
+  {
+    id: 'l5', title: 'SQL : WHERE et la sélection', skill: 'Filtrer les lignes avec une condition (comparaisons, NULL, LIKE)',
+    lead: "La sélection ne garde que certaines lignes d'une table selon une condition booléenne : c'est la clause WHERE.",
+    ex: ['l5-q1', 'l5-q2', 'l5-s1', 'l5-s2', 'l5-s3', 'l5-s4', 'l5-s5', 'l5-s6', 'l5-q3', 'l5-s7', 'l5-s8', 'l5-q4', 'l5-s9', 'l5-s10', 'l5-s11', 'l5-d1', 'l5-q5', 'l5-s12', 'l5-s13'],
+    body: () => `
+<h2>La sélection</h2>
+<p>Exemple : les livres parus en 2020.</p>
+${sqlb('SELECT *\nFROM Livre\nWHERE annéeParution = 2020')}
+<p>La condition derrière <code>WHERE</code> est une expression booléenne : elle est évaluée pour chaque ligne, seules celles où elle est vraie sont conservées.</p>
+<h3>Projection et sélection ensemble</h3>
+<p>Les titres des livres parus en 2020, par ordre alphabétique :</p>
+${sqlb('SELECT titre\nFROM Livre\nWHERE annéeParution = 2020\nORDER BY titre')}
+<p>L'ordre des clauses est toujours : <code>SELECT</code>, <code>FROM</code>, <code>WHERE</code>, <code>ORDER BY</code>.</p>
+<h2>Les constantes</h2>
+${tbl(['Type', 'Exemples'], [['entiers', c('38') + ', ' + c('-45')], ['flottants', c('1.0') + ', ' + c('14.165') + ', ' + c('-8.217')], ['caractères', c("'A'") + ', ' + c("'c'")], ['chaînes', c("'bonjour'") + ', ' + c("'Zola'") + ', ' + c("'-8.5'") + ', ' + c("'aujourd''hui'")]])}
+<p>Les chaînes sont entourées d'<strong>apostrophes simples</strong> (jamais de guillemets), et une apostrophe à l'intérieur se double. Pas de distinction majuscules/minuscules : <code>'Zola'</code>, <code>'zola'</code> et <code>'ZOLA'</code> sont égales.</p>
+<h2>Les opérateurs arithmétiques</h2>
+${tbl(['Opérateur', 'Rôle'], [[c('+') + ' ' + c('-'), 'addition, soustraction'], [c('*'), 'multiplication'], [c('/'), 'division : <strong>entière</strong> si les deux nombres sont entiers'], [c('%'), 'reste de la division entière']])}
+<p>Pour obtenir un résultat flottant avec des entiers, il faut un flottant dans le calcul : <code>1.0 * 17 / 4</code> ou <code>17 / (1.0 * 4)</code>, mais pas <code>1.0 * (9 / 4)</code>.</p>
+${sqlb('SELECT 17 / 4, 17 % 4, 1.0 * 17 / 4, 1.0 * (9 / 4)')}
+<h2>Les opérateurs de comparaison</h2>
+<p><code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code> <code>=</code> <code>!=</code> (ou <code>&lt;&gt;</code>) fonctionnent avec les entiers, flottants, caractères et chaînes. Pour des chaînes, c'est l'ordre alphabétique :</p>
+${sqlb("SELECT nomPays\nFROM Pays\nWHERE (nomPays >= 'D') AND (nomPays < 'N')")}
+${note('attention', 'Piège', `<p>Avec <code>nomPays &lt;= 'M'</code>, <code>'Malaisie'</code> serait exclu, car <code>'Malaisie' &gt; 'M'</code> (une chaîne plus longue qui commence pareil est plus grande). D'où le <code>&lt; 'N'</code>.</p>`)}
+<h2>Les opérateurs booléens</h2>
+<p><code>AND</code>, <code>OR</code>, <code>NOT</code> combinent les conditions. Les <strong>parenthèses</strong> évitent de se soucier des règles de priorité : <code>x &lt; 8 AND a + b = 0</code> se lit <code>(x &lt; 8) AND (a + b = 0)</code>.</p>
+${sqlb("SELECT nom, prénom\nFROM Auteur\nWHERE (prénom = 'Victor' OR prénom = 'George') AND NOT (nom = 'Hugo')")}
+<h2>Valeur non renseignée : NULL</h2>
+<p>Un attribut sans valeur (non obligatoire) vaut <code>NULL</code>. Pour le tester, on utilise <code>IS NULL</code> ou <code>IS NOT NULL</code> :</p>
+${sqlb('SELECT nom, prénom\nFROM Auteur\nWHERE prénom IS NULL')}
+${note('attention', 'Piège', `<p><code>prénom = NULL</code> ne renvoie <strong>jamais</strong> de ligne : comparer à NULL donne « inconnu », pas « vrai ». Il faut écrire <code>IS NULL</code>. Pour la même raison, <code>prénom != 'Victor'</code> ne renvoie pas les lignes où le prénom est NULL.</p>${sqlb('SELECT nom, prénom\nFROM Auteur\nWHERE prénom = NULL')}`)}
+<h2>Comparer des chaînes : LIKE</h2>
+<p>Deux jokers : <code>%</code> remplace n'importe quelle suite de caractères (même vide), <code>_</code> remplace exactement un caractère.</p>
+${tbl(['Motif', 'Signification'], [[c("nom LIKE 'V%'"), 'nom commençant par un V'], [c("nom LIKE '%ris%'"), "nom contenant « ris »"], [c("nom LIKE '%X'"), 'nom terminé par un X'], [c("nom LIKE '%A_'"), 'nom ayant un A en avant-dernière position']])}
+<p>Teste des motifs sur une liste de noms :</p>
+${likeLab()}
+${sqlb("SELECT nom\nFROM Auteur\nWHERE nom LIKE 'D%'")}
+<h2>Les dates</h2>
+<p>Dans la table Personne, les dates sont au format année-mois-jour (<code>'1996-07-02'</code>) et se comparent comme du texte :</p>
+${sqlb("SELECT nom, prénom, dateNaissance\nFROM Personne\nWHERE dateNaissance >= '1980-01-01' AND dateNaissance < '1990-01-01'\nORDER BY dateNaissance DESC")}
+<p>Pour travailler par rapport à la date du jour, SQL Server propose les fonctions <code>GETDATE()</code> et <code>DATEDIFF</code>. Ici, <code>DATEDIFF(year, d1, d2)</code> donne l'écart d'années calendaires :</p>
+${sqlb("SELECT nom, prénom, dateNaissance\nFROM Personne\nWHERE DATEDIFF(year, dateNaissance, GETDATE()) >= 20\nORDER BY dateNaissance DESC")}`
+  },
+  {
+    id: 'l6', title: 'Schémas, jointure et SQL Server', skill: 'Lire un schéma graphique et repérer la condition de jointure',
+    lead: "Un schéma graphique montre les tables et leurs références. Ces références indiquent la condition à utiliser pour relier des tables : la jointure.",
+    ex: ['l6-q1', 'l6-q2', 'l6-q3', 'l6-s1', 'l6-s2', 'l6-q4'],
+    body: () => `
+<h2>Représentation graphique d'une base</h2>
+<p>Chaque table est un rectangle avec son nom et la liste de ses attributs (la clé est soulignée ou marquée par un symbole de clé). On omet généralement les domaines.</p>
+${schemaFig(['Pays', 'Auteur'])}
+<p>Les <strong>contraintes de référence</strong> indiquent comment « naviguer » d'une table à l'autre pour regrouper des informations éloignées : <code>Auteur.codePays référence Pays.codePays</code>. Elles disent quelle condition utiliser pour une jointure.</p>
+<h3>La mini-base Bibliothèque</h3>
+${schemaFig(['Pays', 'Auteur', 'Livre', 'Ecrire'])}
+<ul class="refs"><li><code>Auteur.codePays</code> référence <code>Pays.codePays</code></li><li><code>Ecrire.cote</code> référence <code>Livre.cote</code></li><li><code>Ecrire.codeAuteur</code> référence <code>Auteur.codeAuteur</code></li></ul>
+<h2>La jointure (un avant-goût)</h2>
+<p>La <strong>jointure</strong> « met en commun » des informations de tables différentes. Nom, prénom et pays des auteurs :</p>
+${sqlb('SELECT nom, prénom, nomPays\nFROM Auteur\n  INNER JOIN Pays ON Auteur.codePays = Pays.codePays')}
+<p>La condition après <code>ON</code> vient directement de la contrainte de référence. Remarque : l'auteur sans pays (<code>codePays</code> NULL) n'apparaît pas dans le résultat. Nous verrons la jointure en détail plus tard.</p>
+<p>Quand deux tables ont un attribut du même nom, il faut le préfixer : <code>Auteur.codePays</code>.</p>
+<h2>La base NewClassique</h2>
+<p>Pour la suite du semestre, la base de référence est <strong>NewClassique</strong> : des musiciens (environ 2000), des œuvres du répertoire classique (plus de 3000), des enregistrements (environ 15000), des albums (plus de 700). Elle compte 20 tables et a été créée automatiquement à partir d'informations collectées sur Internet : elle peut contenir certaines bizarreries. On y trouve :</p>
+<ul><li>des œuvres, leurs types (sonate, symphonie…) et leurs compositeurs, avec leur nationalité ;</li><li>des compositions (« parties » d'une œuvre), des enregistrements (chacun concerne une unique composition) et leurs interprètes avec leur instrument ;</li><li>des chefs d'orchestre et les orchestres ;</li><li>des disques, des albums (avec leur genre : baroque, opéra…) et leurs éditeurs.</li></ul>
+<h2>SQL Server Management Studio</h2>
+<p>Pour écrire et exécuter des requêtes en TD, tu utilises <strong>SQL Server Management Studio</strong> (SSMS) :</p>
+${tbl(['Étape', 'Détail'], [['Connexion au serveur', 'au lancement : serveur <code>info-mssql-etd</code>, et <strong>pas</strong> « Windows »'], ['Explorateur d\'objets', 'liste des bases hébergées (dont NewClassique) et de leurs tables, avec attributs et domaines'], ['Nouvelle requête', 'ouvre un nouvel onglet'], ['Exécuter', 'rédige la requête, exécute, le résultat s\'affiche en bas avec le nombre de lignes']])}
+<p>L'<a href="#atelier">atelier SQL</a> de ce site reproduit ce principe sur les mini-bases du cours.</p>`
+  }
+];
+
+/* ================================================================== EXERCICES */
+const Q = (q, choices, answer, why, o) => Object.assign({ type: 'qcm', q, choices, answer, why }, o || {});
+/* exercice SQL : ref = requête de référence, ordered déduit de ORDER BY */
+const S = (title, prompt, ref, hint, o) => Object.assign({ type: 'sql', title, prompt, ref, hint, solution: ref }, o || {});
+const EX = {
+  /* --- Leçon 1 --- */
+  'l1-q1': Q("Qu'est-ce qu'une donnée persistante ?", ['Une donnée dont la durée de vie dépasse celle des programmes qui l\'utilisent', 'Une donnée qui reste en mémoire vive', 'Une donnée qui ne peut pas être modifiée', 'Une donnée stockée uniquement sur Internet'], 0, 'Elle survit à l\'arrêt du programme : elle est conservée sur un support (disque).'),
+  'l1-q2': Q("Que signifie SGBD ?", ['Système de gestion de bases de données', 'Structure générale de bases de données', 'Système graphique de bureau de données', 'Standard global de bases de données'], 0, 'Un SGBD (DBMS en anglais) est le logiciel qui crée et manipule les bases.'),
+  'l1-q3': Q("Quel niveau d'abstraction décrit l'implantation des données sur le support mémoire ?", ['physique (interne)', 'logique (conceptuel)', 'externe (vue)', 'relationnel'], 0, 'Le niveau physique concerne l\'inscription des données sur le support : c\'est celui de l\'ingénieur système.'),
+  'l1-q4': Q("Un utilisateur ne doit voir que certaines informations et sous une forme simplifiée. De quel niveau parle-t-on ?", ['Le niveau externe (vue)', 'Le niveau physique', 'Le niveau logique', 'Aucun des trois'], 0, 'Une vue est une « façon de voir » la base, simplifiée ou restreinte.'),
+  'l1-q5': Q("Quel défi consiste à respecter les contraintes d'intégrité ?", ['L\'intégrité', 'La sécurité', 'La gestion des accès concurrents', 'La persistance'], 0, 'L\'intégrité assure la cohérence de l\'information via des prédicats à satisfaire.'),
+  /* --- Leçon 2 --- */
+  'l2-q1': Q('Quel est le produit cartésien {a, b} × {1, 2} ?', ['{(a,1), (a,2), (b,1), (b,2)}', '{(a,1), (b,2)}', '{a, b, 1, 2}', '{(1,a), (2,b)}'], 0, 'On forme tous les couples (x, y) avec x dans le premier ensemble et y dans le second : 2 × 2 = 4 couples.'),
+  'l2-q2': Q('Une relation entre A et B est…', ['un sous-ensemble de A × B', 'l\'union de A et B', 'un élément de A', 'un nom de table'], 0, 'R ⊆ A × B.'),
+  'l2-q3': Q("Dans une table, que désigne un attribut ?", ['Une colonne', 'Une ligne', 'La table entière', 'Une clé étrangère'], 0, 'Attribut = titre de colonne (nom + domaine).'),
+  'l2-q4': Q("Que désigne un tuple ?", ['Une ligne de la table', 'Une colonne', 'Le nom de la table', 'Le domaine d\'un attribut'], 0, 'Tuple = ligne, par exemple (Kahlo, Frida, 1).'),
+  'l2-q5': Q("Quelle est la différence entre schéma de relation et relation ?", ['Le schéma décrit la structure (stable) ; la relation est son contenu, qui évolue', 'Aucune, ce sont des synonymes', 'Le schéma contient les données, la relation contient les noms', 'Le schéma est une ligne, la relation est une colonne'], 0, 'Le schéma reste stable ; la relation, instance du schéma, évolue au fil des mises à jour.'),
+  'l2-q6': Q("Quel est le degré (arité) de ArtistePeintre (nom, prénom, nationalité) ?", ['3', '2', '1', 'Il dépend du nombre de lignes'], 0, 'Le degré est le nombre de domaines, donc d\'attributs : 3.'),
+  /* --- Leçon 3 --- */
+  'l3-q1': Q("Dans ArtistePeintre (nom, prénom, nationalité), pourquoi nom ne peut-il pas être une clé ?", ['Deux artistes peuvent avoir le même nom', 'Un nom est trop long', 'Les noms ne sont pas des chaînes', 'Parce qu\'il est obligatoire'], 0, 'Une clé doit identifier chaque ligne de façon unique. Deux homonymes poseraient problème : on crée une clé artificielle (numArtiste).'),
+  'l3-q2': Q("La clé primaire d'une relation est…", ['un ensemble minimal d\'attributs identifiant chaque tuple de façon unique', 'un attribut toujours numérique', 'tous les attributs de la table', 'un attribut qui ne peut jamais être NULL dans une autre table'], 0, 'Minimal et unique : c\'est le sens de la définition.'),
+  'l3-q3': Q("Dans ArtistePeintre (numArtiste, nom, prénom, nationalité) et Pays (numéroPays, nomPays, capitale), quelle est la clé étrangère ?", ['nationalité', 'numArtiste', 'nomPays', 'capitale'], 0, 'nationalité contient des valeurs de la clé primaire numéroPays de la table Pays.', { codeChoices: true }),
+  'l3-q4': Q("Quelle contrainte de référence faut-il associer à cette clé étrangère ?", ['ArtistePeintre.nationalité référence Pays.numéroPays', 'Pays.numéroPays référence ArtistePeintre.nationalité', 'ArtistePeintre.nom référence Pays.nomPays', 'Unicité de ArtistePeintre.nationalité'], 0, 'On écrit « table.clé étrangère référence table.clé primaire » : la table qui possède la clé étrangère est à gauche.', { codeChoices: true }),
+  'l3-q5': Q("Que fait le SGBD si on supprime un pays alors que des artistes ont cette nationalité ?", ['Il l\'interdit : la contrainte de référence serait violée', 'Il supprime aussi les artistes', 'Il met la nationalité à 0', 'Il ne fait rien de spécial'], 0, 'Le SGBD interdit la suppression d\'un pays tant qu\'il reste des artistes qui y font référence.'),
+  'l3-q6': Q("Laquelle de ces contraintes est gérée automatiquement par le SGBD ?", ['Unicité', 'Une règle comme « un artiste ne peut pas être né après sa mort »', 'Un prénom correctement orthographié', 'Une règle de gestion propre à l\'entreprise (contrainte contextuelle)'], 0, 'Référence, attribut obligatoire et unicité sont gérées par le SGBD ; les contraintes contextuelles par les développeurs.'),
+  'l3-q7': Q("Le prénom de Monet est saisi « Albert » au lieu de « Claude ». Que fait le SGBD ?", ['Rien : il ne peut pas savoir que c\'est faux', 'Il refuse la saisie', 'Il corrige automatiquement', 'Il signale une violation de la clé primaire'], 0, 'Une erreur de saisie n\'est pas une incohérence détectable : les contraintes d\'intégrité ne remplacent pas la vérification des données.'),
+  'l3-dA': { type: 'design', title: 'A. Les étudiants', prompt: 'On s\'intéresse aux étudiants du département informatique ; on souhaite connaître leurs nom, prénom, date de naissance et groupe. Propose le schéma relationnel et ses contraintes.',
+    corr: 'Etudiant (<u>numEtudiant</u> : entier, nom : chaîne, prénom : chaîne, dateNaissance : date, groupe : chaîne)<br>Tous les attributs sont obligatoires.<br><span class="hint-in">Pourquoi un numéro ? Ni le nom, ni {nom, prénom}, ni même {nom, prénom, dateNaissance} ne garantissent l\'unicité : on crée une clé artificielle.</span>' },
+  'l3-dB': { type: 'design', title: 'B. La ville de naissance', prompt: 'On souhaite également connaître la ville de naissance de chaque étudiant.',
+    corr: 'Etudiant (<u>numEtudiant</u> : entier, nom : chaîne, prénom : chaîne, dateNaissance : date, groupe : chaîne, <strong>villeNaissance : chaîne</strong>)<br>Tous les attributs sont obligatoires.<br><span class="hint-in">Une première solution simple : un attribut villeNaissance. Mais deux villes peuvent avoir le même nom dans des pays différents : la question suivante l\'améliore.</span>' },
+  'l3-dC': { type: 'design', title: 'C. Nés à l\'étranger', prompt: 'Certains étudiants sont nés à l\'étranger : il faut donc aussi connaître le pays de naissance.',
+    corr: 'Pays (<u>numPays</u> : entier, nomPays : chaîne)<br>Ville (<u>numVille</u> : entier, nomVille : chaîne, numPays : entier)<br>Etudiant (<u>numEtudiant</u> : entier, nom, prénom, dateNaissance, groupe, <strong>villeNaissance : entier</strong>)<br>Ville.numPays référence Pays.numPays<br>Etudiant.villeNaissance référence Ville.numVille<br>Unicité de Pays.nomPays ; unicité de {Ville.nomVille, Ville.numPays}<br><span class="hint-in">Le pays se retrouve via la ville : inutile de le stocker dans Etudiant (pas de redondance).</span>' },
+  'l3-dD': { type: 'design', title: 'D. La ville de résidence', prompt: 'On souhaite également connaître la ville (et le pays) de résidence principale de chaque étudiant.',
+    corr: 'Pays (<u>numPays</u>, nomPays)<br>Ville (<u>numVille</u>, nomVille, numPays)<br>Etudiant (<u>numEtudiant</u>, nom, prénom, dateNaissance, groupe, <strong>villeNaissance</strong>, <strong>villeResidence</strong>)<br>Ville.numPays référence Pays.numPays<br>Etudiant.villeNaissance référence Ville.numVille<br>Etudiant.villeResidence référence Ville.numVille<br>Tous les attributs sont obligatoires.<br><span class="hint-in">Deux clés étrangères de Etudiant vers la même table Ville : une pour la naissance, une pour la résidence.</span>' },
+  /* --- Leçon 4 --- */
+  'l4-q1': Q("Quelle est la structure d'une requête d'interrogation simple ?", ['SELECT … FROM … WHERE … ORDER BY …', 'FROM … SELECT … ORDER BY … WHERE …', 'WHERE … SELECT … FROM … ORDER BY …', 'SELECT … WHERE … FROM … ORDER BY …'], 0, 'Toujours dans cet ordre : SELECT, FROM, WHERE (facultatif), ORDER BY (facultatif).'),
+  'l4-q2': Q("Que veut dire « SQL est un langage déclaratif » ?", ['On décrit le résultat souhaité, le SGBD choisit comment l\'obtenir', 'On écrit les boucles à la main', 'On déclare les variables avant de les utiliser', 'On doit préciser l\'algorithme de tri'], 0, 'C\'est l\'optimiseur de requêtes du SGBD qui décide du « comment ».'),
+  'l4-q3': Q("Que fait SELECT * FROM Pays ?", ['Il affiche tous les attributs de toutes les lignes de Pays', 'Il supprime la table Pays', 'Il affiche seulement la clé', 'Il compte les pays'], 0, 'L\'étoile désigne tous les attributs.'),
+  'l4-s1': S('Noms et prénoms', 'Écris la requête qui donne le nom et le prénom de tous les auteurs.', 'SELECT nom, prénom FROM Auteur', 'Projection : SELECT attribut1, attribut2 FROM table'),
+  'l4-s2': S('Titres des livres', 'Donne les titres de tous les livres.', 'SELECT titre FROM Livre', 'Un seul attribut, dans la table Livre.'),
+  'l4-s3': S('Tri sur deux critères', 'Nom et prénom des auteurs, par ordre alphabétique des noms et, pour un même nom, par ordre décroissant des prénoms.', 'SELECT nom, prénom FROM Auteur ORDER BY nom ASC, prénom DESC', 'ORDER BY nom ASC, prénom DESC'),
+  'l4-s4': S('Sans doublons', 'Donne la liste des prénoms des auteurs sans doublons, triée par ordre alphabétique.', 'SELECT DISTINCT prénom FROM Auteur ORDER BY prénom', 'DISTINCT se place juste après SELECT.'),
+  'l4-s5': S('Tous les attributs', 'Affiche tous les attributs de tous les livres, par année de parution décroissante.', 'SELECT * FROM Livre ORDER BY annéeParution DESC', 'SELECT * puis ORDER BY … DESC'),
+  'l4-q4': Q("Que renvoie SELECT DISTINCT prénom FROM Auteur ?", ['Chaque prénom une seule fois', 'Seulement les prénoms qui commencent par D', 'Les auteurs dont le prénom est unique', 'Une erreur'], 0, 'DISTINCT supprime les lignes identiques dans le résultat.'),
+  /* --- Leçon 5 --- */
+  'l5-q1': Q("Que renvoie la requête SELECT titre FROM Livre WHERE annéeParution = 2020 ?", ['Les titres des livres parus en 2020', 'Tous les titres, triés par année', 'Les années des livres de 2020', 'Une erreur : il manque ORDER BY'], 0, 'WHERE filtre les lignes, SELECT choisit les colonnes.'),
+  'l5-q2': Q("Quelle écriture est correcte pour la chaîne de caractères Zola ?", ["'Zola'", '"Zola"', 'Zola', '`Zola`'], 0, 'Les chaînes sont délimitées par des apostrophes simples.', { codeChoices: true }),
+  'l5-s1': S('Une année précise', 'Affiche tous les attributs des livres parus en 2020.', 'SELECT * FROM Livre WHERE annéeParution = 2020', 'WHERE annéeParution = 2020'),
+  'l5-s2': S('Projection + sélection', 'Donne les titres des livres parus en 2020, par ordre alphabétique.', 'SELECT titre FROM Livre WHERE annéeParution = 2020 ORDER BY titre', 'SELECT, FROM, WHERE puis ORDER BY'),
+  'l5-s3': S('Interlude 1', 'Table Personne : liste des noms des personnes, par ordre alphabétique.', 'SELECT nom FROM Personne ORDER BY nom ASC', 'ORDER BY nom (ASC est facultatif)'),
+  'l5-s4': S('Interlude 2', 'Liste des noms et prénoms des personnes.', 'SELECT nom, prénom FROM Personne', 'Une simple projection.'),
+  'l5-s5': S('Interlude 3', 'Liste des personnes (tous les attributs) dont le nom est « Baudelaire ».', "SELECT * FROM Personne WHERE nom = 'Baudelaire'", "WHERE nom = 'Baudelaire'"),
+  'l5-s6': S('Interlude 4', 'Prénom des personnes nommées « Zola ».', "SELECT prénom FROM Personne WHERE nom = 'Zola'", "SELECT prénom … WHERE nom = 'Zola'"),
+  'l5-q3': Q("Pour les pays dont le nom commence par une lettre de D à M, pourquoi écrit-on nomPays < 'N' plutôt que nomPays <= 'M' ?", ["Car 'Malaisie' > 'M' : <= 'M' exclurait les pays commençant par M", "Car M n'existe pas dans l'alphabet SQL", "Car SQL ne sait pas écrire <=", "Pour obtenir un tri décroissant"], 0, "En ordre alphabétique, 'M' est plus petit que 'Malaisie' : un pays commençant par M dépasserait la borne <= 'M'."),
+  'l5-s7': S('Interlude 5', 'Liste des noms des pays commençant par une lettre comprise entre D et M.', "SELECT nomPays FROM Pays WHERE (nomPays >= 'D') AND (nomPays < 'N')", "Deux bornes combinées avec AND : >= 'D' et < 'N'."),
+  'l5-s8': S('Interlude 6 (version à date fixe)', "Liste des personnes (tous les attributs) nées avant le 1er janvier 1990, par ordre inverse des dates de naissance. (Dans le cours, la condition porte sur « plus de 20 ans » avec la date du jour.)", "SELECT * FROM Personne WHERE dateNaissance < '1990-01-01' ORDER BY dateNaissance DESC", "dateNaissance < '1990-01-01' puis ORDER BY dateNaissance DESC"),
+  'l5-q4': Q("Quelle requête renvoie les auteurs dont le prénom n'est pas renseigné ?", ['SELECT * FROM Auteur WHERE prénom IS NULL', 'SELECT * FROM Auteur WHERE prénom = NULL', "SELECT * FROM Auteur WHERE prénom = ''", 'SELECT * FROM Auteur WHERE prénom = 0'], 0, "Seul IS NULL teste l'absence de valeur : = NULL ne renvoie jamais de ligne.", { codeChoices: true }),
+  'l5-s9': S('Interlude 7 (version à date fixe)', 'Liste des noms et prénoms des personnes nées dans les années 1980 (du 1er janvier 1980 inclus au 1er janvier 1990 exclu). (Dans le cours : les trentenaires.)', "SELECT nom, prénom FROM Personne WHERE (dateNaissance >= '1980-01-01') AND (dateNaissance < '1990-01-01')", 'Deux conditions reliées par AND.'),
+  'l5-s10': S('Valeur absente', 'Liste des auteurs (tous les attributs) dont le prénom n\'est pas renseigné.', 'SELECT * FROM Auteur WHERE prénom IS NULL', 'IS NULL'),
+  'l5-s11': S('Sans pays', 'Nom et prénom des personnes dont le pays n\'est pas renseigné.', 'SELECT nom, prénom FROM Personne WHERE codePays IS NULL', 'IS NULL sur codePays'),
+  'l5-d1': { type: 'drill', kind: 'like', need: 8 },
+  'l5-q5': Q("Que signifie nom LIKE '%A_' ?", ["Le nom a un A en avant-dernière position", "Le nom commence par A et finit par _", "Le nom contient exactement deux caractères dont un A", "Le nom finit par A"], 0, "% remplace n'importe quelle suite de caractères, _ exactement un : donc …A suivi d'un seul caractère.", { codeChoices: false }),
+  'l5-s12': S('Commence par', "Donne les noms (table Auteur) qui commencent par la lettre D.", "SELECT nom FROM Auteur WHERE nom LIKE 'D%'", "LIKE 'D%'"),
+  'l5-s13': S('Condition composée', "Donne le nom et le prénom des auteurs dont le prénom est « Victor » ou « George », triés par nom.", "SELECT nom, prénom FROM Auteur WHERE prénom = 'Victor' OR prénom = 'George' ORDER BY nom", "Deux comparaisons reliées par OR, puis ORDER BY nom."),
+  /* --- Leçon 6 --- */
+  'l6-q1': Q("Dans un schéma graphique, à quoi servent les contraintes de référence ?", ['À savoir comment naviguer d\'une table à l\'autre et quelle condition utiliser pour une jointure', 'À trier les tables par ordre alphabétique', 'À limiter le nombre de lignes', 'À définir les domaines des attributs'], 0, 'Elles relient une clé étrangère à la clé primaire qu\'elle référence : c\'est la condition de jointure.'),
+  'l6-q2': Q("Quelle est la condition de jointure entre Auteur et Pays ?", ['Auteur.codePays = Pays.codePays', 'Auteur.codeAuteur = Pays.codePays', 'Auteur.nom = Pays.nomPays', 'Auteur.prénom = Pays.nomPays'], 0, 'Auteur.codePays référence Pays.codePays.', { codeChoices: true }),
+  'l6-q3': Q("Quelle table fait le lien entre Livre et Auteur dans Bibliothèque ?", ['Ecrire', 'Pays', 'Personne', 'Aucune'], 0, 'Ecrire (cote, codeAuteur) référence les deux tables : un livre peut avoir plusieurs auteurs et inversement.'),
+  'l6-s1': S('Ma première jointure', 'Donne le nom, le prénom et le nom du pays (nomPays) des auteurs, par ordre alphabétique des noms puis des prénoms.', 'SELECT nom, prénom, nomPays FROM Auteur INNER JOIN Pays ON Auteur.codePays = Pays.codePays ORDER BY nom, prénom', 'FROM Auteur INNER JOIN Pays ON Auteur.codePays = Pays.codePays'),
+  'l6-s2': S('Livres et années', 'Donne les titres des livres de la table Livre parus avant 1900, du plus ancien au plus récent.', 'SELECT titre FROM Livre WHERE annéeParution < 1900 ORDER BY annéeParution', 'Pas de jointure ici : sélection + tri sur l\'année.'),
+  'l6-q4': Q("Où te connectes-tu avec SQL Server Management Studio, en TD ?", ['Au serveur info-mssql-etd (pas « Windows »)', 'À « Windows »', 'À n\'importe quel serveur', 'Il n\'y a pas de connexion'], 0, 'Au lancement, le serveur à choisir est info-mssql-etd.')
+};
+const EX_IDS = Object.keys(EX);
+
+/* ================================================================== MÉMO */
+const MEMO = {
+  clauses: [
+    ['SELECT', 'les attributs voulus (* = tous, DISTINCT = sans doublons)', 'SELECT DISTINCT prénom'],
+    ['FROM', 'la table', 'FROM Auteur'],
+    ['WHERE', 'la condition (facultatif)', "WHERE nom LIKE 'V%'"],
+    ['ORDER BY', 'le tri (ASC par défaut, DESC inverse)', 'ORDER BY nom, prénom DESC']
+  ],
+  ops: [
+    ['= != <> < > <= >=', 'comparaisons (nombres, texte, dates)'],
+    ['AND  OR  NOT', 'combiner des conditions (utiliser des parenthèses)'],
+    ['IS NULL / IS NOT NULL', 'tester une valeur non renseignée'],
+    ["LIKE 'V%'", '% = suite de caractères, _ = un caractère'],
+    ['+ - * / %', 'arithmétique (/ entière si deux entiers)']
+  ],
+  vocab: [['table', 'relation'], ['colonne', 'attribut'], ['ligne', 'tuple'], ['structure de table', 'schéma de relation'], ['structure de base', 'schéma relationnel'], ['clé primaire', 'identifie chaque ligne (soulignée)'], ['clé étrangère', 'clé primaire d\'une autre table'], ['contraintes', 'référence, obligatoire, unicité']],
+  errors: [
+    ['Nom de colonne non valide', 'faute de frappe dans un attribut, ou attribut absent de la table du FROM'],
+    ['Nom d\'objet non valide', 'la table n\'existe pas : vérifie son nom'],
+    ['Syntaxe incorrecte près de …', 'virgule oubliée, clauses dans le mauvais ordre, apostrophe manquante'],
+    ['Nom de colonne ambigu', 'l\'attribut existe dans deux tables : préfixe-le (Auteur.codePays)'],
+    ['Résultat vide avec = NULL', 'il faut écrire IS NULL']
+  ]
+};
+if (typeof module !== 'undefined') module.exports = { LESSONS, EX, EX_IDS, MEMO };
+
+/* app.js */
+/* Application : routage, atelier SQL, exercices, widgets */
+Store.load();
+const NAV = [
+  { group: 'Cours', items: LESSONS.map((l, i) => ({ id: l.id, label: l.title, n: i + 1 })) },
+  { group: 'Outils', items: [{ id: 'atelier', label: 'Atelier SQL', n: '›' }, { id: 'memo', label: 'Mémo', n: '≡' }] }
+];
+const ALL_IDS = ['accueil', ...NAV.flatMap(g => g.items.map(i => i.id))];
+const ORDER = LESSONS.map(l => l.id);
+const main = () => $('#main');
+const rnd = n => Math.floor(Math.random() * n);
+const pick = a => a[rnd(a.length)];
+
+/* ---------- Exécution SQL et affichage ---------- */
+function resHTML(r, o) {
+  o = o || {};
+  const head = r.cols.map(c => `<th scope="col">${esc(c)}</th>`).join('');
+  const shown = r.rows.slice(0, o.max || 200);
+  const body = shown.map(row => `<tr>${row.map(v => v === null ? '<td class="null">NULL</td>' : `<td${typeof v === 'number' ? ' class="num"' : ''}>${esc(SQLE.fmt(v))}</td>`).join('')}</tr>`).join('');
+  const more = r.rows.length > shown.length ? `<p class="res-more">… ${r.rows.length - shown.length} lignes de plus non affichées.</p>` : '';
+  return `<div class="tbl-wrap res-wrap"><table class="res"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${r.cols.length}" class="empty">(aucune ligne)</td></tr>`}</tbody></table></div>${more}<p class="res-count">${r.rows.length} ligne${r.rows.length > 1 ? 's' : ''}</p>`;
+}
+function execSql(src) {
+  try { const r = SQLE.run(DB, src); return { ok: true, res: r, html: resHTML(r) }; }
+  catch (e) {
+    if (e instanceof SQLE.SqlError) return { ok: false, html: `<p class="sql-err" role="alert"><strong>Erreur.</strong> ${esc(e.message)}</p>` };
+    return { ok: false, html: `<p class="sql-err" role="alert"><strong>Erreur.</strong> La requête n'a pas pu être exécutée.</p>` };
+  }
+}
+
+/* ---------- Exercices ---------- */
+function exercise(id) {
+  const def = EX[id], done = !!Store.data.done[id];
+  const head = k => `<header class="ex-h"><span class="ex-kind">${k}</span><span class="ex-badge" ${done ? '' : 'hidden'}>✓ Réussi</span></header>`;
+  if (def.type === 'qcm') {
+    return `<section class="ex ex-qcm${done ? ' is-done' : ''}" data-ex="${id}">${head('Question')}
+  <p class="ex-q">${esc(def.q)}</p>
+  <div class="choices" role="group" aria-label="Réponses">${qOrder(def.choices).map(i => [def.choices[i], i]).map(([ch, i]) => `<button type="button" class="choice" data-act="qcm" data-i="${i}"><span class="mark" aria-hidden="true"></span><span class="ct">${def.codeChoices ? `<code>${esc(ch)}</code>` : esc(ch)}</span></button>`).join('')}</div>
+  <p class="ex-fb" role="status"></p></section>`;
+  }
+  if (def.type === 'sql') {
+    const saved = Store.data.notes[id] || '';
+    return `<section class="ex ex-sql${done ? ' is-done' : ''}" data-ex="${id}">${head('À toi d\'écrire')}
+  <h4 class="ex-title">${esc(def.title)}</h4><p class="ex-q">${esc(def.prompt)}</p>
+  <label class="sr-only" for="ta-${id}">Ta requête SQL</label>
+  <textarea class="sql-ta" id="ta-${id}" rows="4" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="SELECT …">${esc(saved)}</textarea>
+  <div class="ex-actions"><button type="button" class="btn" data-act="sql-check">Vérifier</button><button type="button" class="btn ghost" data-act="sql-try">Exécuter</button><button type="button" class="btn ghost" data-act="sql-hint">Indice</button><button type="button" class="btn ghost" data-act="sql-sol">Solution</button></div>
+  <p class="hint" hidden>${esc(def.hint)}</p>
+  <div class="sol" hidden><p>Une solution possible :</p>${sqlb(def.solution, { noRun: true })}</div>
+  <div class="sql-res" aria-live="polite"></div><p class="ex-fb" role="status"></p></section>`;
+  }
+  if (def.type === 'design') {
+    return `<section class="ex ex-design${done ? ' is-done' : ''}" data-ex="${id}">${head('Conception')}
+  <h4 class="ex-title">${esc(def.title)}</h4><p class="ex-q">${esc(def.prompt)}</p>
+  <label class="sr-only" for="ta-${id}">Ta proposition</label>
+  <textarea class="sql-ta plain" id="ta-${id}" rows="4" placeholder="Écris ton schéma relationnel ici (clé primaire, clés étrangères, contraintes)…">${esc(Store.data.notes[id] || '')}</textarea>
+  <div class="ex-actions"><button type="button" class="btn" data-act="d-show">Voir une correction</button></div>
+  <div class="corr" hidden><p><strong>Une correction possible :</strong></p><div class="corr-b">${def.corr}</div><div class="ex-actions"><button type="button" class="btn" data-act="d-ok">J'avais l'essentiel ✓</button></div><p class="note-line">Plusieurs solutions peuvent être valables : compare surtout les clés primaires, les clés étrangères et les contraintes.</p></div></section>`;
+  }
+  if (def.type === 'drill') return `<section class="ex ex-drill${done ? ' is-done' : ''}" data-ex="${id}" data-kind="${def.kind}" data-need="${def.need}">${head('Entraînement')}<div class="drill-host"></div></section>`;
+  return '';
+}
+function markDone(id) {
+  if (!Store.data.done[id]) { Store.data.done[id] = 1; Store.save(); }
+  const sec = $(`[data-ex="${id}"]`);
+  if (sec) { sec.classList.add('is-done'); const b = $('.ex-badge', sec); if (b) b.hidden = false; }
+  window.updateProgress();
+}
+function setFb(sec, text, cls) { const fb = $('.ex-fb', sec); if (fb) { fb.textContent = text; fb.className = 'ex-fb ' + (cls || ''); } }
+
+/* ---------- Entraînement LIKE ---------- */
+const WORDS = ['Victor', 'Hugo', 'Zola', 'Dumas', 'Colette', 'Orwell', 'Murakami', 'Baudelaire', 'Tolstoï', 'Wilde', 'Ernaux', 'Sand', 'Eco', 'Segalen', 'Alexandre', 'Marie', 'Annie'];
+const PATS = ["V%", "%a", "%ris%", "%X", "_o%", "%e", "%A_", "D%", "%l%l%", "_a%", "S___", "%ie", "%o_", "E%o"];
+const DRILLS = {
+  like() {
+    const w = pick(WORDS), p = pick(PATS), truth = SQLE.like(w, p);
+    return { q: `<code>'${esc(w)}' LIKE '${esc(p)}'</code> : la condition est-elle vraie ?`, bool: true, ok: v => (v === 'vrai') === truth, show: truth ? 'Oui' : 'Non', why: '% = n\'importe quelle suite de caractères (même vide), _ = exactement un caractère. La casse est ignorée.' };
+  }
+};
+function mountDrill(host, kind, need, onDone, title) {
+  let streak = 0, cur = null, answered = false;
+  const render = () => {
+    cur = DRILLS[kind](); answered = false;
+    host.innerHTML = `${title ? `<h4 class="ex-title">${esc(title)}</h4>` : ''}<p class="ex-q">${cur.q}</p>
+    <div class="bool-btns" role="group"><button type="button" class="choice" data-d="vrai"><span class="mark"></span>Vrai</button><button type="button" class="choice" data-d="faux"><span class="mark"></span>Faux</button></div>
+    <p class="ex-fb" role="status"></p><p class="streak" aria-live="polite">Série : <strong>${streak}</strong> / ${need}</p>`;
+  };
+  const answer = v => {
+    if (answered) return; answered = true;
+    const ok = cur.ok(v); streak = ok ? streak + 1 : 0;
+    const fb = $('.ex-fb', host); fb.className = 'ex-fb ' + (ok ? 'ok' : 'ko');
+    fb.textContent = ok ? 'Juste !' : `Pas tout à fait : ${cur.show}. ${cur.why}`;
+    $('.streak', host).innerHTML = `Série : <strong>${streak}</strong> / ${need}`;
+    if (streak >= need) { fb.textContent = 'Série complète, bravo !'; if (onDone) onDone(); }
+    const nxt = document.createElement('button'); nxt.type = 'button'; nxt.className = 'btn ghost'; nxt.textContent = 'Question suivante'; nxt.onclick = render; fb.after(nxt); nxt.focus();
+    $$('.choice', host).forEach(x => { x.disabled = true; });
+  };
+  host.addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (b) answer(b.dataset.d); });
+  render();
+}
+
+/* ---------- Laboratoire LIKE ---------- */
+function mountLikeLab(host) {
+  const names = ['Victor', 'Hugo', 'Zola', 'Dumas', 'Colette', 'Orwell', 'Murakami', 'Baudelaire', 'Voltaire', 'Moreau', 'Eco', 'Sand', 'Ernaux', 'Segalen', 'Wilde', 'Tolstoï'];
+  host.innerHTML = `<h4 class="ex-title">Laboratoire LIKE</h4><label class="lab-l" for="like-in">Motif :</label>
+  <input id="like-in" class="drill-in" type="text" value="%ris%" spellcheck="false" autocomplete="off" autocapitalize="off">
+  <p class="lab-q"><code>nom LIKE '<span class="lab-pat"></span>'</code></p><ul class="names"></ul><p class="res-count lab-n"></p>
+  <p class="note-line">Essaie : <button type="button" class="chip" data-p="V%">V%</button> <button type="button" class="chip" data-p="%e">%e</button> <button type="button" class="chip" data-p="_o%">_o%</button> <button type="button" class="chip" data-p="%o_">%o_</button></p>`;
+  const inp = $('input', host);
+  const upd = () => {
+    const p = inp.value; $('.lab-pat', host).textContent = p;
+    let n = 0;
+    $('.names', host).innerHTML = names.map(w => { const m = SQLE.like(w, p); if (m) n++; return `<li class="${m ? 'yes' : 'no'}">${esc(w)}<span class="sr-only">${m ? ' : correspond' : ' : ne correspond pas'}</span></li>`; }).join('');
+    $('.lab-n', host).textContent = `${n} nom${n > 1 ? 's' : ''} sur ${names.length} correspondent`;
+  };
+  inp.addEventListener('input', upd);
+  host.addEventListener('click', e => { const c = e.target.closest('[data-p]'); if (c) { inp.value = c.dataset.p; upd(); } });
+  upd();
+}
+
+function mountWidgets(root) {
+  $$('[data-widget]', root).forEach(w => {
+    if (w.dataset.widget === 'likelab') mountLikeLab(w);
+    else if (w.dataset.widget === 'drill') mountDrill(w, w.dataset.kind, 99, null, w.dataset.title);
+  });
+  $$('.ex-drill', root).forEach(sec => mountDrill($('.drill-host', sec), sec.dataset.kind, +sec.dataset.need, () => markDone(sec.dataset.ex)));
+  $$('.ex .sql-ta', root).forEach(ta => {
+    ta.addEventListener('input', () => { const id = ta.closest('.ex').dataset.ex; Store.data.notes[id] = ta.value; Store.save(); });
+    ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); const b = $('[data-act="sql-check"]', ta.closest('.ex')); if (b) b.click(); } });
+  });
+}
+
+/* ---------- Pages ---------- */
+function progress() {
+  const done = EX_IDS.filter(id => Store.data.done[id]).length;
+  return { done, total: EX_IDS.length, lessons: LESSONS.filter(l => Store.data.lessons[l.id]).length, nl: LESSONS.length };
+}
+function homeSummary() {
+  const p = progress(), nx = LESSONS.find(l => !Store.data.lessons[l.id]);
+  return `<p class="sum-line"><strong>${p.lessons}</strong> leçon${p.lessons > 1 ? 's' : ''} sur ${p.nl} terminée${p.lessons > 1 ? 's' : ''} · <strong>${p.done}</strong> exercice${p.done > 1 ? 's' : ''} réussi${p.done > 1 ? 's' : ''} sur ${p.total}</p>` +
+    (nx ? `<a class="btn" href="#${nx.id}">${p.done || p.lessons ? 'Continuer' : 'Commencer'} : ${esc(nx.title)}</a>` : '<p class="sum-line">Tout est fait. L\'atelier et le mémo sont là pour t\'entraîner librement.</p>');
+}
+window.updateProgress = function () {
+  const p = progress(), pct = Math.round(100 * p.done / p.total);
+  const bar = $('#prog-bar'), txt = $('#prog-txt');
+  if (bar) { bar.style.width = pct + '%'; bar.parentElement.setAttribute('aria-valuenow', String(pct)); }
+  if (txt) txt.textContent = `${p.done}/${p.total} exercices`;
+  $$('.nav a').forEach(a => a.classList.toggle('is-done', !!Store.data.lessons[a.dataset.id]));
+  $$('.skill[data-l]').forEach(s => s.classList.toggle('is-done', !!Store.data.lessons[s.dataset.l]));
+  const sum = $('#home-sum'); if (sum) sum.innerHTML = homeSummary();
+};
+const navHTML = () => NAV.map(g => `<div class="nav-g"><div class="nav-h">${g.group}</div>${g.items.map(i => `<a href="#${i.id}" data-id="${i.id}"><span class="nav-n">${i.n}</span><span class="nav-t">${esc(i.label)}</span></a>`).join('')}</div>`).join('');
+
+function pageAccueil() {
+  return `<div class="home">
+  <section class="hero"><p class="kicker">R1.05 · Bases de données et SQL</p>
+  <h1>Comprendre les bases de données, et leur poser des questions en SQL.</h1>
+  <p class="lead">Du modèle relationnel (tables, clés, contraintes) aux premières requêtes <code>SELECT</code> : projection, tri, <code>DISTINCT</code>, sélection avec <code>WHERE</code>, <code>NULL</code> et <code>LIKE</code>. Chaque requête s'exécute vraiment, sur des tables fournies, et tes réponses sont corrigées automatiquement.</p>
+  <div id="home-sum" class="home-sum">${homeSummary()}</div></section>
+  ${anatomy()}
+  <h2>Ce que tu sauras faire</h2><p>Chaque compétence se coche quand tu termines la leçon.</p>
+  <ul class="skills">${LESSONS.map((l, i) => `<li class="skill${Store.data.lessons[l.id] ? ' is-done' : ''}" data-l="${l.id}"><a href="#${l.id}"><span class="sk-n">${i + 1}</span><span class="sk-t">${esc(l.skill)}</span><span class="sk-l">${esc(l.title)}</span></a></li>`).join('')}</ul>
+  <p><a class="btn ghost" href="#atelier">Ouvrir l'atelier SQL</a> <a class="btn ghost" href="#memo">Voir le mémo</a></p></div>`;
+}
+function pageLesson(l, idx) {
+  const done = !!Store.data.lessons[l.id], prev = ORDER[idx - 1], next = ORDER[idx + 1];
+  const t = id => LESSONS.find(x => x.id === id).title;
+  const hasSql = l.ex.some(e => EX[e].type === 'sql');
+  return `<article class="page"><p class="kicker">Leçon ${idx + 1} sur ${LESSONS.length}</p><h1>${esc(l.title)}</h1><p class="lead">${esc(l.lead)}</p>
+  <div class="body">${l.body()}</div>
+  <section class="practice"><h2>S'entraîner</h2>
+  ${hasSql ? `<details class="tables-d"><summary>Voir les tables disponibles</summary>${schemaFig(['Pays', 'Auteur', 'Livre', 'Ecrire', 'Personne'])}<ul class="refs">${REFS.map(r => `<li><code>${esc(r)}</code></li>`).join('')}</ul></details>` : ''}
+  ${l.ex.map(exercise).join('')}</section>
+  <div class="finish"><button type="button" class="btn${done ? ' ghost' : ''}" data-app="finish" data-l="${l.id}" aria-pressed="${done}">${done ? '✓ Leçon terminée' : 'Marquer la leçon comme terminée'}</button></div>
+  <nav class="pager" aria-label="Navigation">${prev ? `<a href="#${prev}"><span>Précédent</span>${esc(t(prev))}</a>` : '<span></span>'}${next ? `<a class="next" href="#${next}"><span>Suivant</span>${esc(t(next))}</a>` : '<a class="next" href="#memo"><span>Pour finir</span>Mémo</a>'}</nav></article>`;
+}
+function pageMemo() {
+  return `<article class="page"><p class="kicker">Aide-mémoire</p><h1>Mémo</h1><p class="lead">Tout le cours sur une page.</p>
+  <h2>La requête d'interrogation</h2>${anatomy()}
+  ${tbl(['Clause', 'Rôle', 'Exemple'], MEMO.clauses.map(r => [c(r[0]), esc(r[1]), c(r[2])]))}
+  <h2>Opérateurs</h2>${tbl(['Opérateur', 'Rôle'], MEMO.ops.map(r => [c(r[0]), esc(r[1])]))}
+  <h2>Constantes</h2>${tbl(['Type', 'Exemple'], [['entier', c('38')], ['flottant', c('14.165')], ['chaîne', c("'Zola'  'aujourd''hui'")], ['date', c("'1996-07-02'")]])}
+  <h2>Vocabulaire du modèle relationnel</h2>${tbl(['Mot courant', 'Terme du cours'], MEMO.vocab.map(r => [esc(r[0]), esc(r[1])]))}
+  <h2>Contraintes d'intégrité</h2>${tbl(['Contrainte', 'Notation'], [['référence', c('Auteur.codePays référence Pays.codePays')], ['attribut obligatoire', c('Tous les attributs, sauf prénom, sont obligatoires')], ['unicité', c('Unicité de Pays.nomPays')]])}
+  <h2>Messages d'erreur fréquents</h2>${tbl(['Message', 'Cause probable'], MEMO.errors.map(r => [c(r[0]), esc(r[1])]))}</article>`;
+}
+const EXAMPLES = {
+  'Tous les pays': 'SELECT *\nFROM Pays',
+  'Noms triés': 'SELECT nom, prénom\nFROM Auteur\nORDER BY nom, prénom DESC',
+  'Prénoms distincts': 'SELECT DISTINCT prénom\nFROM Auteur',
+  'Livres de 2020': 'SELECT titre\nFROM Livre\nWHERE annéeParution = 2020\nORDER BY titre',
+  'LIKE': "SELECT nom\nFROM Auteur\nWHERE nom LIKE '%ar%'",
+  'Valeurs NULL': 'SELECT nom, prénom\nFROM Auteur\nWHERE prénom IS NULL',
+  'Jointure': 'SELECT nom, prénom, nomPays\nFROM Auteur\n  INNER JOIN Pays ON Auteur.codePays = Pays.codePays'
+};
+function pageAtelier() {
+  return `<article class="page wide"><p class="kicker">Outil</p><h1>Atelier SQL</h1>
+  <p class="lead">Écris une requête SELECT, exécute-la (Ctrl + Entrée) et regarde le résultat. Clique sur une table pour voir son contenu.</p>
+  <div class="at-bar"><label>Exemple <select id="at-sel">${Object.keys(EXAMPLES).map(n => `<option>${esc(n)}</option>`).join('')}</select></label></div>
+  <label class="sr-only" for="at-ta">Requête SQL</label>
+  <textarea id="at-ta" class="sql-ta big" rows="6" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+  <div class="ex-actions"><button type="button" class="btn" data-app="at-run">▶ Exécuter</button><button type="button" class="btn ghost" data-app="at-reset">Exemple d'origine</button></div>
+  <div id="at-res" class="sql-res" aria-live="polite"></div>
+  <h2>Les tables</h2><p>Un clic remplit l'éditeur avec <code>SELECT * FROM …</code>.</p>
+  <div class="chips">${DB.tables.map(t => `<button type="button" class="chip" data-app="at-tbl" data-t="${t.name}">${t.name} <small>${t.rows.length}</small></button>`).join('')}</div>
+  ${schemaFig(DB.tables.map(t => t.name))}<ul class="refs">${REFS.map(r => `<li><code>${esc(r)}</code></li>`).join('')}</ul></article>`;
+}
+function mountAtelier() {
+  const ta = $('#at-ta'), sel = $('#at-sel');
+  const pend = window.pendingSql; window.pendingSql = null;
+  ta.value = pend != null ? pend : (Store.data.atelier || EXAMPLES[sel.value]);
+  ta.addEventListener('input', () => { Store.data.atelier = ta.value; Store.save(); });
+  ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runAtelier(); } });
+  sel.addEventListener('change', () => { ta.value = EXAMPLES[sel.value]; ta.dispatchEvent(new Event('input')); });
+  if (pend != null) runAtelier();
+}
+function runAtelier() { const r = execSql($('#at-ta').value); $('#at-res').innerHTML = r.html; }
+
+/* ---------- Routage ---------- */
+function route() {
+  let id = (location.hash || '').replace('#', '');
+  if (!ALL_IDS.includes(id)) id = 'accueil';
+  const li = LESSONS.findIndex(l => l.id === id);
+  let html;
+  if (id === 'accueil') html = pageAccueil(); else if (li >= 0) html = pageLesson(LESSONS[li], li); else if (id === 'atelier') html = pageAtelier(); else html = pageMemo();
+  const m = main(); m.innerHTML = html;
+  $$('.nav a').forEach(a => a.setAttribute('aria-current', a.dataset.id === id ? 'page' : 'false'));
+  document.title = id === 'accueil' ? 'SQL R1.05' : ((li >= 0 ? LESSONS[li].title : id === 'atelier' ? 'Atelier SQL' : 'Mémo') + ' · SQL R1.05');
+  mountWidgets(m);
+  if (id === 'atelier') mountAtelier();
+  window.updateProgress(); closeDrawer(); window.scrollTo(0, 0); m.focus({ preventScroll: true });
+}
+function closeDrawer() { document.body.classList.remove('drawer-open'); const b = $('#menu-btn'); if (b) b.setAttribute('aria-expanded', 'false'); }
+function setTheme(t) { try { localStorage.setItem('cours-theme', t || ''); } catch (e) { /* indisponible */ } if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
+
+function act(b) {
+  const k = b.dataset.act, sec = b.closest('.ex');
+  if (k === 'sql-run') { const fig = b.closest('.cb'); $('.sql-res', fig).innerHTML = execSql(fig.dataset.sql).html; }
+  else if (k === 'sql-open') { window.pendingSql = b.closest('.cb').dataset.sql; location.hash = '#atelier'; }
+  else if (k === 'qcm') {
+    if (sec.classList.contains('is-done') && $('.choice.ok', sec)) return;
+    const def = EX[sec.dataset.ex], i = +b.dataset.i;
+    if (i === def.answer) { b.classList.add('ok'); $$('.choice', sec).forEach(x => { x.disabled = true; }); setFb(sec, 'Exact. ' + def.why, 'ok'); markDone(sec.dataset.ex); }
+    else { b.classList.add('ko'); b.disabled = true; setFb(sec, "Ce n'est pas celle-là. Relis le cours et essaie une autre réponse.", 'ko'); }
+  } else if (k === 'sql-try' || k === 'sql-check') {
+    const id = sec.dataset.ex, def = EX[id], src = $('.sql-ta', sec).value;
+    if (!src.trim()) { setFb(sec, 'Écris ta requête dans la zone ci-dessus.', 'ko'); return; }
+    const r = execSql(src); $('.sql-res', sec).innerHTML = r.html;
+    if (!r.ok) { setFb(sec, 'Ta requête contient une erreur : lis le message ci-dessus.', 'ko'); return; }
+    if (k === 'sql-try') { setFb(sec, '', ''); return; }
+    const exp = SQLE.run(DB, def.ref);
+    const [ok, msg] = SQLE.compare(r.res, exp, exp.ordered);
+    setFb(sec, ok ? 'Réussi. ' + msg : msg, ok ? 'ok' : 'ko');
+    if (ok) markDone(id);
+  } else if (k === 'sql-hint') $('.hint', sec).hidden = false;
+  else if (k === 'sql-sol') $('.sol', sec).hidden = false;
+  else if (k === 'd-show') { $('.corr', sec).hidden = false; b.hidden = true; }
+  else if (k === 'd-ok') { markDone(sec.dataset.ex); b.disabled = true; b.textContent = '✓ Noté'; }
+}
+function init() {
+  document.getElementById('app').innerHTML = `
+<a class="skip" href="#main">Aller au contenu</a>
+<header class="top">
+  <button type="button" id="menu-btn" class="icon-btn" aria-label="Menu" aria-expanded="false" aria-controls="side">☰</button>
+  <a class="back" href="index.html" title="Retour à la matière" aria-label="Retour à la matière">⌂</a><a class="brand" href="#accueil"><span class="brand-mark">SQL</span>R1.05</a>
+  <div class="meter" role="progressbar" aria-label="Progression" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="prog-bar"></i></div>
+  <span id="prog-txt" class="prog-txt"></span>
+  <div class="tools"><button type="button" id="theme-btn" class="icon-btn" aria-label="Changer le thème" title="Thème clair / sombre">◐</button></div>
+</header>
+<div class="shell"><nav id="side" class="side nav" aria-label="Sommaire">${navHTML()}</nav><div class="scrim" data-app="scrim"></div><main id="main" tabindex="-1"></main></div>`;
+  document.addEventListener('click', e => {
+    const a = e.target.closest('[data-act]'); if (a) act(a);
+    const b = e.target.closest('[data-app]'); if (!b) return;
+    const k = b.dataset.app;
+    if (k === 'finish') {
+      const id = b.dataset.l; Store.data.lessons[id] = !Store.data.lessons[id]; Store.save();
+      const on = !!Store.data.lessons[id];
+      b.textContent = on ? '✓ Leçon terminée' : 'Marquer la leçon comme terminée'; b.classList.toggle('ghost', on); b.setAttribute('aria-pressed', String(on)); window.updateProgress();
+    } else if (k === 'scrim') closeDrawer();
+    else if (k === 'at-run') runAtelier();
+    else if (k === 'at-reset') { const ta = $('#at-ta'); ta.value = EXAMPLES[$('#at-sel').value]; ta.dispatchEvent(new Event('input')); }
+    else if (k === 'at-tbl') { const ta = $('#at-ta'); ta.value = 'SELECT *\nFROM ' + b.dataset.t; ta.dispatchEvent(new Event('input')); runAtelier(); }
+  });
+  $('#menu-btn').addEventListener('click', () => { const o = document.body.classList.toggle('drawer-open'); $('#menu-btn').setAttribute('aria-expanded', String(o)); });
+  $('#theme-btn').addEventListener('click', () => {
+    const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    setTheme(dark ? 'light' : 'dark');
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+  window.addEventListener('hashchange', route);
+  route();
+}
+init();
+
+;(function(){var o=window.updateProgress;window.updateProgress=function(){if(o)o.apply(this,arguments);try{var ids=typeof EX_IDS!=='undefined'?EX_IDS:Object.keys(EXERCISES);var d=Store.data.done||{},l=Store.data.lessons||{};localStorage.setItem('hub:sql/sql-requetes-simples',JSON.stringify({done:ids.filter(function(k){return d[k]}).length,total:ids.length,lessons:LESSONS.filter(function(x){return l[x.id]}).length,nl:LESSONS.length}))}catch(e){}};window.updateProgress()})();
+
+</script>
+</body>
+</html>
