@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Mathématiques · Mes cours IUT</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/hub.css">
+</head>
+<body class="s-maths">
+<header class="hub-top"><a class="back" href="../index.html" aria-label="Retour" title="Retour">⌂</a><a class="brand" href="../index.html"><span class="brand-mark">IUT</span>Mes cours</a><span class="sp"></span><button type="button" id="theme-btn" class="icon-btn" aria-label="Changer le thème" title="Thème clair / sombre">◐</button></header>
+<main class="hub">
+<p class="crumb"><a href="../index.html">Tous les cours</a> › Mathématiques</p>
+<p class="kicker">Maths discrètes · BUT1</p>
+<h1>Mathématiques</h1>
+<p class="lead">Logique, arithmétique dans ℤ, récurrence et second degré : fiches, QCM, cartes mémoire, calculateurs qui montrent les étapes et exercices corrigés.</p>
+<div class="grid">
+<a class="card" href="logique.html" data-prog="maths/logique"><span class="mk">1</span><span class="code">Chapitre 1</span><h3>Logique</h3><p>Propositions, tables de vérité, implication, quantificateurs, lois de Boole, NAND et additionneurs.</p><div class="tags"><span>implication</span><span>quantificateurs</span><span>De Morgan</span><span>NAND</span></div><div class="hmeter" aria-hidden="true"><i></i></div><p class="hprog"></p><span class="go">Ouvrir le cours →</span></a>
+<a class="card" href="arithmetique.html" data-prog="maths/arithmetique"><span class="mk">2</span><span class="code">Chapitre 2</span><h3>Arithmétique dans ℤ</h3><p>Division euclidienne, divisibilité, nombres premiers, PGCD, Bézout, Gauss, congruences et restes chinois.</p><div class="tags"><span>PGCD</span><span>Bézout</span><span>congruences</span><span>premiers</span></div><div class="hmeter" aria-hidden="true"><i></i></div><p class="hprog"></p><span class="go">Ouvrir le cours →</span></a>
+<a class="card" href="recurrence.html" data-prog="maths/recurrence"><span class="mk">3</span><span class="code">Chapitre 3</span><h3>Récurrence et suites</h3><p>Raisonnement par récurrence, sommes classiques, suites arithmétiques et géométriques.</p><div class="tags"><span>récurrence</span><span>sommes</span><span>suites</span></div><div class="hmeter" aria-hidden="true"><i></i></div><p class="hprog"></p><span class="go">Ouvrir le cours →</span></a>
+<a class="card" href="second-degre.html" data-prog="maths/second-degre"><span class="mk">4</span><span class="code">Chapitre 4</span><h3>Second degré</h3><p>Discriminant, signe, inéquations, forme canonique, sommet et problèmes d'optimisation.</p><div class="tags"><span>discriminant</span><span>parabole</span><span>optimisation</span></div><div class="hmeter" aria-hidden="true"><i></i></div><p class="hprog"></p><span class="go">Ouvrir le cours →</span></a>
+<a class="card" href="revision.html" data-prog="maths/revision"><span class="mk">5</span><span class="code">Tout le programme</span><h3>Révision générale</h3><p>Tous les chapitres mélangés : interro blanche, toutes les cartes, tous les exercices et tous les calculateurs.</p><div class="tags"><span>interro blanche</span><span>tout mélangé</span></div><div class="hmeter" aria-hidden="true"><i></i></div><p class="hprog"></p><span class="go">Ouvrir le cours →</span></a>
+</div>
+
+</main>
+<script>
+(function(){try{var t=localStorage.getItem('cours-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}
+function sync(){}
+document.addEventListener('click',function(e){var b=e.target.closest('#theme-btn');if(!b)return;var r=document.documentElement,dark=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches),n=dark?'light':'dark';r.dataset.theme=n;try{localStorage.setItem('cours-theme',n)}catch(e){}});
+function prog(){var cards=document.querySelectorAll('[data-prog]');cards.forEach(function(c){var keys=c.dataset.prog.split(','),d=0,t=0,any=false;var opened=0;keys.forEach(function(k){try{var v=localStorage.getItem('hub:'+k);if(v){v=JSON.parse(v);d+=v.done;t+=v.total;any=true;opened++}}catch(e){}});
+ var bar=c.querySelector('.hmeter i'),txt=c.querySelector('.hprog');if(any&&t){bar.style.width=Math.round(100*d/t)+'%';var u=' exercices réussis',tx=null;if(keys.length===1){try{var w=JSON.parse(localStorage.getItem('hub:'+keys[0]));if(w.unit)u=' '+w.unit;if(w.text)tx=w.text}catch(e){}}else{try{if(JSON.parse(localStorage.getItem('hub:'+keys[0])).unit)u=' cartes sues'}catch(e){}}txt.textContent=tx||(d+' / '+t+u+(opened<keys.length?' (chapitres déjà ouverts)':''))}else{txt.textContent='Pas encore commencé'}})}
+prog();window.addEventListener('pageshow',prog)})();
+</script>
+</body>
+</html>
