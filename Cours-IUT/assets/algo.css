@@ -1,5 +1,0 @@
-/* Style de la matière : Algorithmique */
-:root{--accent:#1f4fd8;--accent-soft:#e3ebff;--accent-ink:#fff}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--accent:#7aa2ff;--accent-soft:#17264d;--accent-ink:#0b1226}}
-:root[data-theme="dark"]{--accent:#7aa2ff;--accent-soft:#17264d;--accent-ink:#0b1226}
-:root[data-theme="light"]{--accent:#1f4fd8;--accent-soft:#e3ebff;--accent-ink:#fff}
