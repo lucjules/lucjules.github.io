@@ -1,0 +1,64 @@
+# Régénère l'index de la recherche et la liste des fichiers hors ligne (outils/construire.js)
+# à chaque modification de main, puis enregistre le résultat : plus besoin de Node.js en local.
+# Sur une demande de fusion, l'action vérifie seulement que la génération fonctionne.
+name: Recherche et hors ligne
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: construire-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  construire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Installer Playwright et Chromium
+        working-directory: outils
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Régénérer l'index de recherche et la liste hors ligne
+        run: node outils/construire.js
+
+      - name: Comparer avec la version enregistrée
+        id: diff
+        run: |
+          if git diff --quiet; then
+            echo "change=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Index de recherche et liste hors ligne déjà à jour."
+          else
+            echo "change=true" >> "$GITHUB_OUTPUT"
+            git diff --stat
+            echo "::notice::Index de recherche ou liste hors ligne à mettre à jour (fait automatiquement sur main)."
+          fi
+
+      - name: Enregistrer la mise à jour sur main
+        if: github.event_name != 'pull_request' && steps.diff.outputs.change == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Mise à jour automatique de l'index de recherche et de la liste hors ligne"
+          git push
+
+      - name: Republier le site
+        if: github.event_name != 'pull_request' && steps.diff.outputs.change == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" || echo "::warning::La republication sera faite par GitHub Pages au prochain changement."

@@ -72,7 +72,9 @@ function fichiersDuSite() {
 
 (async () => {
   const navigateur = await chromium.launch();
-  const page = await navigateur.newPage();
+  const page = await navigateur.newPage({ locale: 'fr-FR', timezoneId: 'Europe/Paris' });
+  // Hasard figé (ordre des réponses des QCM) : deux lancements donnent exactement le même index
+  await page.addInitScript(() => { let g = 42; Math.random = () => ((g = (g * 16807) % 2147483647) - 1) / 2147483646; });
   const erreurs = [];
   page.on('pageerror', e => erreurs.push(e.message));
   const index = await indexer(page);
