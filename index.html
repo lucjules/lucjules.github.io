@@ -6,6 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Mes cours de BUT1 Informatique à l'IUT : algorithmique, système Linux, bases de données SQL, management et mathématiques, avec exercices corrigés automatiquement.">
 <meta name="color-scheme" content="light dark">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1f4fd8">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="stylesheet" href="assets/fonts/fonts.css">
@@ -14,11 +16,16 @@
 <script src="assets/common.js"></script>
 </head>
 <body class="">
-<header class="hub-top"><a class="brand" href="index.html"><span class="brand-mark">IUT</span>Mes cours</a><span class="sp"></span><button type="button" id="theme-btn" class="icon-btn" aria-label="Changer le thème" title="Thème clair / sombre">◐</button></header>
+<header class="hub-top"><a class="brand" href="index.html"><span class="brand-mark">IUT</span>Mes cours</a><span class="sp"></span><button type="button" id="install-btn" class="btn mini" hidden>Installer l'app</button><button type="button" id="theme-btn" class="icon-btn" aria-label="Changer le thème" title="Thème clair / sombre">◐</button></header>
 <main class="hub">
 <p class="kicker">IUT · Informatique</p>
 <h1>Mes cours, une matière après l'autre.</h1>
 <p class="lead">Choisis une matière : chaque cours a ses leçons, ses exercices corrigés automatiquement et ses outils pour s'entraîner.</p>
+<div class="search" role="search">
+<label for="q" class="sr-only">Rechercher une notion dans tous les cours</label>
+<input id="q" type="search" placeholder="Rechercher une notion : chmod, Bézout, boucle Pour, PESTEL…" autocomplete="off" spellcheck="false" enterkeyhint="search" aria-controls="q-res">
+<div id="q-res" class="search-res" aria-live="polite" hidden></div>
+</div>
 <div class="grid">
 <a class="card s-algo" href="algo/index.html" data-prog="algo/cycle1,algo/cycle2"><span class="mk">Ex</span><span class="code">ExAlgo · Java</span><h2>Algorithmique</h2><p>Écrire des algorithmes en ExAlgo et en Java : variables, conditions, boucles, fonctions, tests.</p><p class="muted">2 chapitres</p><div class="hmeter" aria-hidden="true"><i></i></div><p class="hprog"></p><span class="go">Ouvrir →</span></a>
 <a class="card s-systeme" href="systeme/index.html" data-prog="systeme/intro-systeme"><span class="mk">$</span><span class="code">Linux</span><h2>Système</h2><p>Se repérer dans un terminal Linux, gérer les fichiers et comprendre les permissions.</p><p class="muted">1 chapitre</p><div class="hmeter" aria-hidden="true"><i></i></div><p class="hprog"></p><span class="go">Ouvrir →</span></a>
@@ -27,7 +34,19 @@
 <a class="card s-maths" href="maths/index.html" data-prog="maths/logique,maths/arithmetique,maths/recurrence,maths/second-degre"><span class="mk">∀∃</span><span class="code">Maths discrètes · BUT1</span><h2>Mathématiques</h2><p>Logique, arithmétique dans ℤ, récurrence et second degré : fiches, QCM, cartes mémoire, calculateurs qui montrent les étapes et exercices corrigés.</p><p class="muted">5 chapitres</p><div class="hmeter" aria-hidden="true"><i></i></div><p class="hprog"></p><span class="go">Ouvrir →</span></a>
 </div>
 <p class="note-line muted">Ta progression est enregistrée dans ce navigateur, sur cet appareil.</p>
+<p id="install-ios" class="note-line muted" hidden>Sur iPhone ou iPad : bouton Partager, puis « Sur l'écran d'accueil » pour l'avoir comme une app, même hors connexion.</p>
+<details class="backup">
+<summary>Sauvegarder ou transférer ma progression</summary>
+<p class="muted">Pour retrouver ta progression sur un autre appareil (ou après avoir vidé ton navigateur) : exporte-la ici, puis importe-la depuis cette même page sur l'autre appareil.</p>
+<div class="bk-row"><button type="button" class="btn" id="bk-dl">Télécharger un fichier</button><button type="button" class="btn ghost" id="bk-copy">Copier un code</button></div>
+<label for="bk-code" class="bk-label">Importer : colle un code ou choisis un fichier de sauvegarde</label>
+<textarea id="bk-code" rows="3" spellcheck="false" placeholder="Colle ici le code copié sur ton autre appareil"></textarea>
+<div class="bk-row"><button type="button" class="btn" id="bk-import">Importer le code</button><button type="button" class="btn ghost" id="bk-file-btn">Choisir un fichier…</button><input type="file" id="bk-file" accept=".json,application/json,text/plain" hidden></div>
+<p id="bk-msg" class="bk-msg" role="status"></p>
+</details>
 </main>
 <script src="assets/hub.js"></script>
+<script src="assets/recherche.js"></script>
+<script src="assets/sauvegarde.js"></script>
 </body>
 </html>

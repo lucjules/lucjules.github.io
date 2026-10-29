@@ -39,3 +39,31 @@ html[data-theme="dark"] .s-maths{--accent:#ffd83a;--accent-soft:#3a3410;--accent
 html[data-theme="light"] .s-maths{--accent:#1f2e8a;--accent-soft:#e3e7fb;--accent-ink:#fff}
 .s-maths{--accent:#1f2e8a;--accent-soft:#e3e7fb;--accent-ink:#fff}
 .hub-body{background:transparent}
+
+/* Recherche */
+.search{margin:22px 0 0;max-width:46em}
+.search input{width:100%;font:inherit;font-size:1.05rem;color:var(--ink);background:var(--paper);border:2px solid var(--ink);border-radius:var(--r);padding:.7em .9em;box-shadow:4px 4px 0 var(--ink);-webkit-appearance:none;appearance:none}
+.search input::placeholder{color:var(--ink2);opacity:1}
+.search-res{margin-top:12px;border:2px solid var(--ink);border-radius:var(--r);background:var(--paper);overflow:hidden}
+.q-nb,.q-vide{margin:0;padding:.6em .9em;font-size:.88rem;color:var(--ink2)}
+.q-nb{border-bottom:1px solid var(--line)}
+.hit{display:flex;flex-direction:column;gap:2px;padding:.7em .9em;text-decoration:none;color:var(--ink);border-bottom:1px solid var(--line)}
+.hit:last-child{border-bottom:0}
+.hit:hover,.hit:focus-visible{background:var(--accent-soft)}
+.hit-where{font:700 .74rem var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--accent)}
+.hit b{font-family:var(--f-head);font-size:1.05rem;font-weight:700}
+.hit-snip{font-size:.9rem;color:var(--ink2);overflow-wrap:anywhere}
+.hit mark{background:var(--warn-soft);color:var(--ink);border-radius:3px;padding:0 .1em}
+
+/* Sauvegarde de la progression */
+.backup{margin:18px 0 0;border:2px solid var(--ink);border-radius:var(--r);background:var(--paper);padding:0 18px;max-width:46em}
+.backup summary{cursor:pointer;font-weight:700;padding:14px 0}
+.backup[open]{padding-bottom:16px}
+.backup>p:first-of-type{margin-top:0}
+.bk-row{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+.bk-label{display:block;margin-top:16px;font-weight:700;font-size:.95rem}
+.backup textarea{display:block;width:100%;margin-top:6px;font:.85rem/1.4 var(--f-mono);color:var(--ink);background:var(--paper2);border:2px solid var(--line);border-radius:8px;padding:.5em .6em;resize:vertical}
+.bk-msg{margin:0;font-size:.92rem;min-height:1.4em}
+.bk-msg.ok{color:var(--ok)}
+.bk-msg.ko{color:var(--ko)}
+#install-btn{white-space:nowrap}
