@@ -15,7 +15,7 @@ assets/                         styles (un style de base + un style par matière
 assets/fonts/                   polices (hébergées dans le dossier, aucune connexion nécessaire)
 sw.js, manifest.webmanifest     application installable et disponible hors ligne (site en ligne)
 404.html                        page « introuvable »
-outils/                         régénère l'index de la recherche (voir README.md)
+outils/                         régénère l'index de la recherche (lancé automatiquement sur GitHub)
 
 Notes
 - Garde le dossier complet ensemble : les pages utilisent le dossier "assets".
@@ -24,4 +24,4 @@ Notes
 - Pour la passer d'un appareil à l'autre : panneau « Sauvegarder ou transférer ma progression » en bas de l'accueil.
 - Pour ajouter un chapitre plus tard : dépose son fichier .html dans le dossier de la matière
   et ajoute une carte dans la page index.html de cette matière.
-  Puis relance « node outils/construire.js » pour que la recherche le trouve (voir README.md).
+  Sur GitHub, la recherche et le mode hors ligne se mettent à jour tout seuls (voir README.md).

@@ -18,6 +18,8 @@ Site de révision pour le BUT1 Informatique : leçons, exercices corrigés autom
 - **Installable et hors ligne** : sur téléphone ou ordinateur, le site peut s'installer comme une application (bouton « Installer l'app », ou sur iPhone : Partager → « Sur l'écran d'accueil »). Après la première visite, tous les cours restent disponibles sans connexion (`sw.js`).
 - **Recherche** : la page d'accueil cherche une notion dans tous les cours (sans tenir compte des accents) et mène directement à la bonne leçon.
 - **Progression** : enregistrée dans le navigateur (`localStorage`), sur chaque appareil. Le panneau « Sauvegarder ou transférer ma progression » de l'accueil permet de l'exporter (fichier ou code à copier) et de l'importer sur un autre appareil.
+- **Reprendre** : l'accueil (et chaque page de matière) propose de revenir directement à la dernière leçon ouverte.
+- **Impression** : imprimer une leçon ou l'enregistrer en PDF donne une version propre, sur fond blanc, sans menus ni boutons, avec les corrigés et les fiches dépliés.
 - Ouvrir `index.html` directement depuis le dossier fonctionne aussi (polices incluses dans `assets/fonts/`), sauf l'installation en application.
 
 ## Organisation
@@ -35,6 +37,7 @@ assets/                styles (base.css + un fichier par matière), icônes, pol
 sw.js, manifest.webmanifest   application installable et hors ligne
 404.html               page « introuvable »
 outils/construire.js   régénère l'index de recherche et la liste hors ligne
+.github/workflows/     lance outils/construire.js automatiquement sur GitHub
 ```
 
 ## Ajouter un chapitre
@@ -42,13 +45,13 @@ outils/construire.js   régénère l'index de recherche et la liste hors ligne
 1. Déposer le fichier `.html` du chapitre dans le dossier de la matière.
 2. Ajouter sa carte dans le `index.html` de la matière.
 3. Dans le `index.html` racine, ajouter le chapitre à l'attribut `data-prog` de la carte de la matière et mettre à jour le nombre de chapitres.
-4. Régénérer l'index de recherche et la liste hors ligne (Node.js nécessaire) :
+4. C'est tout : à chaque modification de `main`, une GitHub Action (`.github/workflows/construire.yml`) régénère l'index de recherche et la liste hors ligne, puis enregistre le résultat. L'onglet **Actions** du dépôt montre son déroulement.
 
-   ```
-   cd outils && npm install && npx playwright install chromium   # la première fois
-   cd .. && node outils/construire.js
-   ```
+Pour le faire à la main (Node.js nécessaire) :
 
-   Sans cette étape, le nouveau chapitre fonctionne quand même en ligne (et hors ligne une fois visité), mais la recherche ne le trouve pas encore.
+```
+cd outils && npm install && npx playwright install chromium   # la première fois
+cd .. && node outils/construire.js
+```
 
 Les polices sont sous licence SIL Open Font License 1.1 (voir `assets/fonts/OFL.txt`).
