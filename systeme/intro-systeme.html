@@ -11,16 +11,11 @@
 <link rel="stylesheet" href="../assets/fonts/fonts.css">
 <link rel="stylesheet" href="../assets/base.css">
 <link rel="stylesheet" href="../assets/systeme.css">
+<script src="../assets/common.js"></script>
 </head>
 <body>
 <div id="app"></div>
 <script>
-try{var __t=localStorage.getItem('cours-theme');if(__t)document.documentElement.dataset.theme=__t}catch(e){}
-function qOrder(ch){var idx=ch.map(function(_,i){return i}),n=idx.length;
-  if(ch.every(function(x){return /^(vrai|faux|oui|non)$/i.test(String(x))}))return idx;
-  for(var i=n-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=idx[i];idx[i]=idx[j];idx[j]=t}
-  var pin=idx.filter(function(i){return /^Aucune?$/i.test(String(ch[i]))}),rest=idx.filter(function(i){return pin.indexOf(i)<0});
-  return rest.concat(pin)}
 /* util.js */
 /* Utilitaires */
 const $ = (s, r) => (r || document).querySelector(s);
