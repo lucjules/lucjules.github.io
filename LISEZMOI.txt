@@ -11,11 +11,12 @@ sql/index.html                  Bases de données : sql-requetes-simples.html
 management/index.html           Management : introduction.html, chapitre1.html
 maths/index.html                Mathématiques : logique, arithmetique, recurrence, second-degre, revision
                                 (le code commun des 5 pages est dans maths/app.js)
-assets/                         styles (un style de base + un style par matière)
+assets/                         styles (un style de base + un style par matière), icône
+assets/fonts/                   polices (hébergées dans le dossier, aucune connexion nécessaire)
 
 Notes
 - Garde le dossier complet ensemble : les pages utilisent le dossier "assets".
-- Internet n'est utile que pour les polices ; sans connexion, des polices système les remplacent.
+- Aucune connexion Internet n'est nécessaire : tout, polices comprises, est dans le dossier.
 - La progression est enregistrée dans le navigateur (par appareil).
 - Pour ajouter un chapitre plus tard : dépose son fichier .html dans le dossier de la matière
   et ajoute une carte dans la page index.html de cette matière.
