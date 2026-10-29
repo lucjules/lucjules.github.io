@@ -18,7 +18,7 @@ const MATHS_PAGES = { logique: 'logique.html', arith: 'arithmetique.html', recur
 
 async function indexer(page) {
   const entrees = [];
-  await page.goto(url('index.html'));
+  await page.goto(url('cours.html')); // accueil des cours : une carte par matière
   const matieres = await page.$$eval('.grid a.card', as => as.map(a => ({ href: a.getAttribute('href'), nom: a.querySelector('h2').innerText })));
   for (const m of matieres) {
     const dir = path.dirname(m.href);

@@ -3,7 +3,7 @@
    essayé d'abord (pour avoir la dernière version) et le cache sert de secours.
    VERSION et FICHIERS sont générés par outils/construire.js : ne pas les modifier à la main. */
 // <généré>
-const VERSION = '45804febd8';
+const VERSION = '56677e30d1';
 const FICHIERS = [
   './',
   '404.html',
@@ -43,7 +43,9 @@ const FICHIERS = [
   'assets/sauvegarde.js',
   'assets/sql.css',
   'assets/systeme.css',
+  'cours.html',
   'index.html',
+  'jeux.html',
   'management/chapitre1.html',
   'management/index.html',
   'management/introduction.html',
@@ -62,6 +64,10 @@ const FICHIERS = [
 ];
 // </généré>
 const CACHE = 'mes-cours-' + VERSION;
+// Les jeux publiés à la même adresse (/LunaPoke/…) ont leur propre service worker : on ne gère que
+// les fichiers à la racine du site et ceux des dossiers du site (algo/, assets/…)
+const RACINE = new URL('./', location).pathname;
+const DOSSIERS = new Set(FICHIERS.filter(f => f.includes('/')).map(f => f.split('/')[0]));
 const DELAI = 4000; // au-delà, on sert la copie en cache si elle existe
 
 self.addEventListener('install', e => {
@@ -78,8 +84,11 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  e.respondWith(new URL(req.url).pathname.includes('/assets/fonts/') ? cacheDAbord(req) : reseauDAbord(req));
+  const u = new URL(req.url);
+  if (req.method !== 'GET' || u.origin !== location.origin || !u.pathname.startsWith(RACINE)) return;
+  const chemin = u.pathname.slice(RACINE.length);
+  if (chemin.includes('/') && !DOSSIERS.has(chemin.split('/')[0])) return;
+  e.respondWith(u.pathname.includes('/assets/fonts/') ? cacheDAbord(req) : reseauDAbord(req));
 });
 
 async function cacheDAbord(req) {

@@ -1,7 +1,7 @@
 {
-  "name": "Mes cours IUT",
-  "short_name": "Mes cours",
-  "description": "Révisions du BUT1 Informatique : leçons, exercices corrigés et outils pour s'entraîner, même hors connexion.",
+  "name": "Cours et jeux · Lucjules",
+  "short_name": "Cours & jeux",
+  "description": "Révisions du BUT1 Informatique (leçons, exercices corrigés, outils pour s'entraîner) et jeux faits maison, même hors connexion.",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",

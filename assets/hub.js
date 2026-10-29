@@ -14,10 +14,18 @@ if(astuce&&/iphone|ipad|ipod/i.test(navigator.userAgent)&&!navigator.standalone&
 // Bouton « Reprendre » : dernière leçon ouverte (notée par common.js), filtrée par matière sur les pages de matière
 function reprendre(){var el=document.getElementById('resume');if(!el)return;var r=null;
  try{r=JSON.parse(localStorage.getItem('cours-reprendre'))}catch(e){}
- var dir=el.dataset.dir||'';if(!r||!r.u||r.u.indexOf(dir)!==0){el.hidden=true;return}
+ // seulement un chemin de leçon du site (« algo/cycle1.html#l1 ») : le lien peut venir d'une sauvegarde importée
+ var dir=el.dataset.dir||'';if(!r||typeof r.u!=='string'||!/^[\w-]+\/[\w-]+\.html(#[\w-]*)?$/.test(r.u)||r.u.indexOf(dir)!==0){el.hidden=true;return}
  var carte=!dir&&document.querySelector('.grid a.card[href^="'+r.u.split('/')[0]+'/"] h2');
  el.href=(el.dataset.base||'')+r.u;
  el.querySelector('.resume-k').textContent='Reprendre'+(carte?' · '+carte.textContent:'');
  el.querySelector('.resume-t').textContent=r.chap+(r.sec?' › '+r.sec:'');el.hidden=false}
-function maj(){prog();reprendre()}
+// Jeux : partie en cours lue dans la sauvegarde du jeu (même adresse, donc même stockage du navigateur)
+function jeux(){document.querySelectorAll('[data-jeu="aerelia"]').forEach(function(p){var g=null,bar=p.parentNode.querySelector('.hmeter i');
+ try{var n=localStorage.getItem('aerelia_slot')||'1';g=JSON.parse(localStorage.getItem(n==='1'?'aerelia':'aerelia_'+n))}catch(e){}
+ if(!g||!Array.isArray(g.party)||!g.party.length){p.textContent='Aérélia : pas encore commencé';if(bar)bar.style.width='0';return}
+ var b=Math.min(19,Math.max(0,+g.badge||0)),t=Math.max(0,+(g.sx&&g.sx.time)||0),nv=Math.max.apply(null,g.party.map(function(c){return +c.lv||0}));
+ p.textContent='Aérélia : '+b+' badge'+(b>1?'s':'')+' sur 19 · niveau '+nv+' · '+Math.floor(t/3600)+' h '+String(Math.floor(t/60)%60).padStart(2,'0')+' de jeu';
+ if(bar)bar.style.width=Math.round(100*b/19)+'%'})}
+function maj(){prog();reprendre();jeux()}
 maj();window.addEventListener('pageshow',maj)})();
