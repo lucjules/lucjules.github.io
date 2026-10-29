@@ -38,7 +38,21 @@ html[data-theme="light"] .s-management{--accent:#8a1f7a;--accent-soft:#f7e1f3;--
 html[data-theme="dark"] .s-maths{--accent:#ffd83a;--accent-soft:#3a3410;--accent-ink:#14172b}
 html[data-theme="light"] .s-maths{--accent:#1f2e8a;--accent-soft:#e3e7fb;--accent-ink:#fff}
 .s-maths{--accent:#1f2e8a;--accent-soft:#e3e7fb;--accent-ink:#fff}
+.s-cours{--accent:#1f4fd8;--accent-soft:#e3ebff;--accent-ink:#fff}
+.s-jeux{--accent:#306230;--accent-soft:#e6f0d0;--accent-ink:#fff}
+@media (prefers-color-scheme:dark){html:not([data-theme="light"]) .s-cours{--accent:#7aa2ff;--accent-soft:#17264d;--accent-ink:#0b1226}}
+html[data-theme="dark"] .s-cours{--accent:#7aa2ff;--accent-soft:#17264d;--accent-ink:#0b1226}
+html[data-theme="light"] .s-cours{--accent:#1f4fd8;--accent-soft:#e3ebff;--accent-ink:#fff}
+@media (prefers-color-scheme:dark){html:not([data-theme="light"]) .s-jeux{--accent:#9bbc0f;--accent-soft:#1d2a10;--accent-ink:#0f380f}}
+html[data-theme="dark"] .s-jeux{--accent:#9bbc0f;--accent-soft:#1d2a10;--accent-ink:#0f380f}
+html[data-theme="light"] .s-jeux{--accent:#306230;--accent-soft:#e6f0d0;--accent-ink:#fff}
 .hub-body{background:transparent}
+
+/* Accueil général : une grande carte par espace (cours, jeux) */
+.portals{grid-template-columns:repeat(auto-fit,minmax(min(100%,22em),1fr))}
+.portal{padding:24px 22px 20px;border-top-width:14px}
+.portal .mk{font-size:1.4rem}
+.portal h2{font-size:clamp(1.7rem,4vw,2.1rem)}
 
 /* Recherche */
 .search{margin:22px 0 0;max-width:46em}

@@ -1,8 +1,13 @@
-# Mes cours IUT
+# Cours et jeux
 
-Site de révision pour le BUT1 Informatique : leçons, exercices corrigés automatiquement et outils pour s'entraîner.
+Mon site, en deux espaces choisis depuis l'accueil (`index.html`) :
+
+- **Mes cours** (`cours.html`) : site de révision pour le BUT1 Informatique, avec leçons, exercices corrigés automatiquement et outils pour s'entraîner ;
+- **Mes jeux** (`jeux.html`) : les jeux faits maison, publiés chacun depuis son propre dépôt (par exemple [Aérélia](https://lucjules.github.io/LunaPoke/), dépôt `LunaPoke`).
 
 **En ligne :** https://lucjules.github.io/
+
+## Cours
 
 | Matière | Chapitres |
 | --- | --- |
@@ -16,21 +21,23 @@ Site de révision pour le BUT1 Informatique : leçons, exercices corrigés autom
 
 - Site 100 % statique : HTML, CSS et JavaScript, sans dépendance ni étape de compilation. Il est publié tel quel par GitHub Pages.
 - **Installable et hors ligne** : sur téléphone ou ordinateur, le site peut s'installer comme une application (bouton « Installer l'app », ou sur iPhone : Partager → « Sur l'écran d'accueil »). Après la première visite, tous les cours restent disponibles sans connexion (`sw.js`).
-- **Recherche** : la page d'accueil cherche une notion dans tous les cours (sans tenir compte des accents) et mène directement à la bonne leçon.
-- **Progression** : enregistrée dans le navigateur (`localStorage`), sur chaque appareil. Le panneau « Sauvegarder ou transférer ma progression » de l'accueil permet de l'exporter (fichier ou code à copier) et de l'importer sur un autre appareil.
-- **Reprendre** : l'accueil (et chaque page de matière) propose de revenir directement à la dernière leçon ouverte.
+- **Recherche** : l'accueil des cours cherche une notion dans tous les cours (sans tenir compte des accents) et mène directement à la bonne leçon.
+- **Progression** : enregistrée dans le navigateur (`localStorage`), sur chaque appareil. Le panneau « Sauvegarder ou transférer ma progression » de l'accueil des cours permet de l'exporter (fichier ou code à copier) et de l'importer sur un autre appareil.
+- **Reprendre** : l'accueil, l'accueil des cours et chaque page de matière propose de revenir directement à la dernière leçon ouverte.
 - **Impression** : imprimer une leçon ou l'enregistrer en PDF donne une version propre, sur fond blanc, sans menus ni boutons, avec les corrigés et les fiches dépliés.
 - Ouvrir `index.html` directement depuis le dossier fonctionne aussi (polices incluses dans `assets/fonts/`), sauf l'installation en application.
 
 ## Organisation
 
 ```
-index.html             accueil général (recherche, sauvegarde de la progression)
+index.html             accueil général : choix entre les cours et les jeux
+cours.html             accueil des cours (recherche, sauvegarde de la progression)
+jeux.html              accueil des jeux (partie en cours de chaque jeu)
 <matière>/index.html   accueil d'une matière, avec une carte par chapitre
 <matière>/*.html       un fichier par chapitre (application complète)
 maths/app.js           code commun aux 5 pages de maths
 assets/common.js       code commun à toutes les pages (thème, QCM, hors ligne)
-assets/hub.js          pages d'accueil : thème, barres de progression, installation
+assets/hub.js          pages d'accueil : thème, barres de progression, partie en cours, installation
 assets/recherche*.js   recherche (recherche-index.js est généré)
 assets/sauvegarde.js   export / import de la progression
 assets/                styles (base.css + un fichier par matière), icônes, polices
@@ -44,10 +51,16 @@ outils/construire.js   régénère l'index de recherche et la liste hors ligne
 
 1. Déposer le fichier `.html` du chapitre dans le dossier de la matière.
 2. Ajouter sa carte dans le `index.html` de la matière.
-3. Dans le `index.html` racine, ajouter le chapitre à l'attribut `data-prog` de la carte de la matière et mettre à jour le nombre de chapitres.
+3. Dans `cours.html`, ajouter le chapitre à l'attribut `data-prog` de la carte de la matière et mettre à jour le nombre de chapitres.
 4. C'est tout : à chaque modification de `main`, une GitHub Action (`.github/workflows/construire.yml`) régénère l'index de recherche et la liste hors ligne, puis enregistre le résultat. L'onglet **Actions** du dépôt montre son déroulement.
 
-Pour le faire à la main (Node.js nécessaire) :
+## Ajouter un jeu
+
+Chaque jeu vit dans son propre dépôt GitHub publié par GitHub Pages (il est alors en ligne à l'adresse `https://lucjules.github.io/<dépôt>/`). Il suffit d'ajouter sa carte dans `jeux.html` (et son nom dans les étiquettes de la carte « Mes jeux » de `index.html`). Le service worker du site laisse de côté les adresses des jeux : chacun gère son propre mode hors ligne.
+
+## Régénérer à la main
+
+Pour régénérer l'index et la liste hors ligne à la main (Node.js nécessaire) :
 
 ```
 cd outils && npm install && npx playwright install chromium   # la première fois

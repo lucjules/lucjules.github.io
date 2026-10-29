@@ -1,10 +1,13 @@
-MES COURS IUT
+COURS ET JEUX
 =============
 
 Ouvre "index.html" (double-clic) dans ton navigateur : c'est l'accueil général.
-Il mène aux 5 matières, et chaque matière a sa propre page d'accueil avec ses chapitres.
+Il mène à deux espaces : les cours (cours.html) et les jeux (jeux.html).
+Les cours mènent aux 5 matières, et chaque matière a sa propre page d'accueil avec ses chapitres.
 
-index.html                      accueil général
+index.html                      accueil général : cours ou jeux
+cours.html                      accueil des cours (recherche, sauvegarde de la progression)
+jeux.html                       accueil des jeux (les jeux eux-mêmes sont en ligne, chacun dans son dépôt)
 algo/index.html                 Algorithmique : cycle1.html, cycle2.html
 systeme/index.html              Système : intro-systeme.html
 sql/index.html                  Bases de données : sql-requetes-simples.html
@@ -21,7 +24,7 @@ Notes
 - Garde le dossier complet ensemble : les pages utilisent le dossier "assets".
 - Aucune connexion Internet n'est nécessaire : tout, polices comprises, est dans le dossier.
 - La progression est enregistrée dans le navigateur (par appareil).
-- Pour la passer d'un appareil à l'autre : panneau « Sauvegarder ou transférer ma progression » en bas de l'accueil.
+- Pour la passer d'un appareil à l'autre : panneau « Sauvegarder ou transférer ma progression » en bas de l'accueil des cours.
 - Pour ajouter un chapitre plus tard : dépose son fichier .html dans le dossier de la matière
-  et ajoute une carte dans la page index.html de cette matière.
+  et ajoute une carte dans la page index.html de cette matière (et le chapitre dans cours.html).
   Sur GitHub, la recherche et le mode hors ligne se mettent à jour tout seuls (voir README.md).
