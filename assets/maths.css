@@ -53,7 +53,7 @@ mark{background:linear-gradient(transparent 52%,var(--mark) 52%);color:inherit;p
 .nav{display:flex;gap:2px;overflow-x:auto;margin:0 -16px;padding:0 12px}
 .nav a{display:flex;align-items:center;gap:8px;padding:10px 12px;text-decoration:none;color:var(--ink-2);font-weight:500;font-size:14px;white-space:nowrap;border-bottom:3px solid transparent}
 .nav a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--brand);font-weight:600}
-.nav .ic{font:500 13px var(--f-mono);opacity:.8}
+.nav .ic{font:500 13px var(--f-mono);opacity:.9}
 .side-foot{display:none}
 .toprow{display:flex;align-items:center;gap:10px}
 .mob-theme{margin-left:auto;font-size:16px;padding:4px 11px}
@@ -223,3 +223,19 @@ h3.sec{margin:26px 0 10px}
 .chlinks a{color:var(--ink-2);text-decoration:none;padding:4px 8px;border-radius:6px;font-size:13px}
 .chlinks a:hover{background:var(--surface-2)}
 .chlinks a[aria-current]{color:var(--ink);font-weight:600;background:var(--surface-2)}
+
+/* Impression et « Enregistrer en PDF » : seule la vue ouverte est imprimée, fiches et corrigés dépliés.
+   common.js passe la page en thème clair et ouvre les sections repliées juste avant l'impression. */
+@media print{
+  @page{margin:14mm 13mm}
+  body{background:#fff;font-size:11pt;line-height:1.45}
+  .side,.mob-theme,.actions,.tabs,.chips,.row>.ghost,.row>.btn,details.chap>summary::before{display:none!important}
+  .app{display:block}
+  .main{padding:0!important}
+  *{box-shadow:none!important;transition:none!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  a{color:inherit}
+  h1{font-size:22pt}h2{font-size:16pt}h3{font-size:13pt}
+  h1,h2,h3,h4,summary{break-after:avoid}
+  .box,.piege,details.ex,table,figure{break-inside:avoid}
+  details.chap{border-color:#bbb}
+}

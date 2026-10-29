@@ -1,5 +1,5 @@
 :root{
-  --paper:#fbfcfe; --paper2:#f1f5fb; --grid:#d9e4f4; --margin:#e5484d;
+  --paper:#fbfcfe; --paper2:#f1f5fb; --grid:#d9e4f4; --margin:#c9353b;
   --ink:#16213a; --ink2:#46526c; --line:#cfd9ea;
   --accent:#1f4fd8; --accent-ink:#fff; --accent-soft:#e3ebff;
   --ok:#0e7a4b; --ok-soft:#dcf5e7; --ko:#b42318; --ko-soft:#fde8e6; --warn:#8a5a00; --warn-soft:#fff3d6;
@@ -295,3 +295,32 @@ pre code{background:none;padding:0;border-radius:0;font-size:inherit}
 .choice{min-width:0}.choice .ct{min-width:0;overflow-wrap:anywhere}.choice code{white-space:pre-wrap;overflow-wrap:anywhere}
 .back{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink);border:2px solid var(--ink);border-radius:8px;width:38px;height:36px;font-size:1.15rem;line-height:1;flex:none}
 .back:hover{background:var(--accent-soft)}
+
+/* Impression et « Enregistrer en PDF » : texte sur fond blanc, sans menus ni boutons, corrigés visibles.
+   common.js passe la page en thème clair et ouvre les corrigés juste avant l'impression. */
+@media print{
+  @page{margin:14mm 13mm}
+  body{background:#fff;font-size:11.5pt;line-height:1.45}
+  /* Blocs de code, terminal et schémas en clair : lisibles même sans « graphiques d'arrière-plan », et moins d'encre */
+  :root:root:root{--slate:#f4f5f8;--slate2:#e8ebf1;--slate-ink:#14161c;--slate-mute:#5a6275;--k:#1d4ed8;--t:#0b6e4f;--s:#a14b0a;--n:#9d174d;--cm:#6b7280;--f:#6d28d9}
+  .cb,.memo pre,.shape,.anatomy,.term,.editor{border:1.5px solid #c8ceda}
+  .cb-bar,.cb-term{border-color:#c8ceda}
+  .tab[aria-selected="true"]{background:#dde3ee;color:#14161c}
+  .term-input{color:#14161c}.t-err{color:#b42318}
+  .top,.side,.scrim,.skip,#menu-btn,.hub-top,.search,.search-res,.backup,.resume,#install-btn,#install-ios,
+  .btn,.cb-actions,.ex-actions,.ed-tools,.ed-hint,.term-in,.term-bar,.ex-badge,.ex-fb,.hint,.meter,.prog-txt{display:none!important}
+  .shell{display:block;min-height:0}
+  main{padding:0}
+  main::before{display:none}
+  .page,.home,.page.wide,.hub{max-width:none;padding:0}
+  *{box-shadow:none!important;transition:none!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  a{color:inherit}
+  h1{font-size:22pt}h2{font-size:16pt;margin-top:1.4em}h3{font-size:13pt}
+  h1,h2,h3,h4,.ex-h,.ex-q{break-after:avoid}
+  .ex,.cb,.note,.mini-card,.lvl,.anatomy,.pieges li,.skill,table,figure,.tbl-wrap,.trace-wrap{break-inside:avoid}
+  .ex{border-width:1.5px;padding:10px 12px;margin:.9em 0}
+  .cb-code,.ex-code,.prog,.memo pre{white-space:pre-wrap;overflow:visible;word-break:break-word}
+  .tbl-wrap,.trace-wrap,.term-out{overflow:visible;max-height:none}
+  .sol-imprime{border-top:1.5px dashed var(--line);padding-top:6px}
+  .sol-imprime::before{content:"Corrigé";display:block;font:700 .72rem var(--f-body);text-transform:uppercase;letter-spacing:.1em;color:var(--ok);margin-bottom:2px}
+}

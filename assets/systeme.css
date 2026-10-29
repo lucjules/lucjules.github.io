@@ -42,3 +42,5 @@
 .streak{color:var(--ink2);margin:.8em 0 0}
 .ex-fb.ok{color:var(--ok);font-weight:700}.ex-fb.ko{color:var(--ko);font-weight:700}
 @media (max-width:700px){.term-input{font-size:16px}.drill-in{font-size:16px}.term-in .prompt{max-width:45%}}
+/* Impression : couleurs du terminal lisibles sur fond clair */
+@media print{.sh-c{color:#14161c}.ls-d{color:#1d4ed8}.ls-x{color:#0b6e4f}.t-err{color:#b42318}}
