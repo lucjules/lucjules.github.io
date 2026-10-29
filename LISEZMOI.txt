@@ -10,6 +10,7 @@ systeme/index.html              Système : intro-systeme.html
 sql/index.html                  Bases de données : sql-requetes-simples.html
 management/index.html           Management : introduction.html, chapitre1.html
 maths/index.html                Mathématiques : logique, arithmetique, recurrence, second-degre, revision
+                                (le code commun des 5 pages est dans maths/app.js)
 assets/                         styles (un style de base + un style par matière)
 
 Notes
