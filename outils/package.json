@@ -1,0 +1,7 @@
+{
+  "name": "mes-cours-iut-outils",
+  "private": true,
+  "description": "Outils de maintenance du site (index de recherche, liste hors ligne)",
+  "scripts": { "construire": "node construire.js" },
+  "devDependencies": { "playwright": "1.63.0" }
+}

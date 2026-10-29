@@ -39,7 +39,7 @@
 .rev{padding:10px 14px;margin:8px 0;border-left:6px solid var(--ko);background:var(--ko-soft);border-radius:0 8px 8px 0}
 .rev.ok{border-left-color:var(--ok);background:var(--ok-soft)}
 .diag{display:grid;gap:10px;margin:1em 0}
-.box{border:2px solid var(--ink);border-radius:8px;padding:8px 12px;background:var(--paper);text-align:center;font-size:.92rem}
+.box{border:2px solid var(--ink);border-radius:8px;padding:8px 12px;background:var(--paper);color:var(--ink);text-align:center;font-size:.92rem}
 .box strong{display:block}
 .box.acc{background:var(--accent-soft)}
 .arrow{text-align:center;color:var(--ink2);font-size:1.3rem;line-height:1}

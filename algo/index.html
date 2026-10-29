@@ -6,11 +6,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Algorithmique en ExAlgo et en Java : variables, conditions, boucles, fonctions et tests, avec un éditeur qui exécute vraiment ton code.">
 <meta name="color-scheme" content="light dark">
+<link rel="manifest" href="../manifest.webmanifest">
+<meta name="theme-color" content="#1f4fd8">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
 <link rel="stylesheet" href="../assets/fonts/fonts.css">
 <link rel="stylesheet" href="../assets/base.css">
 <link rel="stylesheet" href="../assets/hub.css">
+<script src="../assets/common.js"></script>
 </head>
 <body class="s-algo">
 <header class="hub-top"><a class="back" href="../index.html" aria-label="Retour" title="Retour">⌂</a><a class="brand" href="../index.html"><span class="brand-mark">IUT</span>Mes cours</a><span class="sp"></span><button type="button" id="theme-btn" class="icon-btn" aria-label="Changer le thème" title="Thème clair / sombre">◐</button></header>
@@ -25,13 +28,6 @@
 </div>
 
 </main>
-<script>
-(function(){try{var t=localStorage.getItem('cours-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}
-function sync(){}
-document.addEventListener('click',function(e){var b=e.target.closest('#theme-btn');if(!b)return;var r=document.documentElement,dark=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches),n=dark?'light':'dark';r.dataset.theme=n;try{localStorage.setItem('cours-theme',n)}catch(e){}});
-function prog(){var cards=document.querySelectorAll('[data-prog]');cards.forEach(function(c){var keys=c.dataset.prog.split(','),d=0,t=0,any=false;var opened=0;keys.forEach(function(k){try{var v=localStorage.getItem('hub:'+k);if(v){v=JSON.parse(v);d+=v.done;t+=v.total;any=true;opened++}}catch(e){}});
- var bar=c.querySelector('.hmeter i'),txt=c.querySelector('.hprog');if(any&&t){bar.style.width=Math.round(100*d/t)+'%';var u=' exercices réussis',tx=null;if(keys.length===1){try{var w=JSON.parse(localStorage.getItem('hub:'+keys[0]));if(w.unit)u=' '+w.unit;if(w.text)tx=w.text}catch(e){}}else{try{if(JSON.parse(localStorage.getItem('hub:'+keys[0])).unit)u=' cartes sues'}catch(e){}}txt.textContent=tx||(d+' / '+t+u+(opened<keys.length?' (chapitres déjà ouverts)':''))}else{txt.textContent='Pas encore commencé'}})}
-prog();window.addEventListener('pageshow',prog)})();
-</script>
+<script src="../assets/hub.js"></script>
 </body>
 </html>
