@@ -1,6 +1,7 @@
 # Régénère l'index de la recherche et la liste des fichiers hors ligne (outils/construire.js)
 # à chaque modification de main, puis enregistre le résultat : plus besoin de Node.js en local.
-# Sur une demande de fusion, l'action vérifie seulement que la génération fonctionne.
+# Lance aussi les tests du jeu Voie libre (outils/tester-voie-libre.js).
+# Sur une demande de fusion, l'action vérifie seulement que la génération et les tests fonctionnent.
 name: Recherche et hors ligne
 
 on:
@@ -36,6 +37,9 @@ jobs:
 
       - name: Régénérer l'index de recherche et la liste hors ligne
         run: node outils/construire.js
+
+      - name: Tester le jeu Voie libre
+        run: node outils/tester-voie-libre.js
 
       - name: Comparer avec la version enregistrée
         id: diff

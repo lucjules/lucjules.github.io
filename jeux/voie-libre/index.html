@@ -24,6 +24,7 @@
   <div id="h-prog" class="h-prog" hidden><i id="h-prog-barre"></i><span aria-hidden="true">🏁</span></div>
   <p id="h-temps" class="h-temps" hidden>60 s</p>
   <div id="h-bonus"></div>
+  <button type="button" id="b-elan" class="b-elan" hidden aria-label="Élan de départ (touche E)"><span aria-hidden="true">»</span> Élan <b id="h-elans">0</b></button>
   <button type="button" id="b-planche" class="b-planche" aria-label="Sortir une planche (touche B, ou deux tapes sur l'écran)"><span class="mini-planche" aria-hidden="true"></span><b id="h-planches">0</b></button>
   <p id="h-msg" aria-live="polite"></p>
 </div>
@@ -44,15 +45,15 @@
       <button type="button" class="btn vert" id="b-niveaux">Tour de la ville <small>★</small></button>
       <button type="button" class="btn orange" id="b-defi">Défi du jour <small>60 secondes</small></button>
     </div>
-    <div class="ligne">
+    <div class="ligne trois">
       <button type="button" class="btn second" id="b-missions">Missions <small>0 / 3</small></button>
+      <button type="button" class="btn second" id="b-trophees">Trophées <small>0 / 20</small></button>
       <button type="button" class="btn second" id="b-boutique">Boutique <small>persos, planches</small></button>
     </div>
     <div class="bas">
       <a href="../../jeux.html">← Mes jeux</a>
       <button type="button" id="b-aide" class="lien">Aide</button>
-      <button type="button" id="b-son" class="lien" aria-pressed="true">Sons : oui</button>
-      <button type="button" id="b-musique" class="lien" aria-pressed="true">Musique : oui</button>
+      <button type="button" id="b-reglages" class="lien">Réglages</button>
     </div>
   </div>
 </section>
@@ -64,7 +65,8 @@
       <div><b>Changer de voie</b><span><kbd>←</kbd> <kbd>→</kbd> ou <kbd>Q</kbd> <kbd>D</kbd></span><small>Tactile : glisser à gauche ou à droite</small></div>
       <div><b>Sauter</b><span><kbd>↑</kbd> ou <kbd>Espace</kbd></span><small>Tactile : glisser vers le haut</small></div>
       <div><b>Glisser · écraser</b><span><kbd>↓</kbd> ou <kbd>S</kbd></span><small>Tactile : glisser vers le bas. En plein saut, tu retombes d'un coup et tu écrases ce qu'il y a dessous.</small></div>
-      <div><b>Planche</b><span><kbd>B</kbd></span><small>Tactile : deux tapes rapides, ou le bouton en bas à droite. Elle encaisse un choc pendant 30 s.</small></div>
+      <div><b>Planche</b><span><kbd>B</kbd></span><small>Tactile : deux tapes rapides, ou le bouton en bas à droite. Elle encaisse un choc pendant 30 s, et chaque planche de la boutique a son pouvoir.</small></div>
+      <div><b>Élan de départ</b><span><kbd>E</kbd></span><small>Au début d'une course libre, si tu en as : bouton « Élan » en bas à droite. 6 s de vol à toute vitesse.</small></div>
       <div><b>Pause</b><span><kbd>Échap</kbd> ou <kbd>P</kbd></span><small>Tactile : bouton ❚❚ en haut à gauche</small></div>
     </div>
     <ul class="regles">
@@ -72,6 +74,7 @@
       <li><b>Wagons</b> : change de voie, ou monte dessus par la rampe et cours sur les toits.</li>
       <li><b>Caisses « ? »</b> : écrase-les (glisser en plein saut) pour gagner pièces, bonus ou clés.</li>
       <li><b>Accélérateurs</b> au sol : turbo de vitesse qui brise tout sur ton passage.</li>
+      <li><b>Tunnels</b> : il y fait sombre et le plafond est bas, même en jetpack.</li>
       <li>Heurter un wagon <b>de côté</b> te fait trébucher et l'agent te rattrape : deux fois de suite et c'est perdu.</li>
       <li>Après un choc, tu peux <b>continuer avec des clés</b>.</li>
     </ul>
@@ -82,7 +85,7 @@
       <p><span class="bic" style="--c:#8338ec">▲</span><span><b>Jetpack</b> : vole au-dessus de tout et ramasse les pièces du ciel.</span></p>
       <p><span class="bic" style="--c:#ff70a6">◯</span><span><b>Bulle</b> : encaisse un choc et fait sauter plus haut.</span></p>
     </div>
-    <p class="note">Les <b>missions</b> font monter ton multiplicateur de score. Le <b>Tour de la ville</b> propose 12 niveaux à étoiles, et le <b>Défi du jour</b> le même parcours de 60 s pour tout le monde.</p>
+    <p class="note">Les <b>missions</b> font monter ton multiplicateur de score, les <b>trophées</b> rapportent des pièces, et un <b>cadeau</b> t'attend chaque jour. Le <b>Tour de la ville</b> propose 12 niveaux à étoiles, et le <b>Défi du jour</b> le même parcours de 60 s pour tout le monde.</p>
     <button type="button" class="btn" data-retour>Retour</button>
   </div>
 </section>
@@ -116,6 +119,50 @@
     <p id="d-cle" class="note"></p>
     <button type="button" class="btn orange" id="b-lancer-defi">C'est parti</button>
     <button type="button" class="btn second" data-retour>Retour</button>
+  </div>
+</section>
+
+<section id="trophees" class="ecran" aria-labelledby="t-trophees" hidden>
+  <div class="carte">
+    <h2 id="t-trophees">Trophées et records</h2>
+    <h3 class="sous-titre">Tes 5 meilleurs scores</h3>
+    <ol id="tr-scores" class="scores"></ol>
+    <div id="tr-stats" class="stats grille"></div>
+    <h3 class="sous-titre">Trophées · <span id="tr-total">0</span></h3>
+    <ul id="tr-liste" class="missions trophees"></ul>
+    <button type="button" class="btn" data-retour>Retour</button>
+  </div>
+</section>
+
+<section id="reglages" class="ecran" aria-labelledby="t-reglages" hidden>
+  <div class="carte">
+    <h2 id="t-reglages">Réglages</h2>
+    <div class="reglages">
+      <button type="button" id="b-son" class="btn second" aria-pressed="true">Sons : oui</button>
+      <button type="button" id="b-musique" class="btn second" aria-pressed="true">Musique : oui</button>
+      <button type="button" id="b-vib" class="btn second" aria-pressed="true">Vibrations : oui</button>
+    </div>
+    <h3 class="sous-titre">Sensibilité des glissements</h3>
+    <div class="seg" role="group" aria-label="Sensibilité des glissements">
+      <button type="button" data-sens="0.7">Faible</button><button type="button" data-sens="1">Normale</button><button type="button" data-sens="1.4">Forte</button>
+    </div>
+    <h3 class="sous-titre">Qualité graphique</h3>
+    <div class="seg" role="group" aria-label="Qualité graphique">
+      <button type="button" data-qualite="auto">Auto</button><button type="button" data-qualite="basse">Économie</button><button type="button" data-qualite="haute">Maximale</button>
+    </div>
+    <p class="note">« Auto » baisse les détails si ton appareil a du mal à suivre.</p>
+    <button type="button" class="btn" data-retour>Retour</button>
+    <button type="button" class="lien danger" id="b-effacer">Effacer ma progression</button>
+  </div>
+</section>
+
+<section id="cadeau" class="ecran" aria-labelledby="t-cadeau" hidden>
+  <div class="carte">
+    <p class="sur">Cadeau du jour</p>
+    <h2 id="t-cadeau">Bon retour en ville !</h2>
+    <p id="ca-serie" class="intro"></p>
+    <ol id="ca-jours" class="jours"></ol>
+    <button type="button" class="btn orange" id="b-cadeau">Récupérer</button>
   </div>
 </section>
 
