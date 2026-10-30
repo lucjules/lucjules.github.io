@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Voie libre · Mes jeux</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Voie libre : course sans fin sur trois voies. Change de voie, saute, glisse sous les portiques, monte sur les wagons et ramasse les pièces.">
+<meta name="theme-color" content="#5b6cff">
+<link rel="manifest" href="../../manifest.webmanifest">
+<link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="../../assets/fonts/fonts.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="scene" role="img" aria-label="Voie libre : le coureur sur trois voies de chemin de fer"></canvas>
+
+<div id="hud" hidden>
+  <div class="hud-haut">
+    <button type="button" id="b-pause" class="rond" aria-label="Pause"><span aria-hidden="true">❚❚</span></button>
+    <div class="puce"><span class="piece-ic" aria-hidden="true"></span><b id="h-pieces">0</b><span class="sr-only">pièces</span></div>
+    <div class="score"><b id="h-score">0</b><span id="h-mult" class="mult" hidden>×2</span></div>
+  </div>
+  <div id="h-bonus"></div>
+  <p id="h-msg" aria-live="polite"></p>
+</div>
+
+<section id="menu" class="ecran" aria-labelledby="t-menu">
+  <div class="carte">
+    <p class="sur">Mes jeux</p>
+    <h1 id="t-menu">Voie libre</h1>
+    <p class="intro">Cours sur les voies, évite les wagons et les barrières, ramasse un maximum de pièces.</p>
+    <div class="stats"><div><span>Record</span><b id="m-record">0</b></div><div><span>Pièces</span><b id="m-pieces">0</b></div></div>
+    <button type="button" class="btn" id="b-jouer">Jouer</button>
+    <div class="ligne"><button type="button" class="btn second" id="b-boutique">Améliorations</button><button type="button" class="btn second" id="b-aide">Comment jouer</button></div>
+    <div class="bas"><a href="../../jeux.html">← Mes jeux</a><button type="button" id="b-son" class="lien" aria-pressed="true">Son : oui</button></div>
+  </div>
+</section>
+
+<section id="aide" class="ecran" aria-labelledby="t-aide" hidden>
+  <div class="carte">
+    <h2 id="t-aide">Comment jouer</h2>
+    <div class="commandes">
+      <div><b>Changer de voie</b><span><kbd>←</kbd> <kbd>→</kbd> ou <kbd>Q</kbd> <kbd>D</kbd></span><small>Tactile : glisser à gauche ou à droite</small></div>
+      <div><b>Sauter</b><span><kbd>↑</kbd> ou <kbd>Espace</kbd></span><small>Tactile : glisser vers le haut</small></div>
+      <div><b>Glisser</b><span><kbd>↓</kbd> ou <kbd>S</kbd></span><small>Tactile : glisser vers le bas</small></div>
+      <div><b>Pause</b><span><kbd>Échap</kbd> ou <kbd>P</kbd></span><small>Tactile : bouton ❚❚ en haut à gauche</small></div>
+    </div>
+    <ul class="regles">
+      <li><b>Barrière basse</b> : saute par-dessus. <b>Portique</b> : glisse dessous.</li>
+      <li><b>Wagons</b> : change de voie, ou monte dessus par la rampe et cours sur le toit.</li>
+      <li>Heurter un wagon <b>de côté</b> te fait trébucher : deux fois de suite et la course s'arrête.</li>
+      <li>Glisser en plein saut te fait redescendre tout de suite.</li>
+    </ul>
+    <div class="bonus-liste">
+      <p><span class="bic" style="--c:#ef476f">U</span><span><b>Aimant</b> attire les pièces des trois voies.</span></p>
+      <p><span class="bic" style="--c:#06d6a0">⇈</span><span><b>Super saut</b> : assez haut pour monter sur les wagons.</span></p>
+      <p><span class="bic" style="--c:#ffb703">×2</span><span><b>Score ×2</b> pendant quelques secondes.</span></p>
+      <p><span class="bic" style="--c:#4cc9f0">◆</span><span><b>Bouclier</b> : encaisse un choc à ta place.</span></p>
+    </div>
+    <button type="button" class="btn" data-retour>Retour</button>
+  </div>
+</section>
+
+<section id="boutique" class="ecran" aria-labelledby="t-boutique" hidden>
+  <div class="carte">
+    <h2 id="t-boutique">Améliorations</h2>
+    <p class="intro">Les pièces ramassées allongent la durée des bonus.</p>
+    <p class="solde"><span class="piece-ic" aria-hidden="true"></span><b id="s-pieces">0</b> pièces</p>
+    <div id="amelio"></div>
+    <button type="button" class="btn" data-retour>Retour</button>
+  </div>
+</section>
+
+<section id="pause" class="ecran" aria-labelledby="t-pause" hidden>
+  <div class="carte">
+    <h2 id="t-pause">Pause</h2>
+    <button type="button" class="btn" id="b-reprendre">Reprendre</button>
+    <button type="button" class="btn second" id="b-recommencer">Recommencer</button>
+    <button type="button" class="btn second" data-menu>Menu</button>
+  </div>
+</section>
+
+<section id="fin" class="ecran" aria-labelledby="t-fin" hidden>
+  <div class="carte">
+    <p class="sur" id="f-record" hidden>Nouveau record !</p>
+    <h2 id="t-fin">Fin de la course</h2>
+    <p class="gros" id="f-score">0</p>
+    <div class="stats"><div><span>Distance</span><b id="f-dist">0 m</b></div><div><span>Pièces</span><b id="f-pieces">0</b></div></div>
+    <button type="button" class="btn" id="b-rejouer">Rejouer</button>
+    <button type="button" class="btn second" data-menu>Menu</button>
+  </div>
+</section>
+
+<script src="jeu.js"></script>
+</body>
+</html>

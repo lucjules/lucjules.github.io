@@ -20,12 +20,18 @@ function reprendre(){var el=document.getElementById('resume');if(!el)return;var 
  el.href=(el.dataset.base||'')+r.u;
  el.querySelector('.resume-k').textContent='Reprendre'+(carte?' · '+carte.textContent:'');
  el.querySelector('.resume-t').textContent=r.chap+(r.sec?' › '+r.sec:'');el.hidden=false}
-// Jeux : partie en cours lue dans la sauvegarde du jeu (même adresse, donc même stockage du navigateur)
-function jeux(){document.querySelectorAll('[data-jeu="aerelia"]').forEach(function(p){var g=null,bar=p.parentNode.querySelector('.hmeter i');
- try{var n=localStorage.getItem('aerelia_slot')||'1';g=JSON.parse(localStorage.getItem(n==='1'?'aerelia':'aerelia_'+n))}catch(e){}
- if(!g||!Array.isArray(g.party)||!g.party.length){p.textContent='Aérélia : pas encore commencé';if(bar)bar.style.width='0';return}
- var b=Math.min(19,Math.max(0,+g.badge||0)),t=Math.max(0,+(g.sx&&g.sx.time)||0),nv=Math.max.apply(null,g.party.map(function(c){return +c.lv||0}));
- p.textContent='Aérélia : '+b+' badge'+(b>1?'s':'')+' sur 19 · niveau '+nv+' · '+Math.floor(t/3600)+' h '+String(Math.floor(t/60)%60).padStart(2,'0')+' de jeu';
- if(bar)bar.style.width=Math.round(100*b/19)+'%'})}
+// Jeux : partie en cours ou record, lus dans la sauvegarde de chaque jeu (même adresse, donc même stockage du navigateur).
+// Chaque fonction rend [texte, avancement de 0 à 1 ou null] ; la barre .hmeter juste avant le texte est remplie si elle existe.
+function lire(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
+var JEUX={
+ aerelia:function(){var n=null;try{n=localStorage.getItem('aerelia_slot')}catch(e){}var g=lire(!n||n==='1'?'aerelia':'aerelia_'+n);
+  if(!g||!Array.isArray(g.party)||!g.party.length)return['Aérélia : pas encore commencé',0];
+  var b=Math.min(19,Math.max(0,+g.badge||0)),t=Math.max(0,+(g.sx&&g.sx.time)||0),nv=Math.max.apply(null,g.party.map(function(c){return +c.lv||0}));
+  return['Aérélia : '+b+' badge'+(b>1?'s':'')+' sur 19 · niveau '+nv+' · '+Math.floor(t/3600)+' h '+String(Math.floor(t/60)%60).padStart(2,'0')+' de jeu',b/19]},
+ 'voie-libre':function(){var d=lire('voie-libre'),n=d&&Math.floor(+d.parties)>0?Math.floor(+d.parties):0;
+  if(!n)return['Voie libre : pas encore joué',null];
+  return['Voie libre : record '+Math.max(0,Math.floor(+d.record)||0).toLocaleString('fr-FR')+' · '+n+' course'+(n>1?'s':''),null]}};
+function jeux(){document.querySelectorAll('[data-jeu]').forEach(function(p){var f=JEUX[p.dataset.jeu];if(!f)return;var r=f(),m=p.previousElementSibling,bar=m&&m.classList.contains('hmeter')?m.querySelector('i'):null;
+ p.textContent=r[0];if(bar&&r[1]!=null)bar.style.width=Math.round(100*r[1])+'%'})}
 function maj(){prog();reprendre();jeux()}
 maj();window.addEventListener('pageshow',maj)})();
