@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Voie libre · Mes jeux</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Voie libre : course sans fin sur trois voies. Change de voie, saute, glisse sous les portiques, monte sur les wagons et ramasse les pièces.">
+<meta name="description" content="Voie libre : course à travers les quartiers d'une ville, sur trois voies. Saute, glisse, monte sur les wagons, écrase les caisses, sors ta planche et ramasse les pièces.">
 <meta name="theme-color" content="#5b6cff">
 <link rel="manifest" href="../../manifest.webmanifest">
 <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
@@ -13,15 +13,18 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<canvas id="scene" role="img" aria-label="Voie libre : le coureur sur trois voies de chemin de fer"></canvas>
+<canvas id="scene" role="img" aria-label="Voie libre : le coureur sur trois voies de chemin de fer, dans la ville"></canvas>
 
 <div id="hud" hidden>
   <div class="hud-haut">
     <button type="button" id="b-pause" class="rond" aria-label="Pause"><span aria-hidden="true">❚❚</span></button>
     <div class="puce"><span class="piece-ic" aria-hidden="true"></span><b id="h-pieces">0</b><span class="sr-only">pièces</span></div>
-    <div class="score"><b id="h-score">0</b><span id="h-mult" class="mult" hidden>×2</span></div>
+    <div class="score"><b id="h-score">0</b><span id="h-mult" class="mult" title="Multiplicateur de score">×1</span></div>
   </div>
+  <div id="h-prog" class="h-prog" hidden><i id="h-prog-barre"></i><span aria-hidden="true">🏁</span></div>
+  <p id="h-temps" class="h-temps" hidden>60 s</p>
   <div id="h-bonus"></div>
+  <button type="button" id="b-planche" class="b-planche" aria-label="Sortir une planche (touche B, ou deux tapes sur l'écran)"><span class="mini-planche" aria-hidden="true"></span><b id="h-planches">0</b></button>
   <p id="h-msg" aria-live="polite"></p>
 </div>
 
@@ -29,11 +32,28 @@
   <div class="carte">
     <p class="sur">Mes jeux</p>
     <h1 id="t-menu">Voie libre</h1>
-    <p class="intro">Cours sur les voies, évite les wagons et les barrières, ramasse un maximum de pièces.</p>
-    <div class="stats"><div><span>Record</span><b id="m-record">0</b></div><div><span>Pièces</span><b id="m-pieces">0</b></div></div>
-    <button type="button" class="btn" id="b-jouer">Jouer</button>
-    <div class="ligne"><button type="button" class="btn second" id="b-boutique">Améliorations</button><button type="button" class="btn second" id="b-aide">Comment jouer</button></div>
-    <div class="bas"><a href="../../jeux.html">← Mes jeux</a><button type="button" id="b-son" class="lien" aria-pressed="true">Son : oui</button></div>
+    <p class="intro">Fonce à travers les quartiers de la ville : saute, glisse, monte sur les wagons et ramasse les pièces.</p>
+    <div class="stats">
+      <div><span>Record</span><b id="m-record">0</b></div>
+      <div><span>Pièces</span><b id="m-pieces">0</b></div>
+      <div><span>Clés</span><b id="m-cles">0</b></div>
+      <div><span>Multi.</span><b id="m-multi">×1</b></div>
+    </div>
+    <button type="button" class="btn" id="b-jouer">Jouer <small>course libre</small></button>
+    <div class="ligne">
+      <button type="button" class="btn vert" id="b-niveaux">Tour de la ville <small>★</small></button>
+      <button type="button" class="btn orange" id="b-defi">Défi du jour <small>60 secondes</small></button>
+    </div>
+    <div class="ligne">
+      <button type="button" class="btn second" id="b-missions">Missions <small>0 / 3</small></button>
+      <button type="button" class="btn second" id="b-boutique">Boutique <small>persos, planches</small></button>
+    </div>
+    <div class="bas">
+      <a href="../../jeux.html">← Mes jeux</a>
+      <button type="button" id="b-aide" class="lien">Aide</button>
+      <button type="button" id="b-son" class="lien" aria-pressed="true">Sons : oui</button>
+      <button type="button" id="b-musique" class="lien" aria-pressed="true">Musique : oui</button>
+    </div>
   </div>
 </section>
 
@@ -43,31 +63,73 @@
     <div class="commandes">
       <div><b>Changer de voie</b><span><kbd>←</kbd> <kbd>→</kbd> ou <kbd>Q</kbd> <kbd>D</kbd></span><small>Tactile : glisser à gauche ou à droite</small></div>
       <div><b>Sauter</b><span><kbd>↑</kbd> ou <kbd>Espace</kbd></span><small>Tactile : glisser vers le haut</small></div>
-      <div><b>Glisser</b><span><kbd>↓</kbd> ou <kbd>S</kbd></span><small>Tactile : glisser vers le bas</small></div>
+      <div><b>Glisser · écraser</b><span><kbd>↓</kbd> ou <kbd>S</kbd></span><small>Tactile : glisser vers le bas. En plein saut, tu retombes d'un coup et tu écrases ce qu'il y a dessous.</small></div>
+      <div><b>Planche</b><span><kbd>B</kbd></span><small>Tactile : deux tapes rapides, ou le bouton en bas à droite. Elle encaisse un choc pendant 30 s.</small></div>
       <div><b>Pause</b><span><kbd>Échap</kbd> ou <kbd>P</kbd></span><small>Tactile : bouton ❚❚ en haut à gauche</small></div>
     </div>
     <ul class="regles">
-      <li><b>Barrière basse</b> : saute par-dessus. <b>Portique</b> : glisse dessous.</li>
-      <li><b>Wagons</b> : change de voie, ou monte dessus par la rampe et cours sur le toit.</li>
-      <li>Heurter un wagon <b>de côté</b> te fait trébucher : deux fois de suite et la course s'arrête.</li>
-      <li>Glisser en plein saut te fait redescendre tout de suite.</li>
+      <li><b>Barrière basse</b> : saute. <b>Portique</b> et <b>drone</b> : glisse dessous.</li>
+      <li><b>Wagons</b> : change de voie, ou monte dessus par la rampe et cours sur les toits.</li>
+      <li><b>Caisses « ? »</b> : écrase-les (glisser en plein saut) pour gagner pièces, bonus ou clés.</li>
+      <li><b>Accélérateurs</b> au sol : turbo de vitesse qui brise tout sur ton passage.</li>
+      <li>Heurter un wagon <b>de côté</b> te fait trébucher et l'agent te rattrape : deux fois de suite et c'est perdu.</li>
+      <li>Après un choc, tu peux <b>continuer avec des clés</b>.</li>
     </ul>
     <div class="bonus-liste">
       <p><span class="bic" style="--c:#ef476f">U</span><span><b>Aimant</b> attire les pièces des trois voies.</span></p>
-      <p><span class="bic" style="--c:#06d6a0">⇈</span><span><b>Super saut</b> : assez haut pour monter sur les wagons.</span></p>
-      <p><span class="bic" style="--c:#ffb703">×2</span><span><b>Score ×2</b> pendant quelques secondes.</span></p>
-      <p><span class="bic" style="--c:#4cc9f0">◆</span><span><b>Bouclier</b> : encaisse un choc à ta place.</span></p>
+      <p><span class="bic" style="--c:#06d6a0">⇈</span><span><b>Super baskets</b> : assez haut pour monter sur les wagons.</span></p>
+      <p><span class="bic" style="--c:#ffb703">×2</span><span><b>Score ×2</b> en plus du multiplicateur.</span></p>
+      <p><span class="bic" style="--c:#8338ec">▲</span><span><b>Jetpack</b> : vole au-dessus de tout et ramasse les pièces du ciel.</span></p>
+      <p><span class="bic" style="--c:#ff70a6">◯</span><span><b>Bulle</b> : encaisse un choc et fait sauter plus haut.</span></p>
     </div>
+    <p class="note">Les <b>missions</b> font monter ton multiplicateur de score. Le <b>Tour de la ville</b> propose 12 niveaux à étoiles, et le <b>Défi du jour</b> le même parcours de 60 s pour tout le monde.</p>
     <button type="button" class="btn" data-retour>Retour</button>
+  </div>
+</section>
+
+<section id="missions" class="ecran" aria-labelledby="t-missions" hidden>
+  <div class="carte">
+    <h2 id="t-missions">Missions</h2>
+    <p class="intro">Réussis les trois pour augmenter ton multiplicateur de score : <b id="mi-multi" class="gros-multi">×1</b></p>
+    <ul id="mi-liste" class="missions"></ul>
+    <h3 class="sous-titre">Chasse aux lettres du jour</h3>
+    <div id="mi-mot" class="mot"></div>
+    <p id="mi-mot-txt" class="note"></p>
+    <button type="button" class="btn" data-retour>Retour</button>
+  </div>
+</section>
+
+<section id="niveaux" class="ecran" aria-labelledby="t-niveaux" hidden>
+  <div class="carte">
+    <h2 id="t-niveaux">Tour de la ville</h2>
+    <p class="intro">Rallie l'arrivée de chaque niveau. ★ arrivée, ★ assez de pièces, ★ sans trébucher. Total : <b id="niv-total">0</b></p>
+    <div id="niv-liste"></div>
+    <button type="button" class="btn" data-retour>Retour</button>
+  </div>
+</section>
+
+<section id="defi" class="ecran" aria-labelledby="t-defi" hidden>
+  <div class="carte">
+    <h2 id="t-defi">Défi du jour</h2>
+    <p class="intro">60 secondes sur le même parcours pour tout le monde aujourd'hui, déjà rapide. Fais le meilleur score possible, sans continuer avec des clés.</p>
+    <div class="stats"><div><span>Ton meilleur aujourd'hui</span><b id="d-meilleur">0</b></div></div>
+    <p id="d-cle" class="note"></p>
+    <button type="button" class="btn orange" id="b-lancer-defi">C'est parti</button>
+    <button type="button" class="btn second" data-retour>Retour</button>
   </div>
 </section>
 
 <section id="boutique" class="ecran" aria-labelledby="t-boutique" hidden>
   <div class="carte">
-    <h2 id="t-boutique">Améliorations</h2>
-    <p class="intro">Les pièces ramassées allongent la durée des bonus.</p>
+    <h2 id="t-boutique">Boutique</h2>
     <p class="solde"><span class="piece-ic" aria-hidden="true"></span><b id="s-pieces">0</b> pièces</p>
-    <div id="amelio"></div>
+    <div class="onglets" role="tablist">
+      <button type="button" role="tab" data-o="bonus">Bonus</button>
+      <button type="button" role="tab" data-o="persos">Persos</button>
+      <button type="button" role="tab" data-o="planches">Planches</button>
+      <button type="button" role="tab" data-o="objets">Objets</button>
+    </div>
+    <div id="amelio" role="tabpanel"></div>
     <button type="button" class="btn" data-retour>Retour</button>
   </div>
 </section>
@@ -78,6 +140,17 @@
     <button type="button" class="btn" id="b-reprendre">Reprendre</button>
     <button type="button" class="btn second" id="b-recommencer">Recommencer</button>
     <button type="button" class="btn second" data-menu>Menu</button>
+    <ul id="p-missions" class="missions petit"></ul>
+  </div>
+</section>
+
+<section id="continuer" class="ecran" aria-labelledby="t-continuer" hidden>
+  <div class="carte">
+    <h2 id="t-continuer">Continuer ?</h2>
+    <p class="intro">Il faut <b id="c-cout">1</b> clé · tu en as <b id="c-cles">0</b></p>
+    <div class="compte"><i id="c-barre"></i></div>
+    <button type="button" class="btn orange" id="b-continuer">Utiliser 1 clé</button>
+    <button type="button" class="btn second" id="b-non">Non merci</button>
   </div>
 </section>
 
@@ -85,13 +158,18 @@
   <div class="carte">
     <p class="sur" id="f-record" hidden>Nouveau record !</p>
     <h2 id="t-fin">Fin de la course</h2>
+    <p id="f-etoiles" class="etoiles" hidden></p>
     <p class="gros" id="f-score">0</p>
     <div class="stats"><div><span>Distance</span><b id="f-dist">0 m</b></div><div><span>Pièces</span><b id="f-pieces">0</b></div></div>
+    <p id="f-recompense" class="recompense" hidden></p>
+    <ul id="f-missions" class="faites" hidden></ul>
+    <button type="button" class="btn vert" id="b-suivant" hidden>Niveau suivant</button>
     <button type="button" class="btn" id="b-rejouer">Rejouer</button>
     <button type="button" class="btn second" data-menu>Menu</button>
   </div>
 </section>
 
+<script src="donnees.js"></script>
 <script src="jeu.js"></script>
 </body>
 </html>
