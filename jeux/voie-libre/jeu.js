@@ -15,7 +15,8 @@
     NIVEAUX = DON.niveaux,
     TROPHEES = DON.trophees,
     QUOTIDIEN = DON.quotidien,
-    COFFRES = DON.coffres;
+    COFFRES = DON.coffres,
+    EVENEMENTS = DON.evenements;
 
   // ---------- Réglages ----------
   const VOIE = 2.2; // distance entre les centres de deux voies
@@ -81,7 +82,8 @@
     tuto: 0,
     elans: 0,
     coffres: 0,
-    st: { pieces: 0, piecesCourse: 0, scoreMax: 0, caisses: 0, drones: 0, toits: 0, planches: 0, defis: 0, mots: 0, figures: 0, coffres: 0 },
+    st: { pieces: 0, piecesCourse: 0, scoreMax: 0, caisses: 0, drones: 0, toits: 0, planches: 0, defis: 0, mots: 0, figures: 0, coffres: 0, esquives: 0 },
+    ev: { id: '', edition: 0, n: 0, pris: [] },
     trophees: [],
     scores: [],
     quotidien: { jour: '', serie: 0, pris: true },
@@ -121,6 +123,8 @@
       D.missions = d.missions.map(m => ({ i: m.i, n: n(m.n), p: Math.max(0, +m.p || 0), fait: !!m.fait }));
     if (d.defi && typeof d.defi == 'object') D.defi = { jour: String(d.defi.jour || ''), meilleur: n(d.defi.meilleur), cle: d.defi.cle ? 1 : 0 };
     if (d.mot && typeof d.mot == 'object') D.mot = { jour: String(d.mot.jour || ''), n: n(d.mot.n, 20) };
+    if (d.ev && typeof d.ev == 'object' && EVENEMENTS.some(e => e.id === d.ev.id))
+      D.ev = { id: d.ev.id, edition: n(d.ev.edition), n: n(d.ev.n), pris: Array.isArray(d.ev.pris) ? d.ev.pris.filter(i => Number.isInteger(i) && i >= 0 && i < 10) : [] };
   })();
   function ecrire() {
     try {
@@ -163,6 +167,23 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
   const motDuJour = () => DON.mots[nombreJour() % DON.mots.length];
+  // événement saisonnier en cours (ou forcé par ?evenement=… pour essayer) ; son édition est l'année de son début
+  const evForce = new URLSearchParams(location.search).get('evenement');
+  function evenementActif() {
+    const d = new Date(),
+      md = String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    for (const e of EVENTS_LISTE()) {
+      const dedans = evForce ? evForce == e.id : e.debut <= e.fin ? md >= e.debut && md <= e.fin : md >= e.debut || md <= e.fin;
+      if (!dedans) continue;
+      const edition = d.getFullYear() - (e.debut > e.fin && md <= e.fin ? 1 : 0);
+      if (D.ev.id != e.id || D.ev.edition != edition) D.ev = { id: e.id, edition, n: 0, pris: [] };
+      return e;
+    }
+    return null;
+  }
+  const EVENTS_LISTE = () => EVENEMENTS;
+  let EV = null; // événement de la course en cours (fixé au départ)
+
   function majJour() {
     const j = jour();
     if (D.mot.jour != j) D.mot = { jour: j, n: 0 };
@@ -387,6 +408,7 @@
     pontZ = 0,
     tunZ = 0,
     zLettre = 0,
+    zJeton = 0,
     nettoyage = 0,
     tutoT = -1;
 
@@ -466,6 +488,8 @@
     pontZ = 120;
     tunZ = 260;
     zLettre = 300 + r() * 400;
+    zJeton = 80;
+    EV = evenementActif(); // aussi pour le décor du menu ; les jetons n'apparaissent qu'en course
     S.qVu = quartierIndex(0);
     generer();
   }
@@ -485,6 +509,11 @@
       if (S.type == 'libre' && genZ > zLettre && t.libres.length && D.mot.n < motDuJour().length) {
         bonus.push({ k: 'lettre', x: lx(t.libres[Math.floor(r() * t.libres.length)]), y: 1, z: t.z + t.pas * 0.78 });
         zLettre = genZ + 700 + r() * 500;
+      }
+      // événement saisonnier : un jeton à ramasser de temps en temps
+      if (EV && genZ > zJeton && t.libres.length) {
+        bonus.push({ k: 'jeton', x: lx(t.libres[Math.floor(r() * t.libres.length)]), y: 1, z: t.z + t.pas * 0.86 });
+        zJeton = genZ + 140 + r() * 120;
       }
       genZ = t.fin;
     }
@@ -771,6 +800,7 @@
     if (S.invu > 0) return;
     vibrer(60);
     S.secousse = 0.25;
+    S.flash = 0.35;
     S.trebuches++;
     if (S.alerte > 0) {
       if (proteger()) return;
@@ -798,6 +828,7 @@
     S.invu = 1;
     S.alerte = 0;
     S.secousse = 0.4;
+    S.flash = 0.3;
     son('bouclier');
     return true;
   }
@@ -812,6 +843,7 @@
   function perdu() {
     if (S.mode != 'jeu') return;
     S.secousse = 0.6;
+    S.flash = 0.5;
     son('choc');
     vibrer(220);
     const cout = 2 ** S.revives;
@@ -865,6 +897,7 @@
       if (!b.pris && Math.abs(b.x - P.x) < 1.1 && Math.abs(b.z - P.z) < 1.1 && b.y > P.y - 0.6 && b.y < P.y + hp + 0.6) {
         b.pris = true;
         if (b.k == 'lettre') lettre();
+        else if (b.k == 'jeton') jeton();
         else {
           activerBonus(b.k);
           evenement('bonus');
@@ -892,6 +925,46 @@
       annonce('Mot « ' + mot + ' » trouvé : +1 clé, +300 pièces');
     }
     ecrire();
+  }
+
+  // jeton d'événement : chaque palier atteint donne sa récompense
+  function jeton() {
+    if (!EV) return;
+    D.ev.n++;
+    son('lettre');
+    flotte('+1', P.x, P.y + 2, P.z + 1.5, [255, 214, 140]);
+    EV.paliers.forEach((pa, i) => {
+      if (D.ev.n < pa.n || D.ev.pris.includes(i)) return;
+      D.ev.pris.push(i);
+      D.pieces += pa.pieces || 0;
+      D.coffres += pa.coffres || 0;
+      if (pa.perso && !D.persos.includes(pa.perso)) D.persos.push(pa.perso);
+      if (pa.planche && !D.planchesDeb.includes(pa.planche)) D.planchesDeb.push(pa.planche);
+      annonce(EV.nom + ' : ' + pa.txt + ' !');
+    });
+    ecrire();
+  }
+
+  // esquive de justesse : changer de voie juste avant un obstacle qui aurait touché
+  function justesse(l) {
+    if (S.demo || vole()) return;
+    const hp = P.glisse > 0 ? H_GLISSE : H_DEBOUT;
+    for (const o of objs) {
+      if (o.casse || o.frole || o.l != l || o.ramp || !['train', 'bas', 'haut', 'caisse'].includes(o.t)) continue;
+      const dz = o.z0 - P.z;
+      if (dz < 0.4 || dz > (S.v + (o.vit || 0)) * 0.3) continue;
+      let bas = o.y0 || 0,
+        haut = o.t == 'train' ? (o.plat ? H_PLAT : H_TRAIN) : o.t == 'bas' ? bas + 0.65 : o.t == 'caisse' ? bas + H_CAISSE : 1.75;
+      if (o.t == 'haut') bas = 1.0;
+      if (P.y >= haut - 0.05 || P.y + hp <= bas) continue;
+      o.frole = true;
+      const g = 25 * S.mult;
+      S.score += g;
+      flotte('Justesse ! +' + g, lx(l), P.y + 2.2, P.z + 2.5, [140, 230, 255]);
+      evenement('esquives');
+      son('justesse');
+      return;
+    }
   }
 
   function prendre(c) {
@@ -940,6 +1013,7 @@
     if (S.mode != 'jeu' || P.voie == 0) return;
     P.voieAvant = P.voie;
     P.voie--;
+    justesse(P.voieAvant);
     evenement('voies');
     son('voie');
   }
@@ -947,6 +1021,7 @@
     if (S.mode != 'jeu' || P.voie == 2) return;
     P.voieAvant = P.voie;
     P.voie++;
+    justesse(P.voieAvant);
     evenement('voies');
     son('voie');
   }
@@ -1011,7 +1086,7 @@
     D.pieces += S.pieces;
     D.distance = Math.max(D.distance, Math.floor(S.dist));
     if (S.nouveau) D.record = score;
-    for (const k of ['caisses', 'drones', 'toits', 'planches', 'figures']) D.st[k] += Math.floor(S.compteurs[k] || 0);
+    for (const k of ['caisses', 'drones', 'toits', 'planches', 'figures', 'esquives']) D.st[k] += Math.floor(S.compteurs[k] || 0);
     D.st.pieces += S.pieces;
     D.st.piecesCourse = Math.max(D.st.piecesCourse, S.pieces);
     D.st.scoreMax = Math.max(D.st.scoreMax, score);
@@ -1134,7 +1209,7 @@
       }
     const entre = ([a, b]) => a + Math.floor(Math.random() * (b - a + 1));
     let res;
-    const bloques = PERSOS.filter(p => !D.persos.includes(p.id));
+    const bloques = PERSOS.filter(p => !D.persos.includes(p.id) && !p.evenement);
     if (c.perso && bloques.length) {
       const p = bloques[Math.floor(Math.random() * bloques.length)];
       D.persos.push(p.id);
@@ -1227,6 +1302,7 @@
     cam.z = P.z - 6;
     S.ombre += ((enTunnel(cam.z + 3) ? 1 : 0) - S.ombre) * (1 - Math.exp(-dt * 5));
     S.secousse = Math.max(0, S.secousse - dt);
+    S.flash = Math.max(0, (S.flash || 0) - dt);
     for (const q of parts) {
       q.x += q.vx * dt;
       q.y += q.vy * dt;
@@ -1308,12 +1384,23 @@
       B = QUARTIERS[q.b];
     for (const k of ['ciel', 'brume', 'sol', 'ballast', 'mur']) PAL[k] = mixer(A[k], B[k], q.t);
     PAL.pluie = pluieA(cam.z + 25);
+    if (EV && EV.id == 'halloween') {
+      // crépuscule violet et orangé, lumières allumées
+      PAL.ciel = mixer(PAL.ciel, [60, 26, 84], 0.82);
+      PAL.brume = mixer(PAL.brume, [170, 96, 112], 0.6);
+      PAL.mur = mixer(PAL.mur, [90, 70, 100], 0.4);
+    } else if (EV && EV.id == 'hiver') {
+      PAL.brume = mixer(PAL.brume, [236, 242, 250], 0.5);
+      PAL.mur = [250, 252, 255];
+      PAL.sol = mixer(PAL.sol, [240, 244, 250], 0.6);
+    }
     if (PAL.pluie > 0) {
       // ciel couvert
       PAL.ciel = mixer(PAL.ciel, [128, 138, 156], 0.55 * PAL.pluie);
       PAL.brume = mixer(PAL.brume, [176, 184, 198], 0.5 * PAL.pluie);
     }
     PAL.nuit = A.nuit + (B.nuit - A.nuit) * q.t;
+    if (EV && EV.id == 'halloween') PAL.nuit = Math.max(PAL.nuit, 0.65);
     PAL.lum = (1 - 0.32 * PAL.nuit) * (1 - 0.4 * S.ombre);
     PAL.brumeCiel = PAL.brume;
     PAL.brume = mixer(PAL.brume, [18, 20, 30], 0.85 * S.ombre); // au fond d'un tunnel, tout se fond dans le noir
@@ -1622,6 +1709,28 @@
         pave(s < 0 ? -4.1 : 3.7, s < 0 ? -3.7 : 4.1, 0, 0.7, za, z2, PAL.mur, false);
         // fresque sur la face intérieure, une tranche sur trois environ
         const h = Math.abs(Math.sin(z * 12.9898 + s * 78.233) * 43758.5453) % 1;
+        if (EV && EV.id == 'halloween' && h > 0.55 && z2 - za > 4) {
+          // citrouille posée sur le mur, visage allumé
+          const p = proj(s * 3.9, 1.05, za + 2);
+          if (p.d > PRES) {
+            const rr = (0.42 * F) / p.d;
+            ctx.fillStyle = teinte([255, 140, 46], t, 1, true);
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y, rr * 1.2, rr, 0, 0, 7);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,236,150,' + (1 - t) + ')';
+            ctx.beginPath();
+            ctx.moveTo(p.x - rr * 0.5, p.y - rr * 0.2);
+            ctx.lineTo(p.x - rr * 0.25, p.y - rr * 0.45);
+            ctx.lineTo(p.x - rr * 0.05, p.y - rr * 0.2);
+            ctx.moveTo(p.x + rr * 0.05, p.y - rr * 0.2);
+            ctx.lineTo(p.x + rr * 0.25, p.y - rr * 0.45);
+            ctx.lineTo(p.x + rr * 0.5, p.y - rr * 0.2);
+            ctx.moveTo(p.x - rr * 0.55, p.y + rr * 0.15);
+            ctx.quadraticCurveTo(p.x, p.y + rr * 0.6, p.x + rr * 0.55, p.y + rr * 0.15);
+            ctx.fill();
+          }
+        }
         if (DETAIL > 1 && h < 0.4 && z2 - za > 6) {
           const xf = s < 0 ? -3.69 : 3.69,
             c1 = TRAINS[Math.floor(h * 100) % TRAINS.length],
@@ -1931,7 +2040,7 @@
     ctx.beginPath();
     ctx.arc(p.x, p.y, rr * 1.35, 0, 7);
     ctx.fill();
-    ctx.fillStyle = b.k == 'lettre' ? '#ffb703' : BONUS[b.k].c;
+    ctx.fillStyle = b.k == 'lettre' ? '#ffb703' : b.k == 'jeton' ? (EV ? EV.couleur : '#ff8c2e') : BONUS[b.k].c;
     ctx.beginPath();
     ctx.arc(p.x, p.y, rr, 0, 7);
     ctx.fill();
@@ -1972,6 +2081,39 @@
       ctx.lineTo(0.24, 0.6);
       ctx.lineTo(0.38, 0.22);
       ctx.fill();
+    } else if (k == 'jeton') {
+      const j = EV ? EV.jeton : 'citrouille';
+      if (j == 'citrouille') {
+        ctx.fillStyle = '#ffd9a8';
+        ctx.moveTo(-0.35, -0.1);
+        ctx.lineTo(-0.18, -0.32);
+        ctx.lineTo(-0.02, -0.1);
+        ctx.moveTo(0.02, -0.1);
+        ctx.lineTo(0.18, -0.32);
+        ctx.lineTo(0.35, -0.1);
+        ctx.moveTo(-0.4, 0.1);
+        ctx.quadraticCurveTo(0, 0.55, 0.4, 0.1);
+        ctx.fill();
+      } else if (j == 'cadeau') {
+        ctx.fillRect(-0.4, -0.25, 0.8, 0.65);
+        ctx.fillStyle = '#ffd166';
+        ctx.fillRect(-0.08, -0.25, 0.16, 0.65);
+        ctx.fillRect(-0.4, -0.02, 0.8, 0.14);
+        ctx.beginPath();
+        ctx.ellipse(-0.14, -0.35, 0.14, 0.09, -0.4, 0, 7);
+        ctx.ellipse(0.14, -0.35, 0.14, 0.09, 0.4, 0, 7);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = '#ffd6a5';
+        ctx.moveTo(-0.25, -0.05);
+        ctx.lineTo(0, 0.55);
+        ctx.lineTo(0.25, -0.05);
+        ctx.fill();
+        ctx.fillStyle = '#ff8fab';
+        ctx.beginPath();
+        ctx.arc(0, -0.15, 0.3, 0, 7);
+        ctx.fill();
+      }
     } else if (k == 'bulle') {
       ctx.arc(0, 0, 0.45, 0, 7);
       ctx.stroke();
@@ -2037,6 +2179,10 @@
       ovale('#ffffff', 0, y - 0.27, 0.07, 0.07);
       arrondi(mixer3(pr.accessoire), -0.22, y - 0.06, 0.44, 0.07, 0.03);
     } else if (pr.coiffure == 'crete') ovale(pr.cheveux, 0, y - 0.2, 0.06, 0.16);
+    else if (pr.coiffure == 'capuche') {
+      ovale(pr.sweat, 0, y + 0.02, 0.26, 0.25);
+      ovale(pr.accessoire, 0, y - 0.24, 0.05, 0.04);
+    }
     else if (pr.coiffure == 'chignon') {
       ovale(pr.cheveux, 0, y - 0.22, 0.11, 0.1);
       arrondi(pr.accessoire, -0.09, y - 0.15, 0.18, 0.04, 0.02);
@@ -2074,6 +2220,7 @@
       ovale(pr.cheveux, -0.27, y + 0.08, 0.1, 0.16);
       ovale(pr.cheveux, 0.27, y + 0.08, 0.1, 0.16);
     }
+    if (pr.coiffure == 'capuche') ovale(pr.sweat, 0, y - 0.01, 0.27, 0.26);
     ovale(pr.cheveux, 0, y - 0.03, 0.22, 0.21);
     ovale(pr.peau, 0, y + 0.03, 0.18, 0.18);
     ovale('#1d1d2b', -0.07, y + 0.02, 0.025, 0.035);
@@ -2290,7 +2437,51 @@
     dessinerVoies();
     dessinerParcours();
     pluie();
+    if (EV && EV.id == 'hiver') neige();
+    if (EV && EV.id == 'halloween') chauvesSouris();
     vitesseTraits();
+    if (S.flash > 0) {
+      // bords de l'écran rougis quand on se fait toucher
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
+      g.addColorStop(0, 'rgba(255,40,60,0)');
+      g.addColorStop(1, 'rgba(255,40,60,' + Math.min(0.55, S.flash * 1.4) + ')');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  // neige des fêtes d'hiver : flocons qui tombent en se balançant
+  function neige() {
+    if (S.ombre > 0.9) return;
+    ctx.fillStyle = 'rgba(255,255,255,' + 0.85 * (1 - S.ombre) + ')';
+    const n = DETAIL > 1 ? gouttes.length : 45;
+    for (let i = 0; i < n; i++) {
+      const [gx, gy, v] = gouttes[i],
+        y = ((gy + S.t * 0.12 * v) % 1) * H,
+        x = ((gx + Math.sin(S.t * v + i) * 0.02 - cam.x * 0.01) % 1 + 1) % 1 * W;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.5 + v * 1.5, 0, 7);
+      ctx.fill();
+    }
+  }
+
+  // chauves-souris d'Halloween dans le ciel
+  function chauvesSouris() {
+    ctx.fillStyle = 'rgba(30,16,40,.85)';
+    for (let i = 0; i < 6; i++) {
+      const x = ((i * 0.37 + S.t * 0.03 * (1 + i * 0.2)) % 1.2 - 0.1) * W,
+        y = HORIZON * (0.2 + 0.12 * Math.sin(S.t * 0.7 + i * 2)),
+        a = Math.sin(S.t * 14 + i) * 0.6,
+        s = Math.min(W, H) * (0.018 + (i % 3) * 0.006);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x - s, y - s * a - s * 0.3, x - s * 2, y - s * a * 1.4);
+      ctx.quadraticCurveTo(x - s * 1.2, y + s * 0.2, x, y + s * 0.35);
+      ctx.quadraticCurveTo(x + s * 1.2, y + s * 0.2, x + s * 2, y - s * a * 1.4);
+      ctx.quadraticCurveTo(x + s, y - s * a - s * 0.3, x, y);
+      ctx.fill();
+    }
   }
 
   // ---------- Interface ----------
@@ -2298,8 +2489,8 @@
   const reduit = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fmt = n => Math.floor(n).toLocaleString('fr-FR');
   const secondes = d => d.toLocaleString('fr-FR') + ' s';
-  const ECRANS = ['menu', 'aide', 'boutique', 'missions', 'niveaux', 'defi', 'trophees', 'reglages', 'cadeau', 'coffre', 'pause', 'continuer', 'fin'],
-    SECONDAIRES = ['aide', 'boutique', 'missions', 'niveaux', 'defi', 'trophees', 'reglages', 'cadeau', 'coffre'];
+  const ECRANS = ['menu', 'aide', 'boutique', 'missions', 'niveaux', 'defi', 'trophees', 'reglages', 'cadeau', 'coffre', 'evenement', 'pause', 'continuer', 'fin'],
+    SECONDAIRES = ['aide', 'boutique', 'missions', 'niveaux', 'defi', 'trophees', 'reglages', 'cadeau', 'coffre', 'evenement'];
   let ecranActuel = 'menu';
 
   function ecran(id) {
@@ -2334,6 +2525,13 @@
     $('b-trophees').querySelector('small').textContent = D.trophees.length + ' / ' + TROPHEES.length;
     $('b-boutique').querySelector('small').textContent = D.coffres ? D.coffres + ' coffre' + (D.coffres > 1 ? 's' : '') + ' à ouvrir' : 'persos, planches';
     $('b-boutique').classList.toggle('alerte', D.coffres > 0);
+    const e = evenementActif();
+    $('b-evenement').hidden = !e;
+    if (e) {
+      const prochain = e.paliers.find(p => p.n > D.ev.n);
+      $('b-evenement').style.setProperty('--c', e.couleur);
+      $('b-evenement').innerHTML = '<span aria-hidden="true">' + EMOJI[e.jeton] + '</span> ' + e.nom + '<small>' + D.ev.n + ' ' + e.jetons + (prochain ? ' · prochain cadeau à ' + prochain.n : ' · tout est gagné !') + '</small>';
+    }
     if (verifierQuotidien()) return ecranCadeau();
     ecran('menu');
   }
@@ -2343,6 +2541,31 @@
     $('ca-jours').innerHTML = QUOTIDIEN.map((c, i) => '<li class="' + (i + 1 < D.quotidien.serie ? 'pris' : i + 1 == D.quotidien.serie ? 'auj' : '') + '"><small>Jour ' + (i + 1) + '</small><b>' + c.txt + '</b></li>').join('');
     $('ca-serie').textContent = D.quotidien.serie > 1 ? D.quotidien.serie + ' jours d\'affilée !' : 'Reviens chaque jour pour de plus beaux cadeaux.';
     ecran('cadeau');
+  }
+
+  // ----- événement saisonnier -----
+  const EMOJI = { citrouille: '🎃', cadeau: '🎁', glace: '🍦' };
+  const dateFin = e => {
+    const [m, j] = e.fin.split('-').map(Number);
+    return j + ' ' + ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'][m - 1];
+  };
+  function ecranEvenement() {
+    const e = evenementActif();
+    if (!e) return afficherMenu();
+    $('t-evenement').textContent = EMOJI[e.jeton] + ' ' + e.nom;
+    $('ev-dates').textContent = 'Jusqu\'au ' + dateFin(e) + ' : ramasse les ' + e.jetons + ' pendant tes courses.';
+    const max = e.paliers[e.paliers.length - 1].n;
+    $('ev-barre').style.width = Math.min(100, (100 * D.ev.n) / max) + '%';
+    $('ev-barre').style.background = e.couleur;
+    $('ev-n').textContent = D.ev.n + ' ' + e.jetons;
+    $('ev-paliers').innerHTML = e.paliers
+      .map((p, i) => {
+        const ok = D.ev.pris.includes(i);
+        return '<li class="' + (ok ? 'fait' : '') + '">' + (p.perso ? '<canvas class="apercu" data-perso="' + p.perso + '" width="96" height="120" aria-hidden="true"></canvas>' : p.planche ? '<span class="mini-planche" style="--c1:' + PLANCHES.find(x => x.id == p.planche).c1 + ';--c2:' + PLANCHES.find(x => x.id == p.planche).c2 + '" aria-hidden="true"></span>' : '<span class="bic" style="--c:' + e.couleur + '" aria-hidden="true">' + (p.coffres ? '?' : '◉') + '</span>') + '<span><b>' + p.txt + '</b><small>' + p.n + ' ' + e.jetons + '</small></span><em>' + (ok ? '✓' : Math.max(0, p.n - D.ev.n) + ' de plus') + '</em></li>';
+      })
+      .join('');
+    for (const c of $('ev-paliers').querySelectorAll('[data-perso]')) dessinFace(c, PERSOS.find(x => x.id == c.dataset.perso));
+    ecran('evenement');
   }
 
   // ----- coffre mystère -----
@@ -2585,12 +2808,14 @@
       h = PERSOS.map(p => {
         const a = D.persos.includes(p.id),
           choisi = D.perso == p.id;
+        if (p.evenement && !a) return '<div class="amelio verrou"><canvas class="apercu" data-perso="' + p.id + '" width="96" height="120" aria-hidden="true"></canvas><div><b>' + p.nom + '</b><small>Récompense de l\'événement « ' + EVENEMENTS.find(e => e.id == p.evenement).nom + ' »</small></div><span class="max">🔒</span></div>';
         return '<div class="amelio"><canvas class="apercu" data-perso="' + p.id + '" width="96" height="120" aria-hidden="true"></canvas><div><b>' + p.nom + '</b><small>' + (choisi ? 'Ton personnage' : a ? 'Débloqué' : 'À débloquer') + '</small></div>' + (choisi ? '<span class="max">✓</span>' : a ? '<button type="button" class="choisir" data-a="perso:' + p.id + '">Choisir</button>' : acheter('perso:' + p.id, p.prix, p.nom)) + '</div>';
       }).join('');
     else if (onglet == 'planches')
       h = PLANCHES.map(p => {
         const a = D.planchesDeb.includes(p.id),
           choisi = D.planche == p.id;
+        if (p.evenement && !a) return '<div class="amelio verrou"><span class="mini-planche" style="--c1:' + p.c1 + ';--c2:' + p.c2 + '" aria-hidden="true"></span><div><b>' + p.nom + '</b><small>Récompense de l\'événement « ' + EVENEMENTS.find(e => e.id == p.evenement).nom + ' »</small></div><span class="max">🔒</span></div>';
         return '<div class="amelio"><span class="mini-planche" style="--c1:' + p.c1 + ';--c2:' + p.c2 + '" aria-hidden="true"></span><div><b>' + p.nom + '</b><small>' + p.txt + (choisi ? ' · ta planche' : '') + '</small></div>' + (choisi ? '<span class="max">✓</span>' : a ? '<button type="button" class="choisir" data-a="planche:' + p.id + '">Choisir</button>' : acheter('planche:' + p.id, p.prix, p.nom)) + '</div>';
       }).join('');
     else
@@ -2622,13 +2847,13 @@
     if (a == 'niv' && D.niv[id] < 5 && payer(DON.prixAmelio[D.niv[id]])) D.niv[id]++;
     else if (a == 'perso') {
       const p = PERSOS.find(x => x.id == id);
-      if (D.persos.includes(id) || payer(p.prix)) {
+      if (D.persos.includes(id) || (!p.evenement && payer(p.prix))) {
         if (!D.persos.includes(id)) D.persos.push(id);
         D.perso = id;
       }
     } else if (a == 'planche') {
       const p = PLANCHES.find(x => x.id == id);
-      if (D.planchesDeb.includes(id) || payer(p.prix)) {
+      if (D.planchesDeb.includes(id) || (!p.evenement && payer(p.prix))) {
         if (!D.planchesDeb.includes(id)) D.planchesDeb.push(id);
         D.planche = id;
       }
@@ -2796,6 +3021,7 @@
     else if (k == 'victoire') [523, 659, 784, 1047, 1319].forEach((f, i) => note(f, 0, 0.25, 'triangle', 0.09, i * 0.1));
     else if (k == 'alerte') [440, 330].forEach((f, i) => note(f, 0, 0.12, 'square', 0.05, i * 0.13));
     else if (k == 'bouclier') note(900, 300, 0.3, 'sawtooth', 0.06);
+    else if (k == 'justesse') note(880, 1760, 0.12, 'sine', 0.06);
     else if (k == 'figure') [660, 880, 1320].forEach((f, i) => note(f, 0, 0.1, 'triangle', 0.07, i * 0.05));
     else if (k == 'coffre') {
       souffle(0.4, 0.08, 1500);
@@ -2856,7 +3082,8 @@
     if ([0, 3, 6, 8, 10, 14].includes(b)) note(freq(racine + (b == 10 ? 7 : b == 14 ? 12 : 0)), 0, 0.16, 'triangle', 0.16, debut, g);
     if (b == 0 || b == 8)
       for (const i of [12, 16, 19]) note(freq(racine + i + (q.nuit > 0.5 ? -1 : 0) * (i == 16 ? 1 : 0)), 0, 0.5, 'sine', 0.025, debut, g);
-    if (b % 4 == 2 && (s * 7) % 5 < 2) note(freq(racine + 24 + [0, 3, 7, 10, 12][s % 5]), 0, 0.12, 'square', 0.02, debut, g);
+    const m = q.melodie && q.melodie[b];
+    if (m != null && Math.floor(s / 16) % 2 == 1) note(freq(racine + 12 + m), 0, 0.14, 'square', 0.022, debut, g); // la mélodie revient une mesure sur deux
   }
 
   function majSon() {
@@ -2876,6 +3103,7 @@
   $('b-planche').onclick = utiliserPlanche;
   $('b-elan').onclick = utiliserElan;
   $('b-partager').onclick = partager;
+  $('b-evenement').onclick = ecranEvenement;
   $('b-coffre-retour').onclick = () => boutique('objets');
   $('b-trophees').onclick = ecranTrophees;
   $('b-reglages').onclick = ecranReglages;
@@ -3038,7 +3266,8 @@
 
   // pour les tests : état du jeu, génération du parcours, et avance image par image (60 images par seconde)
   window.VL = {
-    S, P, D, troncon, alea, vitesse, demarrer, menu, continuer, ouvrirCoffre, gauche, droite, sauter, glisser, utiliserPlanche, utiliserElan, activerBonus, verifierTrophees,
+    S, P, D, troncon, alea, vitesse, demarrer, menu, continuer, ouvrirCoffre, evenementActif,
+    ev: () => EV, gauche, droite, sauter, glisser, utiliserPlanche, utiliserElan, activerBonus, verifierTrophees,
     tunnels: () => tunnels,
     objs: () => objs,
     pieces: () => pieces,

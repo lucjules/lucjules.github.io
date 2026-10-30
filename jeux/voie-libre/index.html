@@ -6,9 +6,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Voie libre : course à travers les quartiers d'une ville, sur trois voies. Saute, glisse, monte sur les wagons, écrase les caisses, sors ta planche et ramasse les pièces.">
 <meta name="theme-color" content="#5b6cff">
-<link rel="manifest" href="../../manifest.webmanifest">
-<link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="../../assets/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icones/icone-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icones/icone-apple-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Voie libre">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="../../assets/fonts/fonts.css">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -40,6 +43,7 @@
       <div><span>Clés</span><b id="m-cles">0</b></div>
       <div><span>Multi.</span><b id="m-multi">×1</b></div>
     </div>
+    <button type="button" class="btn evenement" id="b-evenement" hidden></button>
     <button type="button" class="btn" id="b-jouer">Jouer <small>course libre</small></button>
     <div class="ligne">
       <button type="button" class="btn vert" id="b-niveaux">Tour de la ville <small>★</small></button>
@@ -77,6 +81,8 @@
       <li><b>Tunnels</b> : il y fait sombre et le plafond est bas, même en jetpack.</li>
       <li><b>Wagons plats</b> (bas, à rayures jaunes) : saute dessus et cours sur le plateau.</li>
       <li>Sur la <b>planche</b>, chaque saut est une <b>figure</b> : enchaîne-les pour un combo.</li>
+      <li>Changer de voie <b>au dernier moment</b> devant un obstacle : esquive de justesse, des points en plus.</li>
+      <li>Pendant les <b>événements</b> (Halloween, fêtes d'hiver, été), ramasse leurs jetons pour gagner des récompenses exclusives.</li>
       <li>Les <b>coffres mystère</b> (missions, caisses, cadeaux, boutique) cachent pièces, objets… ou un personnage.</li>
       <li>Heurter un wagon <b>de côté</b> te fait trébucher et l'agent te rattrape : deux fois de suite et c'est perdu.</li>
       <li>Après un choc, tu peux <b>continuer avec des clés</b>.</li>
@@ -166,6 +172,18 @@
     <p id="ca-serie" class="intro"></p>
     <ol id="ca-jours" class="jours"></ol>
     <button type="button" class="btn orange" id="b-cadeau">Récupérer</button>
+  </div>
+</section>
+
+<section id="evenement" class="ecran" aria-labelledby="t-evenement" hidden>
+  <div class="carte">
+    <p class="sur">Événement</p>
+    <h2 id="t-evenement"></h2>
+    <p id="ev-dates" class="intro"></p>
+    <div class="compte"><i id="ev-barre"></i></div>
+    <p class="note"><b id="ev-n"></b> ramassé(e)s</p>
+    <ul id="ev-paliers" class="paliers"></ul>
+    <button type="button" class="btn" data-retour>Retour</button>
   </div>
 </section>
 
