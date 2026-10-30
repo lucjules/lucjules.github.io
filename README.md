@@ -5,7 +5,7 @@ Mon site, en deux espaces choisis depuis l'accueil (`index.html`) :
 - **Mes cours** (`cours.html`) : site de révision pour le BUT1 Informatique, avec leçons, exercices corrigés automatiquement et outils pour s'entraîner ;
 - **Mes jeux** (`jeux.html`) : les jeux faits maison :
   - [Aérélia](https://lucjules.github.io/LunaPoke/), aventure rétro de capture de créatures, dans son propre dépôt (`LunaPoke`) ;
-  - [Voie libre](https://lucjules.github.io/jeux/voie-libre/), course sans fin sur trois voies, dans ce dépôt (`jeux/voie-libre/`).
+  - [Voie libre](https://lucjules.github.io/jeux/voie-libre/), course à travers les quartiers d'une ville sur trois voies (course libre, Tour de la ville en 12 niveaux, Défi du jour), dans ce dépôt (`jeux/voie-libre/`).
 
 **En ligne :** https://lucjules.github.io/
 
@@ -35,7 +35,8 @@ Mon site, en deux espaces choisis depuis l'accueil (`index.html`) :
 index.html             accueil général : choix entre les cours et les jeux
 cours.html             accueil des cours (recherche, sauvegarde de la progression)
 jeux.html              accueil des jeux (partie en cours ou record de chaque jeu)
-jeux/voie-libre/       jeu Voie libre : index.html, style.css, jeu.js (rendu 3D sur canvas, sans bibliothèque)
+jeux/voie-libre/       jeu Voie libre : index.html, style.css, donnees.js (quartiers, personnages, planches,
+                       missions, niveaux), jeu.js (moteur : rendu 3D sur canvas, sons et musique synthétisés)
 <matière>/index.html   accueil d'une matière, avec une carte par chapitre
 <matière>/*.html       un fichier par chapitre (application complète)
 maths/app.js           code commun aux 5 pages de maths

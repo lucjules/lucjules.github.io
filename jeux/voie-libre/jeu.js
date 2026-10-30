@@ -1,9 +1,18 @@
-/* Voie libre : course sans fin sur trois voies (changer de voie, sauter, glisser, monter sur les wagons).
-   Rendu en fausse 3D sur un canvas 2D, sans bibliothèque. Sauvegarde dans localStorage, clé « voie-libre »
-   (record, pièces, améliorations), lue aussi par la page des jeux pour afficher le record.
-   Pour les tests : ?graine=123 rend le parcours reproductible, et window.VL donne accès à l'état du jeu. */
+/* Voie libre : course sur trois voies à travers les quartiers d'une ville.
+   Changer de voie, sauter, glisser, monter sur les wagons, écraser les caisses, planche, jetpack…
+   Trois modes : course libre (sans fin), Tour de la ville (niveaux à étoiles) et Défi du jour (60 s).
+   Rendu en fausse 3D sur un canvas 2D, sans bibliothèque ; sons et musique synthétisés.
+   Contenu (quartiers, personnages, missions, niveaux) : donnees.js. Sauvegarde : localStorage « voie-libre ».
+   Pour les tests : ?graine=123 rend le parcours reproductible, et window.VL donne accès au jeu. */
 (() => {
   'use strict';
+  const DON = window.VL_DONNEES;
+  const QUARTIERS = DON.quartiers,
+    PERSOS = DON.personnages,
+    PLANCHES = DON.planches,
+    BONUS = DON.bonus,
+    MISSIONS = DON.missions,
+    NIVEAUX = DON.niveaux;
 
   // ---------- Réglages ----------
   const VOIE = 2.2; // distance entre les centres de deux voies
@@ -13,31 +22,20 @@
   const RAMPE = 6; // longueur de la rampe qui monte sur un wagon
   const H_DEBOUT = 1.5;
   const H_GLISSE = 0.7;
+  const H_CAISSE = 0.8;
   const GRAVITE = 40;
   const SAUT = 10.4; // hauteur atteinte ≈ 1,35
   const SUPER_SAUT = 16.7; // ≈ 3,5 : assez pour monter sur les wagons
+  const H_JETPACK = 8;
   const DUREE_GLISSE = 0.62;
+  const DUREE_PLANCHE = 30;
   const VUE = 170; // distance d'affichage
   const BRUME = 45; // début du brouillard
-  const COUT = [150, 400, 900, 1800]; // prix des niveaux 1 à 4 des améliorations
-  const BONUS = {
-    aimant: { nom: 'Aimant', c: '#ef476f' },
-    saut: { nom: 'Super saut', c: '#06d6a0' },
-    x2: { nom: 'Score ×2', c: '#ffb703' },
-    bouclier: { nom: 'Bouclier', c: '#4cc9f0' }
-  };
+  const LQ = 1200; // longueur d'un quartier en course libre
+  const DUREE_DEFI = 60;
   const vitesse = dist => 15 + 17 * (1 - Math.exp(-dist / 1800));
   const difficulte = dist => 1 - Math.exp(-dist / 2200);
   const lx = l => (l - 1) * VOIE; // abscisse du centre d'une voie (0, 1, 2)
-
-  // Couleurs
-  const CIEL_HAUT = [150, 200, 255];
-  const BROUILLARD = [236, 244, 255];
-  const SOL = [226, 232, 241];
-  const BALLAST = [200, 208, 221];
-  const TRAVERSE = [196, 188, 180];
-  const RAIL = [132, 145, 165];
-  const MUR = [244, 246, 250];
   const TRAINS = [
     [255, 107, 107],
     [46, 196, 182],
@@ -45,39 +43,72 @@
     [255, 183, 3],
     [155, 93, 229]
   ];
-  const PASTELS = [
-    [255, 214, 165],
-    [202, 240, 191],
-    [189, 224, 254],
-    [255, 205, 240],
-    [255, 245, 186],
-    [216, 204, 255],
-    [178, 236, 229]
+  const CONTENEURS = [
+    [235, 110, 60],
+    [52, 120, 190],
+    [60, 160, 110],
+    [200, 60, 70],
+    [240, 190, 60]
   ];
+  const TRAVERSE = [196, 188, 180];
+  const RAIL = [132, 145, 165];
 
   // ---------- Sauvegarde ----------
   const CLE = 'voie-libre';
-  const D = { record: 0, pieces: 0, parties: 0, distance: 0, niv: { aimant: 0, saut: 0, x2: 0 }, son: 1 };
+  const D = {
+    record: 0,
+    pieces: 0,
+    parties: 0,
+    distance: 0,
+    cles: 1,
+    planches: 2,
+    niv: {},
+    son: 1,
+    musique: 1,
+    perso: 'lune',
+    persos: ['lune'],
+    planche: 'classique',
+    planchesDeb: ['classique'],
+    multi: 0,
+    missions: null,
+    niveaux: [],
+    defi: { jour: '', meilleur: 0, cle: 0 },
+    mot: { jour: '', n: 0 },
+    tuto: 0
+  };
+  for (const k in BONUS) D.niv[k] = 0;
   (() => {
     let d = null;
     try {
       d = JSON.parse(localStorage.getItem(CLE));
     } catch (e) {}
     if (!d || typeof d != 'object') return;
-    const n = v => (Number.isFinite(+v) && +v > 0 ? Math.floor(+v) : 0);
-    for (const k of ['record', 'pieces', 'parties', 'distance']) D[k] = n(d[k]);
-    if (d.niv && typeof d.niv == 'object') for (const k in D.niv) D.niv[k] = Math.min(4, n(d.niv[k]));
+    const n = (v, max = 1e12) => (Number.isFinite(+v) && +v > 0 ? Math.min(max, Math.floor(+v)) : 0);
+    for (const k of ['record', 'pieces', 'parties', 'distance', 'cles', 'planches']) if (d[k] != null) D[k] = n(d[k]);
+    D.multi = n(d.multi, 29);
+    D.tuto = d.tuto ? 1 : 0;
+    if (d.niv && typeof d.niv == 'object') for (const k in D.niv) D.niv[k] = n(d.niv[k], 5);
     D.son = d.son === 0 ? 0 : 1;
+    D.musique = d.musique === 0 ? 0 : 1;
+    const ids = (t, liste) => (Array.isArray(t) ? t.filter(x => liste.some(o => o.id === x)) : []);
+    D.persos = [...new Set(['lune', ...ids(d.persos, PERSOS)])];
+    D.planchesDeb = [...new Set(['classique', ...ids(d.planchesDeb, PLANCHES)])];
+    if (D.persos.includes(d.perso)) D.perso = d.perso;
+    if (D.planchesDeb.includes(d.planche)) D.planche = d.planche;
+    if (Array.isArray(d.niveaux)) D.niveaux = d.niveaux.slice(0, NIVEAUX.length).map(x => n(x, 3));
+    if (Array.isArray(d.missions) && d.missions.length == 3 && d.missions.every(m => m && MISSIONS[m.i] && n(m.n) > 0))
+      D.missions = d.missions.map(m => ({ i: m.i, n: n(m.n), p: Math.max(0, +m.p || 0), fait: !!m.fait }));
+    if (d.defi && typeof d.defi == 'object') D.defi = { jour: String(d.defi.jour || ''), meilleur: n(d.defi.meilleur), cle: d.defi.cle ? 1 : 0 };
+    if (d.mot && typeof d.mot == 'object') D.mot = { jour: String(d.mot.jour || ''), n: n(d.mot.n, 20) };
   })();
   function ecrire() {
     try {
       localStorage.setItem(CLE, JSON.stringify(D));
     } catch (e) {}
   }
-  const dureeBonus = (k, niv = D.niv[k]) => (k == 'bouclier' ? 30 : 8 + 2.5 * niv);
-  const secondes = d => d.toLocaleString('fr-FR') + ' s';
+  const dureeBonus = (k, niv = D.niv[k]) => BONUS[k].base + BONUS[k].pas * niv;
 
-  // ---------- Hasard reproductible ----------
+  // ---------- Hasard reproductible, jour ----------
   function alea(graine) {
     let a = graine >>> 0;
     return () => {
@@ -99,23 +130,77 @@
     }
     return t;
   };
+  const jour = () => {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  };
+  const nombreJour = () => +jour().replace(/-/g, '');
+  const motDuJour = () => DON.mots[nombreJour() % DON.mots.length];
+  function majJour() {
+    const j = jour();
+    if (D.mot.jour != j) D.mot = { jour: j, n: 0 };
+    if (D.defi.jour != j) D.defi = { jour: j, meilleur: 0, cle: 0 };
+  }
+
+  // ---------- Missions ----------
+  function nouvellesMissions() {
+    const r = alea(1000 + D.multi * 7919),
+      pris = [],
+      t = new Set();
+    for (const i of melange(r, MISSIONS.map((_, i) => i))) {
+      if (t.has(MISSIONS[i].t) || (MISSIONS[i].t == 'planches' && D.planches < 1 && D.multi < 3)) continue;
+      t.add(MISSIONS[i].t);
+      pris.push({ i, n: MISSIONS[i].n(D.multi), p: 0, fait: false });
+      if (pris.length == 3) break;
+    }
+    D.missions = pris;
+  }
+  if (!D.missions) nouvellesMissions();
+  const texteMission = m => MISSIONS[m.i].txt(m.n);
+
+  // une action compte pour les missions ; absolu : valeur de la course en cours (distance, score…)
+  function evenement(t, v = 1, absolu) {
+    if (S.demo) return;
+    S.compteurs[t] = absolu ? v : (S.compteurs[t] || 0) + v;
+    let fini = false;
+    for (const m of D.missions) {
+      const tpl = MISSIONS[m.i];
+      if (m.fait || tpl.t != t) continue;
+      if (tpl.course) m.p = Math.max(m.p, S.compteurs[t]);
+      else if (!absolu) m.p += v;
+      if (m.p >= m.n) {
+        m.fait = true;
+        fini = true;
+        S.missionsFaites.push(texteMission(m));
+        message('Mission accomplie !', 'or');
+        son('mission');
+      }
+    }
+    if (fini && D.missions.every(m => m.fait)) {
+      D.multi = Math.min(29, D.multi + 1);
+      nouvellesMissions();
+      setTimeout(() => message('Multiplicateur ×' + (D.multi + 1) + ' !', 'or'), 1300);
+    }
+    if (fini) ecrire();
+  }
 
   // ---------- Génération du parcours ----------
-  // Le parcours est une suite de tronçons. Chacun est toujours franchissable : les barrières se sautent
-  // ou se passent en glissant, les wagons d'un tronçon partent ensemble et laissent au moins une voie
-  // libre ou une rampe, et le tronçon suivant ne commence qu'une fois tous les wagons passés.
+  // Le parcours est une suite de tronçons. Chacun est toujours franchissable : les barrières et les caisses
+  // se sautent, les portiques et les drones se passent en glissant, les wagons d'un tronçon partent
+  // ensemble et laissent au moins une voie libre ou une rampe, et le tronçon suivant ne commence qu'une
+  // fois tous les wagons passés.
   const piece = (l, y, z) => ({ x: lx(l), y, z, a: z * 0.7 });
 
-  // une rangée de barrières dans les voies données, avec une ligne de pièces dans l'une d'elles
-  function rangee(r, zz, voies, o, p) {
-    const t = voies.map(() => (r() < 0.45 ? null : r() < 0.55 ? 'bas' : 'haut'));
+  // une rangée d'obstacles dans les voies données, avec une ligne de pièces dans l'une d'elles
+  function rangee(r, zz, voies, o, p, d) {
+    const t = voies.map(() => (r() < 0.45 ? null : r() < 0.55 ? (d > 0.08 && r() < 0.28 ? 'caisse' : 'bas') : 'haut'));
     if (t.every(x => !x)) t[Math.floor(r() * t.length)] = r() < 0.55 ? 'bas' : 'haut';
-    voies.forEach((l, i) => t[i] && o.push({ t: t[i], l, z0: zz, z1: zz + 0.5 }));
+    voies.forEach((l, i) => t[i] && o.push({ t: t[i], l, z0: zz, z1: zz + (t[i] == 'caisse' ? H_CAISSE : 0.5), y0: 0 }));
     if (r() < 0.75) {
       const i = Math.floor(r() * voies.length);
       for (let j = -3; j <= 3; j++) {
-        // en arc au-dessus d'une barrière basse (on les prend en sautant), au ras du sol ailleurs
-        const y = t[i] == 'bas' ? 0.6 + 1.0 * (1 - (j / 3.6) ** 2) : 0.5;
+        // en arc au-dessus d'une barrière basse ou d'une caisse, au ras du sol ailleurs
+        const y = t[i] == 'bas' || t[i] == 'caisse' ? 0.6 + 1.1 * (1 - (j / 3.6) ** 2) : 0.5;
         p.push(piece(voies[i], y, zz + 0.25 + j * 2));
       }
     }
@@ -142,16 +227,24 @@
       o.push(t);
       fin = Math.max(fin, t.z1);
     }
-    // pièces sur la rampe et le toit des wagons accessibles (à rampe, ou voisins d'un wagon à rampe)
     for (const t of ts) {
+      // une caisse sur le toit des longs wagons à rampe
+      let caisse = null;
+      if (t.ramp && t.z1 - t.z0 > RAMPE + 14 && r() < 0.4) {
+        const zc = t.z0 + RAMPE + Math.floor((t.z1 - t.z0 - RAMPE) / 2);
+        caisse = { t: 'caisse', l: t.l, z0: zc, z1: zc + H_CAISSE, y0: H_TRAIN };
+        o.push(caisse);
+      }
+      // pièces sur la rampe et le toit des wagons accessibles (à rampe, ou voisins d'un wagon à rampe)
       const acces = t.ramp || ts.some(u => u.ramp && Math.abs(u.l - t.l) == 1);
       if (!acces || r() < 0.3) continue;
       for (let zc = t.z0 + 1.5; zc < t.z1 - 1; zc += 2.5) {
+        if (caisse && Math.abs(zc - caisse.z0) < 2.5) continue;
         const y = t.ramp && zc < t.z0 + RAMPE ? (H_TRAIN * (zc - t.z0)) / RAMPE + 0.5 : H_TRAIN + 0.5;
         p.push(piece(t.l, y, zc));
       }
     }
-    if (libres.length) for (let zz = z + pas * 0.6; zz < fin - 4; zz += pas) rangee(r, zz, libres, o, p);
+    if (libres.length) for (let zz = z + pas * 0.6; zz < fin - 4; zz += pas) rangee(r, zz, libres, o, p, d);
     return { fin, libres };
   }
 
@@ -162,9 +255,29 @@
     const t = { t: 'train', l, z0: z + 60, z1: z + 60 + L, ramp: false, c: Math.floor(r() * TRAINS.length), vit: 9 + 6 * d };
     o.push(t);
     const libres = [0, 1, 2].filter(x => x != l);
-    for (let zz = z + pas * 0.6; zz < t.z1; zz += pas) rangee(r, zz, libres, o, p);
+    for (let zz = z + pas * 0.6; zz < t.z1; zz += pas) rangee(r, zz, libres, o, p, d);
     return { fin: t.z1, libres };
   }
+
+  // drones qui balaient deux voies voisines à hauteur de tête : on passe dessous en glissant
+  function drones(r, z, d, pas, o, p) {
+    const n = 2 + Math.floor(r() * 2);
+    for (let i = 0; i < n; i++) {
+      const zz = z + i * pas,
+        a = Math.floor(r() * 2),
+        autre = a == 0 ? 2 : 0;
+      o.push({ t: 'drone', la: a, lb: a + 1, l: a, z0: zz, z1: zz + 0.6, y0: 0, ph: r() * 6.28 });
+      if (r() < 0.5) o.push({ t: r() < 0.5 ? 'bas' : 'haut', l: autre, z0: zz, z1: zz + 0.5, y0: 0 });
+      else for (let j = -2; j <= 2; j++) p.push(piece(autre, 0.5, zz + j * 2.2));
+    }
+    return { fin: z + (n - 1) * pas + 1, libres: [0, 1, 2] };
+  }
+
+  const tirerBonus = r => {
+    let t = r() * Object.values(BONUS).reduce((s, b) => s + b.poids, 0);
+    for (const k in BONUS) if ((t -= BONUS[k].poids) < 0) return k;
+    return 'aimant';
+  };
 
   // un tronçon à partir de z ; dist sert à doser la difficulté
   function troncon(r, z, dist) {
@@ -176,70 +289,219 @@
       b = [];
     const k = r();
     let res;
-    if (k < 0.34 || d < 0.05) {
+    if (k < 0.3 || d < 0.05) {
       const n = 3 + Math.floor(r() * 3);
-      for (let i = 0; i < n; i++) rangee(r, z + i * pas, [0, 1, 2], o, p);
+      for (let i = 0; i < n; i++) rangee(r, z + i * pas, [0, 1, 2], o, p, d);
       res = { fin: z + (n - 1) * pas + 1, libres: [0, 1, 2] };
-    } else if (k < 0.84 || d < 0.2) res = trains(r, z, d, pas, o, p);
+    } else if (k < 0.42 && d > 0.25) res = drones(r, z, d, pas, o, p);
+    else if (k < 0.86 || d < 0.2) res = trains(r, z, d, pas, o, p);
     else res = approche(r, z, d, pas, o, p);
-    if (res.libres.length && r() < 0.3) {
-      const types = ['aimant', 'saut', 'x2', 'bouclier'];
-      b.push({ k: types[Math.floor(r() * types.length)], x: lx(res.libres[Math.floor(r() * res.libres.length)]), y: 1, z: z + pas * 0.5 });
+    if (res.libres.length && d > 0.15 && r() < 0.16) {
+      const l = res.libres[Math.floor(r() * res.libres.length)];
+      o.push({ t: 'pad', l, z0: z + pas * 0.22, z1: z + pas * 0.22 + 2.6, y0: 0 });
     }
-    return { o, p, b, fin: res.fin + 16 + v * 0.5 };
+    if (res.libres.length && r() < 0.3) b.push({ k: tirerBonus(r), x: lx(res.libres[Math.floor(r() * res.libres.length)]), y: 1, z: z + pas * 0.5 });
+    return { o, p, b, fin: res.fin + 16 + v * 0.5, z, pas, libres: res.libres };
   }
 
   // ---------- État ----------
-  const S = { mode: 'menu', demo: true, t: 0, dist: 0, v: 0, score: 0, pieces: 0, mult: 1, alerte: 0, invu: 0, fin: 0, finVue: false, bonus: {}, graine: 0, secousse: 0 };
-  const P = { voie: 1, voieAvant: 1, x: 0, y: 0, z: 0, vy: 0, gy: 0, sol: true, glisse: 0, tampon: 0, coyote: 0, course: 0, chute: 0 };
+  const S = {
+    mode: 'menu', // menu, jeu, pause, continuer, fin
+    type: 'libre', // libre, niveau, defi
+    demo: true,
+    t: 0,
+    dist: 0,
+    v: 0,
+    score: 0,
+    pieces: 0,
+    mult: 1,
+    alerte: 0,
+    invu: 0,
+    turbo: 0,
+    planche: 0,
+    poursuite: 0,
+    fin: 0,
+    finVue: false,
+    bonus: {},
+    graine: 0,
+    secousse: 0,
+    revives: 0,
+    trebuches: 0,
+    compteurs: {},
+    missionsFaites: [],
+    niveau: -1,
+    long: 0,
+    depart: 0,
+    temps: 0,
+    q: 0,
+    raison: ''
+  };
+  const P = { voie: 1, voieAvant: 1, x: 0, y: 0, z: 0, vy: 0, gy: 0, sol: true, glisse: 0, tampon: 0, coyote: 0, course: 0, chute: 0, ecrase: false };
   const cam = { x: 0, y: 3.4, z: -6, base: 0, sp: Math.sin(0.2), cp: Math.cos(0.2) };
   let objs = [],
     pieces = [],
     bonus = [],
     decor = [],
+    ponts = [],
     parts = [];
   let r = Math.random,
     rDecor = Math.random,
     genZ = 0,
     decZ = [0, 0],
-    nettoyage = 0;
+    propZ = [0, 0],
+    pontZ = 0,
+    zLettre = 0,
+    nettoyage = 0,
+    tutoT = -1;
 
-  function nouveauMonde(demo) {
-    Object.assign(S, { demo, t: 0, dist: 0, score: 0, pieces: 0, alerte: 0, invu: 0, fin: 0, finVue: false, bonus: {}, secousse: 0 });
-    Object.assign(P, { voie: 1, voieAvant: 1, x: 0, y: 0, z: 0, vy: 0, gy: 0, sol: true, glisse: 0, tampon: 0, coyote: 0, chute: 0 });
+  // quartier à la position z : en niveau, toujours le même ; sinon un tous les LQ mètres
+  function quartierA(z) {
+    if (S.type == 'niveau') return { a: S.q, b: S.q, t: 0 };
+    const d = Math.max(0, z),
+      i = Math.floor(d / LQ),
+      f = d - i * LQ;
+    return { a: i % QUARTIERS.length, b: (i + 1) % QUARTIERS.length, t: f > LQ - 120 ? (f - (LQ - 120)) / 120 : 0 };
+  }
+  const quartierIndex = z => {
+    const q = quartierA(z);
+    return q.t < 0.5 ? q.a : q.b;
+  };
+
+  function nouveauMonde(demo, type = 'libre', niveau = -1) {
+    Object.assign(S, {
+      demo,
+      type,
+      t: 0,
+      dist: 0,
+      score: 0,
+      pieces: 0,
+      alerte: 0,
+      invu: 0,
+      turbo: 0,
+      planche: 0,
+      poursuite: demo ? 0 : 1,
+      fin: 0,
+      finVue: false,
+      bonus: {},
+      secousse: 0,
+      revives: 0,
+      trebuches: 0,
+      compteurs: {},
+      missionsFaites: [],
+      niveau,
+      long: 0,
+      depart: 0,
+      temps: 0,
+      raison: '',
+      nouveau: false
+    });
+    Object.assign(P, { voie: 1, voieAvant: 1, x: 0, y: 0, z: 0, vy: 0, gy: 0, sol: true, glisse: 0, tampon: 0, coyote: 0, chute: 0, ecrase: false });
     Object.assign(cam, { x: 0, y: 3.4, z: -6, base: 0 });
     objs = [];
     pieces = [];
     bonus = [];
     decor = [];
+    ponts = [];
     parts = [];
-    S.graine = graineURL != null ? graineURL : (Math.random() * 2 ** 32) >>> 0;
+    if (type == 'niveau') {
+      const n = NIVEAUX[niveau];
+      S.graine = n.graine;
+      S.long = n.long;
+      S.depart = n.depart;
+      S.q = n.q;
+    } else if (type == 'defi') {
+      S.graine = nombreJour();
+      S.depart = 600;
+      S.temps = DUREE_DEFI;
+    } else S.graine = graineURL != null ? graineURL : (Math.random() * 2 ** 32) >>> 0;
+    if (demo && type == 'libre') S.q = Math.floor(Math.random() * QUARTIERS.length);
     r = alea(S.graine);
     rDecor = alea(S.graine ^ 0x9e3779b9);
     genZ = 45;
     decZ = [-12, -12];
+    propZ = [-12, -12];
+    pontZ = 120;
+    zLettre = 300 + r() * 400;
+    S.qVu = quartierIndex(0);
     generer();
   }
 
   function generer() {
     while (!S.demo && genZ < P.z + VUE + 30) {
-      const t = troncon(r, genZ, genZ);
+      if (S.type == 'niveau' && genZ > S.long - 40) {
+        if (!objs.some(o => o.t == 'arrivee')) objs.push({ t: 'arrivee', l: 1, z0: S.long, z1: S.long + 1, y0: 0 });
+        genZ = 1e9;
+        break;
+      }
+      const t = troncon(r, genZ, genZ + S.depart);
       objs.push(...t.o);
       pieces.push(...t.p);
       bonus.push(...t.b);
+      // chasse aux lettres : une lettre du mot du jour de temps en temps (course libre)
+      if (S.type == 'libre' && genZ > zLettre && t.libres.length && D.mot.n < motDuJour().length) {
+        bonus.push({ k: 'lettre', x: lx(t.libres[Math.floor(r() * t.libres.length)]), y: 1, z: t.z + t.pas * 0.78 });
+        zLettre = genZ + 700 + r() * 500;
+      }
       genZ = t.fin;
     }
-    // immeubles des deux côtés
-    for (const c of [0, 1])
-      while (decZ[c] < P.z + VUE + 30) {
-        const s = c ? 1 : -1,
-          a = 6.4 + rDecor() * 1.6,
-          e = a + 4 + rDecor() * 5,
-          z0 = decZ[c],
-          z1 = z0 + 7 + rDecor() * 14;
-        decor.push({ x0: s > 0 ? a : -e, x1: s > 0 ? e : -a, h: 3.5 + rDecor() * 8, z0, z1, c: PASTELS[Math.floor(rDecor() * PASTELS.length)] });
+    // décor des deux côtés, selon le quartier
+    const fin = P.z + VUE + 30;
+    for (const c of [0, 1]) {
+      const s = c ? 1 : -1;
+      while (decZ[c] < fin) {
+        const q = QUARTIERS[S.demo && S.type == 'libre' ? S.q : quartierIndex(decZ[c])],
+          coul = () => q.immeubles[Math.floor(rDecor() * q.immeubles.length)];
+        const z0 = decZ[c];
+        let a, e, h, z1;
+        if (q.id == 'port' && rDecor() < 0.55) {
+          // piles de conteneurs
+          a = 5.4 + rDecor() * 1.5;
+          e = a + 2.6;
+          z1 = z0 + 6.2;
+          const n = 1 + Math.floor(rDecor() * 3);
+          for (let i = 0; i < n; i++) decor.push({ k: 'conteneur', x0: s > 0 ? a : -e, x1: s > 0 ? e : -a, y0: i * 2.6, h: (i + 1) * 2.6, z0, z1, c: CONTENEURS[Math.floor(rDecor() * CONTENEURS.length)] });
+          if (rDecor() < 0.15) decor.push({ k: 'grue', x: s * (11 + rDecor() * 3), z: z0 + 3, h: 15 + rDecor() * 5, s });
+          decZ[c] = z1 + 0.6 + rDecor() * 2;
+          continue;
+        }
+        if (q.id == 'couchant') {
+          a = 8.5 + rDecor() * 2;
+          h = 3 + rDecor() * 4;
+        } else if (q.id == 'parc') {
+          a = 11 + rDecor() * 4;
+          h = 6 + rDecor() * 10;
+        } else if (q.id == 'briques') {
+          a = 6.4 + rDecor() * 1.5;
+          h = 5 + rDecor() * 8;
+        } else {
+          a = 6.4 + rDecor() * 1.6;
+          h = 3.5 + rDecor() * 6;
+        }
+        e = a + 4 + rDecor() * 5;
+        z1 = z0 + 7 + rDecor() * 14;
+        decor.push({ k: 'immeuble', x0: s > 0 ? a : -e, x1: s > 0 ? e : -a, y0: 0, h, z0, z1, c: coul(), res: q.id == 'briques' && rDecor() < 0.45, nuit: q.nuit });
         decZ[c] = z1 + 1 + rDecor() * 5;
       }
+      // éléments au bord des voies : palmiers, arbres, lampadaires
+      while (propZ[c] < fin) {
+        const q = QUARTIERS[S.demo && S.type == 'libre' ? S.q : quartierIndex(propZ[c])],
+          z = propZ[c];
+        if (q.decor.includes('palmier')) {
+          decor.push({ k: 'palmier', x: s * (5.3 + rDecor() * 1.5), z, z0: z, z1: z + 0.5, h: 5 + rDecor() * 2.5, s });
+          propZ[c] = z + 7 + rDecor() * 6;
+        } else if (q.decor.includes('arbre')) {
+          if (rDecor() < 0.35) decor.push({ k: 'lampadaire', x: s * 4.7, z, z0: z, z1: z + 0.3, h: 4.6, s });
+          else decor.push({ k: 'arbre', x: s * (5.6 + rDecor() * 2.5), z, z0: z, z1: z + 0.5, h: 3 + rDecor() * 2, s, c: rDecor() });
+          propZ[c] = z + 5 + rDecor() * 6;
+        } else propZ[c] = z + 20;
+      }
+    }
+    // passerelles au-dessus des voies
+    while (pontZ < fin) {
+      const q = QUARTIERS[quartierIndex(pontZ)];
+      if (!S.demo && q.decor.includes('passerelle') && rDecor() < 0.6) ponts.push({ z0: pontZ, z1: pontZ + 4, c: q.mur });
+      pontZ += 160 + rDecor() * 140;
+    }
   }
 
   function nettoyer() {
@@ -248,9 +510,13 @@
     pieces = pieces.filter(c => !c.pris && c.z > z);
     bonus = bonus.filter(b => !b.pris && b.z > z);
     decor = decor.filter(b => b.z1 > z);
+    ponts = ponts.filter(b => b.z1 > z);
   }
 
   // ---------- Physique ----------
+  const droneX = o => lx(o.la) + (lx(o.lb) - lx(o.la)) * (0.5 - 0.5 * Math.cos(S.t * 1.6 + o.ph));
+  const centre = o => (o.t == 'drone' ? droneX(o) : lx(o.l));
+
   // hauteur du sol sous le coureur : 0, une rampe ou le toit d'un wagon (seulement si on arrive d'en haut)
   function sol(x, z, y0) {
     let g = 0;
@@ -265,7 +531,8 @@
 
   function pas(h) {
     const x0 = P.x,
-      y0 = P.y;
+      y0 = P.y,
+      sol0 = P.sol;
     P.z += S.v * h;
     P.course += S.v * h;
     if (!S.demo) {
@@ -284,42 +551,111 @@
           o.z1 -= o.vit * h;
         }
       }
-    P.vy -= GRAVITE * h;
-    P.y += P.vy * h;
-    const g = sol(P.x, P.z, y0);
-    P.gy = g;
-    if (P.y <= g) {
-      if (!P.sol && P.vy < -8) poussiere();
-      P.y = g;
-      P.vy = 0;
-      P.sol = true;
-      P.coyote = 0.1;
-    } else if (P.y > g + 0.05) P.sol = false;
+    if (S.bonus.jetpack) {
+      // en vol : on monte en douceur à la hauteur du jetpack
+      P.vy = (H_JETPACK - P.y) * 5;
+      P.y += P.vy * h;
+      P.sol = false;
+      P.gy = sol(P.x, P.z, 99);
+    } else {
+      P.vy -= GRAVITE * h;
+      P.y += P.vy * h;
+      const g = sol(P.x, P.z, y0);
+      P.gy = g;
+      if (P.y <= g) {
+        if (!P.sol) atterrir();
+        P.y = g;
+        P.vy = 0;
+        P.sol = true;
+        P.coyote = 0.1;
+      } else if (P.y > g + 0.05) P.sol = false;
+    }
     if (P.sol && P.tampon > 0) sauter();
-    if (!S.demo) {
-      collisions(x0);
-      if (S.mode == 'jeu') ramasser(h);
+    if (S.demo) return;
+    if (P.sol && sol0 && P.y > 2.2) evenement('toits', S.v * h);
+    if (!S.bonus.jetpack) collisions(x0);
+    if (S.mode == 'jeu') {
+      ramasser(h);
+      accelerateurs();
+    }
+  }
+
+  function atterrir() {
+    if (P.vy < -8) poussiere();
+    if (P.ecrase) {
+      // écrasement : onde de choc, et les caisses juste dessous se brisent
+      P.ecrase = false;
+      S.secousse = Math.max(S.secousse, 0.15);
+      son('ecrase');
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * 6.28;
+        parts.push({ x: P.x, y: P.y + 0.05, z: P.z, vx: Math.cos(a) * 6, vy: 0.5, vz: S.v + Math.sin(a) * 6, v: 0.35, c: [255, 255, 255], r: 0.09 });
+      }
+      for (const o of objs) if (o.t == 'caisse' && !o.casse && Math.abs(lx(o.l) - P.x) < 1.2 && o.z0 < P.z + 2 && o.z1 > P.z - 1 && Math.abs(o.y0 - P.y) < 0.9) casserCaisse(o);
     }
   }
 
   function collisions(x0) {
     const hp = P.glisse > 0 ? H_GLISSE : H_DEBOUT;
     for (const o of objs) {
-      if (o.casse || P.z + 0.3 < o.z0 || P.z - 0.3 > o.z1) continue;
-      const c = lx(o.l);
-      if (Math.abs(P.x - c) >= DEMI + LARG) continue;
-      let bas = 0,
+      if (o.casse || o.t == 'pad' || o.t == 'arrivee' || P.z + 0.3 < o.z0 || P.z - 0.3 > o.z1) continue;
+      const c = centre(o),
+        demi = o.t == 'drone' ? 0.75 : DEMI;
+      if (Math.abs(P.x - c) >= demi + LARG) continue;
+      let bas = o.y0 || 0,
         haut = H_TRAIN;
-      if (o.t == 'bas') haut = 0.65;
-      else if (o.t == 'haut') {
+      if (o.t == 'bas') haut = bas + 0.65;
+      else if (o.t == 'caisse') haut = bas + H_CAISSE;
+      else if (o.t == 'haut' || o.t == 'drone') {
         bas = 1.0;
         haut = 1.75;
       } else if (o.ramp && P.z < o.z0 + RAMPE) haut = (H_TRAIN * Math.max(0, P.z - o.z0)) / RAMPE;
       if (P.y >= haut - 0.05 || P.y + hp <= bas) continue;
+      if (S.turbo > 0) {
+        casser(o);
+        continue;
+      }
+      if (o.t == 'caisse' && P.ecrase) {
+        casserCaisse(o);
+        continue;
+      }
       // de côté si, juste avant, le coureur n'était pas dans la largeur de l'obstacle
-      if (Math.abs(x0 - c) >= DEMI + LARG - 1e-6) trebucher(x0);
+      if (o.t != 'drone' && Math.abs(x0 - c) >= demi + LARG - 1e-6) trebucher(x0);
       else choc(o);
       return;
+    }
+    // drones passés en glissant dessous
+    for (const o of objs) if (o.t == 'drone' && !o.passe && !o.casse && o.z1 < P.z - 0.3 && o.z1 > P.z - 3 && Math.abs(droneX(o) - P.x) < 1.1) {
+      o.passe = true;
+      evenement('drones');
+    }
+  }
+
+  function casser(o) {
+    o.casse = true;
+    eclats(o);
+    S.score += 20 * S.mult;
+    son('casse');
+  }
+
+  function casserCaisse(o) {
+    o.casse = true;
+    eclats(o);
+    evenement('caisses');
+    son('caisse');
+    const t = Math.random();
+    if (t < 0.12) {
+      D.cles++;
+      ecrire();
+      message('+1 clé !', 'or');
+    } else if (t < 0.42) activerBonus(tirerBonus(Math.random));
+    else {
+      const n = 10 + Math.floor(Math.random() * 16);
+      S.pieces += n;
+      S.score += 5 * n * S.mult;
+      evenement('pieces', n);
+      message('+' + n + ' pièces');
+      for (let i = 0; i < 10; i++) parts.push({ x: lx(o.l), y: o.y0 + 0.6, z: o.z0, vx: (Math.random() - 0.5) * 5, vy: 4 + Math.random() * 3, vz: S.v, v: 0.6, c: [255, 207, 64], r: 0.12 });
     }
   }
 
@@ -329,70 +665,159 @@
     if (S.invu > 0) return;
     vibrer(60);
     S.secousse = 0.25;
+    S.trebuches++;
     if (S.alerte > 0) {
-      if (S.bonus.bouclier) {
-        delete S.bonus.bouclier;
-        S.invu = 1;
-        S.alerte = 0;
-        son('bouclier');
-        message('Bouclier perdu');
-        return;
-      }
-      return finPartie();
+      if (proteger()) return;
+      return perdu();
     }
     S.alerte = 3.5;
+    S.poursuite = 1;
     son('alerte');
-    message('Attention !', true);
+    message('Attention !', 'alerte');
+  }
+
+  // bulle puis planche : chacune encaisse un choc à la place du coureur
+  function proteger(o) {
+    if (S.bonus.bulle) {
+      delete S.bonus.bulle;
+      message('Bulle éclatée');
+    } else if (S.planche > 0) {
+      S.planche = 0;
+      message('Planche cassée');
+    } else return false;
+    if (o) {
+      o.casse = true;
+      eclats(o);
+    }
+    S.invu = 1;
+    S.alerte = 0;
+    S.secousse = 0.4;
+    son('bouclier');
+    return true;
   }
 
   function choc(o) {
     if (S.invu > 0) return;
-    if (S.bonus.bouclier) {
-      delete S.bonus.bouclier;
-      o.casse = true;
-      S.invu = 1;
-      S.secousse = 0.4;
-      son('bouclier');
-      eclats(o);
-      message('Bouclier perdu');
+    if (proteger(o)) return;
+    perdu();
+  }
+
+  // course perdue : on peut continuer avec des clés (sauf au défi du jour)
+  function perdu() {
+    if (S.mode != 'jeu') return;
+    S.secousse = 0.6;
+    son('choc');
+    vibrer(220);
+    const cout = 2 ** S.revives;
+    if (S.type != 'defi' && D.cles >= cout) {
+      S.mode = 'continuer';
+      S.compte = 5;
+      musique(false);
+      afficherContinuer(cout);
       return;
     }
-    finPartie();
+    finPartie('choc');
+  }
+
+  function continuer() {
+    const cout = 2 ** S.revives;
+    if (S.mode != 'continuer' || D.cles < cout) return;
+    D.cles -= cout;
+    S.revives++;
+    ecrire();
+    // on dégage la voie devant le coureur et il repart protégé quelques instants
+    for (const o of objs) if (o.t != 'pad' && o.t != 'arrivee' && o.z1 > P.z - 3 && o.z0 < P.z + 35) o.efface = true;
+    objs = objs.filter(o => !o.efface);
+    Object.assign(S, { invu: 2, alerte: 0, poursuite: 0, mode: 'jeu' });
+    P.y = sol(P.x, P.z, 99);
+    P.vy = 0;
+    P.voieAvant = P.voie;
+    derniere = 0;
+    ecran(null);
+    musique(true);
+    message('C\'est reparti !');
   }
 
   function ramasser(h) {
     const hp = P.glisse > 0 ? H_GLISSE : H_DEBOUT,
       aimant = !!S.bonus.aimant,
+      vol = !!S.bonus.jetpack,
       k = Math.min(1, 16 * h);
     for (const c of pieces) {
       if (c.pris) continue;
       const dz = c.z - P.z;
       if (dz < -2 || dz > 30) continue;
-      if (aimant && dz < 18) c.vol = true;
+      if (aimant && dz < 18 && Math.abs(c.y - P.y) < 4) c.vol = true;
       if (c.vol) {
         c.x += (P.x - c.x) * k;
         c.y += (P.y + 0.8 - c.y) * k;
-        c.z += (P.z - c.z) * k;
+        c.z += (P.z - c.z) * k + S.v * h; // suit aussi l'avancée du coureur, sinon elle reste à la traîne
         if (Math.hypot(c.x - P.x, c.y - P.y - 0.8, c.z - P.z) < 0.8) prendre(c);
-      } else if (Math.abs(c.x - P.x) < 0.9 && Math.abs(dz) < 0.9 && c.y > P.y - 0.4 && c.y < P.y + hp + 0.4) prendre(c);
+      } else if (Math.abs(c.x - P.x) < (vol ? 1.3 : 0.9) && Math.abs(dz) < 0.9 && c.y > P.y - 0.4 && c.y < P.y + hp + 0.4) prendre(c);
     }
     for (const b of bonus)
       if (!b.pris && Math.abs(b.x - P.x) < 1.1 && Math.abs(b.z - P.z) < 1.1 && b.y > P.y - 0.6 && b.y < P.y + hp + 0.6) {
         b.pris = true;
-        S.bonus[b.k] = dureeBonus(b.k);
-        son('bonus');
-        message(BONUS[b.k].nom + ' !');
+        if (b.k == 'lettre') lettre();
+        else {
+          activerBonus(b.k);
+          evenement('bonus');
+        }
       }
+  }
+
+  function activerBonus(k) {
+    S.bonus[k] = dureeBonus(k);
+    son('bonus');
+    message(BONUS[k].nom + ' !');
+    if (k == 'jetpack') {
+      // une traînée de pièces dans le ciel, qui change de voie de temps en temps
+      let l = P.voie;
+      const fin = P.z + 12 + S.v * dureeBonus(k);
+      for (let z = P.z + 14; z < fin; z += 2.4) {
+        if (Math.random() < 0.06) l = Math.max(0, Math.min(2, l + (Math.random() < 0.5 ? -1 : 1)));
+        pieces.push({ x: lx(l), y: H_JETPACK + 0.6, z, a: z });
+      }
+    }
+  }
+
+  function lettre() {
+    const mot = motDuJour();
+    if (D.mot.n >= mot.length) return;
+    message('Lettre « ' + mot[D.mot.n] + ' » !', 'or');
+    D.mot.n++;
+    son('lettre');
+    if (D.mot.n >= mot.length) {
+      D.cles++;
+      D.pieces += 300;
+      setTimeout(() => message('Mot « ' + mot + ' » trouvé : +1 clé, +300 pièces', 'or'), 1300);
+    }
+    ecrire();
   }
 
   function prendre(c) {
     c.pris = true;
     S.pieces++;
     S.score += 5 * S.mult;
+    evenement('pieces');
     son('piece');
-    if (parts.length < 120)
+    if (parts.length < 140)
       for (let i = 0; i < 4; i++)
         parts.push({ x: c.x, y: c.y, z: c.z, vx: (Math.random() - 0.5) * 3, vy: 2 + Math.random() * 2, vz: S.v * 0.9, v: 0.35, c: [255, 210, 60], r: 0.07 });
+  }
+
+  // accélérateurs au sol : élan de vitesse, et les obstacles traversés se brisent
+  function accelerateurs() {
+    if (!P.sol || P.y > 0.1) return;
+    for (const o of objs)
+      if (o.t == 'pad' && !o.pris && P.z >= o.z0 && P.z <= o.z1 && Math.abs(P.x - lx(o.l)) < 1) {
+        o.pris = true;
+        if (S.turbo <= 0) evenement('pads');
+        S.turbo = 2.4;
+        son('turbo');
+        message('Turbo !');
+        vibrer(40);
+      }
   }
 
   function poussiere() {
@@ -401,9 +826,9 @@
   }
 
   function eclats(o) {
-    const c = TRAINS[o.c] || [255, 107, 107];
-    for (let i = 0; i < 18; i++)
-      parts.push({ x: lx(o.l) + (Math.random() - 0.5) * 2, y: Math.random() * (o.t == 'train' ? 2.3 : 1.5), z: Math.max(o.z0, P.z + 0.5), vx: (Math.random() - 0.5) * 8, vy: 3 + Math.random() * 5, vz: S.v + Math.random() * 6, v: 0.7, c: o.t == 'train' ? c : [255, 255, 255], r: 0.16 });
+    const c = o.t == 'train' ? TRAINS[o.c] : o.t == 'caisse' ? [196, 140, 80] : o.t == 'drone' ? [60, 66, 90] : [255, 255, 255];
+    for (let i = 0; i < 16; i++)
+      parts.push({ x: centre(o) + (Math.random() - 0.5) * 2, y: (o.y0 || 0) + Math.random() * (o.t == 'train' ? 2.3 : 1.2), z: Math.max(o.z0, P.z + 0.5), vx: (Math.random() - 0.5) * 8, vy: 3 + Math.random() * 5, vz: S.v + Math.random() * 6, v: 0.7, c, r: 0.16 });
   }
 
   // ---------- Actions ----------
@@ -411,75 +836,152 @@
     if (S.mode != 'jeu' || P.voie == 0) return;
     P.voieAvant = P.voie;
     P.voie--;
+    evenement('voies');
     son('voie');
   }
   function droite() {
     if (S.mode != 'jeu' || P.voie == 2) return;
     P.voieAvant = P.voie;
     P.voie++;
+    evenement('voies');
     son('voie');
   }
   function sauter() {
-    if (S.mode != 'jeu') return;
+    if (S.mode != 'jeu' || S.bonus.jetpack) return;
     if (P.sol || P.coyote > 0) {
-      P.vy = S.bonus.saut ? SUPER_SAUT : SAUT;
+      P.vy = S.bonus.saut ? SUPER_SAUT : S.bonus.bulle ? SAUT * 1.2 : SAUT;
       P.sol = false;
       P.coyote = 0;
       P.glisse = 0;
       P.tampon = 0;
+      P.ecrase = false;
+      evenement('sauts');
       son('saut');
     } else P.tampon = 0.15; // appui un peu trop tôt : on saute dès l'atterrissage
   }
   function glisser() {
-    if (S.mode != 'jeu') return;
+    if (S.mode != 'jeu' || S.bonus.jetpack) return;
     P.glisse = DUREE_GLISSE;
     P.tampon = 0;
-    if (!P.sol) P.vy = Math.min(P.vy, -24); // en l'air : redescente immédiate
+    if (!P.sol) {
+      P.vy = Math.min(P.vy, -26); // en l'air : redescente immédiate, qui écrase ce qu'il y a dessous
+      P.ecrase = true;
+    }
+    evenement('glisses');
     son('glisse');
   }
+  function utiliserPlanche() {
+    if (S.mode != 'jeu' || S.planche > 0 || D.planches < 1) return;
+    D.planches--;
+    S.planche = DUREE_PLANCHE;
+    ecrire();
+    evenement('planches');
+    son('planche');
+    message('Planche !');
+  }
 
-  function finPartie() {
-    if (S.mode != 'jeu') return;
+  function finPartie(raison) {
+    if (S.mode != 'jeu' && S.mode != 'continuer') return;
     S.mode = 'fin';
+    S.raison = raison;
     S.fin = 0;
-    S.secousse = 0.6;
-    son('choc');
-    vibrer(220);
+    musique(false);
+    if (raison == 'victoire' || raison == 'temps') son('victoire');
     const score = Math.floor(S.score);
-    S.nouveau = score > D.record && score > 0;
+    evenement('score', score, true);
+    evenement('distance', Math.floor(S.dist), true);
+    S.nouveau = S.type == 'libre' && score > D.record && score > 0;
     D.parties++;
     D.pieces += S.pieces;
     D.distance = Math.max(D.distance, Math.floor(S.dist));
     if (S.nouveau) D.record = score;
+    S.recompense = '';
+    if (S.type == 'niveau' && raison == 'victoire') {
+      const n = NIVEAUX[S.niveau],
+        avant = D.niveaux[S.niveau] || 0,
+        etoiles = 1 + (S.pieces >= n.pieces ? 1 : 0) + (S.trebuches == 0 ? 1 : 0);
+      S.etoiles = etoiles;
+      if (!avant) {
+        const g = 100 + 50 * S.niveau;
+        D.pieces += g;
+        S.recompense = '+' + g + ' pièces';
+      }
+      if (etoiles == 3 && avant < 3) {
+        D.cles++;
+        S.recompense += (S.recompense ? ' · ' : '') + '+1 clé';
+      }
+      D.niveaux[S.niveau] = Math.max(avant, etoiles);
+    }
+    if (S.type == 'defi') {
+      majJour();
+      D.defi.meilleur = Math.max(D.defi.meilleur, score);
+      if (raison == 'temps' && !D.defi.cle) {
+        D.defi.cle = 1;
+        D.cles++;
+        S.recompense = 'Défi réussi : +1 clé';
+      }
+    }
     ecrire();
   }
 
   // ---------- Boucle ----------
   function maj(dt) {
     S.t += dt;
+    if (S.mode == 'continuer') {
+      S.compte -= dt;
+      majContinuer();
+      if (S.compte <= 0) {
+        finPartie('choc');
+        ecran(null);
+      }
+      return;
+    }
     if (S.mode == 'fin') {
       S.fin += dt;
-      P.chute = Math.min(1, P.chute + dt * 3);
-      P.vy -= GRAVITE * dt;
-      P.y = Math.max(P.gy, P.y + P.vy * dt);
+      if (S.raison == 'choc') {
+        P.chute = Math.min(1, P.chute + dt * 3);
+        P.vy -= GRAVITE * dt;
+        P.y = Math.max(P.gy, P.y + P.vy * dt);
+      } else {
+        // arrivée ou fin du temps : le coureur ralentit et continue sur sa lancée
+        S.v = Math.max(0, S.v - 20 * dt);
+        P.z += S.v * dt;
+        P.course += S.v * dt;
+      }
+      S.poursuite = S.raison == 'choc' ? Math.min(1, S.poursuite + dt * 2) : Math.max(0, S.poursuite - dt);
       if (S.fin > 0.9 && !S.finVue) {
         S.finVue = true;
         afficherFin();
       }
     } else {
-      S.v = S.demo ? 9 : vitesse(S.dist);
+      S.v = S.demo ? 9 : vitesse(S.dist + S.depart) * (S.turbo > 0 ? 1.5 : 1);
+      const jet = !!S.bonus.jetpack;
       for (const k in S.bonus) if ((S.bonus[k] -= dt) <= 0) delete S.bonus[k];
-      S.mult = S.bonus.x2 ? 2 : 1;
+      if (jet && !S.bonus.jetpack) S.invu = Math.max(S.invu, 1.4); // atterrissage protégé
+      if (S.turbo > 0 && (S.turbo -= dt) <= 0) S.invu = Math.max(S.invu, 0.8);
+      if (S.planche > 0) S.planche = Math.max(0, S.planche - dt);
+      S.mult = (1 + D.multi) * (S.bonus.x2 ? 2 : 1);
       S.alerte = Math.max(0, S.alerte - dt);
       S.invu = Math.max(0, S.invu - dt);
+      if (S.alerte <= 0) S.poursuite = Math.max(0, S.poursuite - dt * 0.35);
       P.glisse = Math.max(0, P.glisse - dt);
       P.tampon = Math.max(0, P.tampon - dt);
       P.coyote = Math.max(0, P.coyote - dt);
       const n = Math.max(1, Math.ceil((S.v * dt) / 0.3));
-      for (let i = 0; i < n && S.mode != 'fin'; i++) pas(dt / n);
+      for (let i = 0; i < n && S.mode == 'jeu'; i++) pas(dt / n);
+      if (S.mode == 'jeu' && !S.demo) {
+        if (S.type == 'defi' && (S.temps -= dt) <= 0) finPartie('temps');
+        else if (S.type == 'niveau' && P.z >= S.long) finPartie('victoire');
+        const q = quartierIndex(P.z);
+        if (q != S.qVu) {
+          S.qVu = q;
+          message(QUARTIERS[q].nom, 'quartier');
+        }
+        tutoriel();
+      }
     }
-    // caméra : suit le coureur, et la hauteur des toits seulement quand il s'y pose
-    if (P.sol || P.y < cam.base) cam.base = P.y;
+    // caméra : suit le coureur, et la hauteur des toits seulement quand il s'y pose (ou en jetpack)
+    if (P.sol || P.y < cam.base || S.bonus.jetpack) cam.base = P.y;
     cam.x += (P.x * 0.75 - cam.x) * (1 - Math.exp(-dt * 7));
     cam.y += (cam.base + 3.4 - cam.y) * (1 - Math.exp(-dt * 4));
     cam.z = P.z - 6;
@@ -499,20 +1001,40 @@
     }
   }
 
+  // première course : quelques conseils
+  function tutoriel() {
+    if (D.tuto || S.type != 'libre') return;
+    const tactile = matchMedia('(pointer: coarse)').matches;
+    const etapes = tactile
+      ? [[0.6, 'Glisse ← ou → pour changer de voie'], [4.5, 'Glisse ↑ pour sauter'], [8.5, 'Glisse ↓ pour passer sous les portiques'], [12.5, 'Tape deux fois pour sortir ta planche']]
+      : [[0.6, '← → pour changer de voie'], [4.5, '↑ ou Espace pour sauter'], [8.5, '↓ pour glisser sous les portiques'], [12.5, 'B pour sortir ta planche']];
+    for (const [t, m] of etapes)
+      if (tutoT < t && S.t >= t) {
+        message(m, 'conseil', 2600);
+        tutoT = S.t;
+      }
+    if (S.t > 16) {
+      D.tuto = 1;
+      ecrire();
+    }
+  }
+
   // ---------- Rendu ----------
-  const cv = document.getElementById('scene'),
-    ctx = cv.getContext('2d');
+  const cv = document.getElementById('scene');
+  let ctx = cv.getContext('2d'); // remplacé un instant par celui de l'image en cache du ciel
   let W = 0,
     H = 0,
     F = 0,
+    F0 = 0,
     CX = 0,
     CY = 0,
     HORIZON = 0,
     DPR = 1,
     maxDPR = 2,
-    degCiel = null,
-    degSol = null;
+    DETAIL = 2; // 2 : tout ; 1 : sans fresques, halos ni fenêtres lointaines ; 0 : décor simplifié
+  const PAL = { ciel: [0, 0, 0], brume: [0, 0, 0], sol: [0, 0, 0], ballast: [0, 0, 0], mur: [0, 0, 0], nuit: 0, lum: 1 };
   const nuages = Array.from({ length: 7 }, (_, i) => ({ a: i * 0.9 + Math.random() * 0.5, h: 0.25 + Math.random() * 0.5, s: 0.6 + Math.random() * 0.7 }));
+  const etoiles = Array.from({ length: 70 }, () => [Math.random(), Math.random() * 0.9, Math.random() * 1.4 + 0.4]);
 
   function taille() {
     W = innerWidth;
@@ -520,30 +1042,36 @@
     DPR = Math.min(maxDPR, window.devicePixelRatio || 1);
     cv.width = Math.round(W * DPR);
     cv.height = Math.round(H * DPR);
-    F = Math.min(W, H * 0.72);
+    F0 = Math.min(W, H * 0.72);
     CX = W / 2;
     CY = H * 0.47;
-    HORIZON = CY - F * Math.tan(0.2);
-    degCiel = ctx.createLinearGradient(0, 0, 0, HORIZON);
-    degCiel.addColorStop(0, rgb(CIEL_HAUT));
-    degCiel.addColorStop(1, rgb(BROUILLARD));
-    degSol = ctx.createLinearGradient(0, HORIZON, 0, H);
-    degSol.addColorStop(0, rgb(BROUILLARD));
-    degSol.addColorStop(0.35, rgb(SOL));
-    degSol.addColorStop(1, rgb(SOL));
   }
   addEventListener('resize', taille);
 
+  const mixer = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
   const rgb = c => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
   const brume = d => Math.min(1, Math.max(0, (d - BRUME) / (VUE - BRUME)));
-  // couleur c éclaircie ou assombrie par s, puis noyée dans le brouillard selon t (0 à 1)
-  function teinte(c, t, s = 1) {
-    let o = '';
+
+  // couleurs du quartier courant, fondues pendant le passage d'un quartier à l'autre
+  function majPalette() {
+    const q = S.demo && S.type == 'libre' ? { a: S.q, b: S.q, t: 0 } : quartierA(cam.z + 25),
+      A = QUARTIERS[q.a],
+      B = QUARTIERS[q.b];
+    for (const k of ['ciel', 'brume', 'sol', 'ballast', 'mur']) PAL[k] = mixer(A[k], B[k], q.t);
+    PAL.nuit = A.nuit + (B.nuit - A.nuit) * q.t;
+    PAL.lum = 1 - 0.32 * PAL.nuit;
+  }
+
+  // couleur c éclaircie ou assombrie par s, assombrie la nuit, puis noyée dans le brouillard selon t
+  function teinte(c, t, s = 1, lumiere) {
+    const k = s * (lumiere ? 1 : PAL.lum),
+      b = PAL.brume;
+    let o = 'rgb(';
     for (let i = 0; i < 3; i++) {
-      const v = Math.min(255, c[i] * s);
-      o += (i ? ',' : '') + ((v + (BROUILLARD[i] - v) * t) | 0);
+      const v = Math.min(255, c[i] * k);
+      o += (i ? ',' : '') + ((v + (b[i] - v) * t) | 0);
     }
-    return 'rgb(' + o + ')';
+    return o + ')';
   }
 
   // projection : caméra derrière le coureur, inclinée de 0,2 rad vers le bas
@@ -565,6 +1093,9 @@
     ctx.closePath();
     ctx.fill();
   }
+  const quadX = (x, y0, y1, z0, z1) => [proj(x, y0, z0), proj(x, y0, z1), proj(x, y1, z1), proj(x, y1, z0)];
+  const quadZ = (x0, x1, y0, y1, z) => [proj(x0, y0, z), proj(x1, y0, z), proj(x1, y1, z), proj(x0, y1, z)];
+  const quadY = (x0, x1, y, z0, z1) => [proj(x0, y, z0), proj(x1, y, z0), proj(x1, y, z1), proj(x0, y, z1)];
 
   // pavé : seules les faces tournées vers la caméra sont dessinées ; la face avant seulement si elle n'est pas coupée
   function pave(x0, x1, y0, y1, z0, z1, c, avant = true, deco) {
@@ -584,81 +1115,220 @@
     if (cam.x < x0) poly([A, A2, E2, E], teinte(c, t, 0.82));
     if (cam.x > x1) poly([B, B2, C2, C], teinte(c, t, 0.82));
     if (cam.y > y1) poly([E, C, C2, E2], teinte(c, t, 1.1));
+    else if (cam.y < y0) poly([A, B, B2, A2], teinte(c, t, 0.7));
     if (avant && !coupe) poly([A, B, C, E], teinte(c, t, 0.95));
     if (deco) deco(t, z0, coupe);
   }
 
-  // bande sur les côtés visibles d'un volume (fenêtres des wagons et des immeubles)
-  function bandeCotes(x0, x1, y0, y1, z0, z1, c, t) {
-    if (cam.x < x0) poly([proj(x0, y0, z0), proj(x0, y0, z1), proj(x0, y1, z1), proj(x0, y1, z0)], teinte(c, t));
-    if (cam.x > x1) poly([proj(x1, y0, z0), proj(x1, y0, z1), proj(x1, y1, z1), proj(x1, y1, z0)], teinte(c, t));
+  // bande sur les côtés visibles d'un volume (fenêtres, rayures)
+  function bandeCotes(x0, x1, y0, y1, z0, z1, c, t, lumiere) {
+    if (cam.x < x0) poly(quadX(x0, y0, y1, z0, z1), teinte(c, t, 1, lumiere));
+    if (cam.x > x1) poly(quadX(x1, y0, y1, z0, z1), teinte(c, t, 1, lumiere));
   }
 
-  function dessinerDecor() {
-    // ciel, soleil, nuages
-    ctx.fillStyle = degCiel;
-    ctx.fillRect(0, 0, W, HORIZON + 1);
-    ctx.fillStyle = 'rgba(255,250,225,.9)';
-    ctx.beginPath();
-    ctx.arc(W * 0.78 - cam.x * 3, HORIZON - H * 0.18, Math.min(W, H) * 0.06, 0, 7);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.85)';
-    for (const n of nuages) {
+  // ciel et sol : dessinés dans une image en cache, refaite seulement quand les couleurs ou l'horizon changent
+  const fond = document.createElement('canvas'),
+    fctx = fond.getContext('2d');
+  let cleFond = '';
+  function ciel() {
+    const cf = [W, H, DPR, Math.round(HORIZON), PAL.ciel, PAL.brume, PAL.sol, Math.round(PAL.nuit * 20)].join();
+    if (cf != cleFond) {
+      cleFond = cf;
+      fond.width = cv.width;
+      fond.height = cv.height;
+      const vrai = ctx;
+      ctx = fctx;
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      cielFixe();
+      ctx = vrai;
+    }
+    ctx.drawImage(fond, 0, 0, W, H);
+    const m = Math.min(W, H);
+    ctx.fillStyle = 'rgba(255,255,255,' + 0.85 * (1 - PAL.nuit * 0.8) + ')';
+    for (const n of DETAIL ? nuages : []) {
       const x = ((((n.a * W * 0.37 - S.t * 6 * n.s - cam.x * 4) % (W * 1.4)) + W * 1.4) % (W * 1.4)) - W * 0.2,
         y = HORIZON * n.h,
-        s = Math.min(W, H) * 0.05 * n.s;
+        s = m * 0.05 * n.s;
       ctx.beginPath();
       ctx.ellipse(x, y, s * 2.2, s * 0.8, 0, 0, 7);
       ctx.ellipse(x + s, y - s * 0.4, s * 1.3, s * 0.9, 0, 0, 7);
       ctx.ellipse(x - s * 1.1, y - s * 0.2, s, s * 0.7, 0, 0, 7);
       ctx.fill();
     }
-    ctx.fillStyle = degSol;
+  }
+  function cielFixe() {
+    const g = ctx.createLinearGradient(0, 0, 0, HORIZON);
+    g.addColorStop(0, rgb(PAL.ciel));
+    g.addColorStop(1, rgb(PAL.brume));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, HORIZON + 1);
+    const m = Math.min(W, H);
+    if (PAL.nuit > 0.5) {
+      ctx.fillStyle = 'rgba(255,255,255,' + (PAL.nuit - 0.5) * 1.6 + ')';
+      for (const [x, y, s] of etoiles) ctx.fillRect(x * W, y * HORIZON, s, s);
+      ctx.fillStyle = 'rgba(255,250,230,.95)';
+      ctx.beginPath();
+      ctx.arc(W * 0.78, HORIZON * 0.35, m * 0.045, 0, 7);
+      ctx.fill();
+    } else {
+      const bas = PAL.nuit > 0.15; // soleil couchant, plus gros et plus bas
+      ctx.fillStyle = bas ? 'rgba(255,236,170,.95)' : 'rgba(255,250,225,.9)';
+      ctx.beginPath();
+      ctx.arc(W * 0.78, bas ? HORIZON - m * 0.05 : HORIZON - H * 0.18, m * (bas ? 0.1 : 0.06), 0, 7);
+      ctx.fill();
+    }
+    const gs = ctx.createLinearGradient(0, HORIZON, 0, H);
+    gs.addColorStop(0, rgb(PAL.brume));
+    gs.addColorStop(0.3, teinte(PAL.sol, 0));
+    gs.addColorStop(1, teinte(PAL.sol, 0));
+    ctx.fillStyle = gs;
     ctx.fillRect(0, HORIZON, W, H - HORIZON);
-    // immeubles, du plus loin au plus proche
-    const vis = decor.filter(b => b.z0 < cam.z + VUE && b.z1 > cam.z + PRES).sort((a, b) => b.z0 - a.z0);
-    for (const b of vis)
-      pave(b.x0, b.x1, 0, b.h, b.z0, b.z1, b.c, true, (t, z0, coupe) => {
-        if (z0 - cam.z > 80) return;
-        const f = [92, 112, 150];
-        for (let y = 1.6; y < b.h - 0.8; y += 2.2) {
-          bandeCotes(b.x0, b.x1, y, y + 0.8, z0 + 0.6, b.z1 - 0.6, mixer(b.c, f, 0.45), t);
-          if (!coupe) poly([proj(b.x0 + 0.6, y, z0), proj(b.x1 - 0.6, y, z0), proj(b.x1 - 0.6, y + 0.8, z0), proj(b.x0 + 0.6, y + 0.8, z0)], teinte(mixer(b.c, f, 0.4), t));
-        }
-      });
-    // voies, par tranches pour le brouillard
-    const z0 = cam.z + PRES,
-      zf = cam.z + VUE;
-    for (let z = z0; z < zf; z += 15) {
-      const z2 = Math.min(zf, z + 15),
-        t = brume(z - cam.z);
-      for (const s of [-1, 1]) pave(s < 0 ? -4.1 : 3.7, s < 0 ? -3.7 : 4.1, 0, 0.7, z, z2, MUR, false);
-      for (let l = 0; l < 3; l++) {
-        const x = lx(l);
-        poly([proj(x - 1.05, 0, z), proj(x + 1.05, 0, z), proj(x + 1.05, 0, z2), proj(x - 1.05, 0, z2)], teinte(BALLAST, t));
-      }
-    }
-    const pasT = 1.6;
-    for (let z = Math.ceil(z0 / pasT) * pasT; z < cam.z + 75; z += pasT) {
-      const t = brume(z - cam.z),
-        c = teinte(TRAVERSE, t);
-      for (let l = 0; l < 3; l++) {
-        const x = lx(l);
-        poly([proj(x - 0.9, 0.03, z), proj(x + 0.9, 0.03, z), proj(x + 0.9, 0.03, z + 0.42), proj(x - 0.9, 0.03, z + 0.42)], c);
-      }
-    }
-    for (let z = z0; z < zf; z += 15) {
-      const z2 = Math.min(zf, z + 15),
-        c = teinte(RAIL, brume(z - cam.z));
-      for (let l = 0; l < 3; l++)
-        for (const s of [-0.55, 0.55]) {
-          const x = lx(l) + s;
-          poly([proj(x - 0.06, 0.12, z), proj(x + 0.06, 0.12, z), proj(x + 0.06, 0.12, z2), proj(x - 0.06, 0.12, z2)], c);
-        }
+  }
+
+  // immeubles, conteneurs, grues, palmiers, arbres et lampadaires, du plus loin au plus proche
+  function dessinerDecor() {
+    const n = cam.z + PRES,
+      loin = cam.z + (DETAIL ? VUE : 110),
+      vis = decor.filter(b => b.z0 < loin && b.z1 > n && (DETAIL || b.k == 'immeuble' || b.k == 'conteneur' || b.z0 < cam.z + 60)).sort((a, b) => b.z0 - a.z0);
+    const fen = [92, 112, 150],
+      lumineux = [255, 214, 120];
+    for (const b of vis) {
+      if (b.k == 'immeuble')
+        pave(b.x0, b.x1, 0, b.h, b.z0, b.z1, b.c, true, (t, z0, coupe) => {
+          if (z0 - cam.z > (DETAIL > 1 ? 85 : DETAIL ? 45 : 0)) return;
+          const allume = PAL.nuit > 0.6,
+            cf = allume ? lumineux : mixer(b.c, fen, 0.45);
+          for (let y = 1.6; y < b.h - 0.8; y += 2.2) {
+            bandeCotes(b.x0, b.x1, y, y + 0.8, z0 + 0.6, b.z1 - 0.6, cf, t, allume);
+            if (!coupe) poly(quadZ(b.x0 + 0.6, b.x1 - 0.6, y, y + 0.8, z0), teinte(allume ? lumineux : mixer(b.c, fen, 0.4), t, 1, allume));
+          }
+          if (b.res && cam.y < b.h + 30) {
+            // réservoir d'eau sur le toit
+            const xm = (b.x0 + b.x1) / 2,
+              zm = (z0 + b.z1) / 2;
+            pave(xm - 0.12, xm + 0.12, b.h, b.h + 1.2, zm - 0.12, zm + 0.12, [90, 70, 60]);
+            pave(xm - 0.9, xm + 0.9, b.h + 1.2, b.h + 2.8, zm - 0.9, zm + 0.9, [150, 110, 80]);
+          }
+        });
+      else if (b.k == 'conteneur')
+        pave(b.x0, b.x1, b.y0, b.h, b.z0, b.z1, b.c, true, (t, z0, coupe) => {
+          if (z0 - cam.z > 70) return;
+          const f = mixer(b.c, [0, 0, 0], 0.25);
+          for (let y = b.y0 + 0.5; y < b.h - 0.3; y += 0.7) bandeCotes(b.x0, b.x1, y, y + 0.12, z0, b.z1, f, t);
+          if (!coupe) for (const x of [0.3, 0.75]) poly(quadZ(b.x0 + (b.x1 - b.x0) * x - 0.05, b.x0 + (b.x1 - b.x0) * x + 0.05, b.y0 + 0.2, b.h - 0.2, z0), teinte(f, t));
+        });
+      else if (b.k == 'grue') {
+        const c = [245, 190, 40],
+          x = b.x,
+          z = b.z;
+        for (const dz of [0, 3]) pave(x - 0.3, x + 0.3, 0, b.h, z + dz, z + dz + 0.5, c);
+        pave(Math.min(x, x - b.s * 14), Math.max(x, x - b.s * 14), b.h, b.h + 0.9, z, z + 3.5, c);
+        pave(Math.min(x, x + b.s * 5), Math.max(x, x + b.s * 5), b.h + 0.9, b.h + 1.4, z + 1.2, z + 2.3, [90, 90, 100]);
+      } else accessoire(b);
     }
   }
 
-  const mixer = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  // palmiers, arbres et lampadaires : dessinés à plat à partir de leur pied et de leur sommet projetés
+  function accessoire(b) {
+    const p = proj(b.x, 0, b.z),
+      q = proj(b.x + (b.k == 'palmier' ? b.s * 0.7 : 0), b.h, b.z);
+    if (p.d < PRES) return;
+    const s = F / p.d,
+      t = brume(p.d);
+    ctx.lineCap = 'round';
+    if (b.k == 'palmier') {
+      ctx.strokeStyle = teinte([150, 110, 70], t);
+      ctx.lineWidth = 0.32 * s;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.quadraticCurveTo(p.x + (q.x - p.x) * 0.2, (p.y + q.y) / 2, q.x, q.y);
+      ctx.stroke();
+      ctx.fillStyle = teinte([60, 160, 90], t);
+      const np = DETAIL > 1 ? 7 : 4;
+      for (let i = 0; i < np; i++) {
+        const a = -Math.PI / 2 + (i - (np - 1) / 2) * (3.3 / np) + Math.sin(S.t * 1.5 + b.z) * 0.05,
+          L = 2.1 * s;
+        ctx.beginPath();
+        ctx.moveTo(q.x, q.y);
+        ctx.quadraticCurveTo(q.x + Math.cos(a) * L * 0.6, q.y + Math.sin(a) * L * 0.6 - 0.4 * s, q.x + Math.cos(a) * L, q.y + Math.sin(a) * L * 0.5 + 0.8 * s);
+        ctx.quadraticCurveTo(q.x + Math.cos(a) * L * 0.5, q.y + Math.sin(a) * L * 0.4, q.x, q.y);
+        ctx.fill();
+      }
+    } else if (b.k == 'arbre') {
+      ctx.strokeStyle = teinte([110, 80, 60], t);
+      ctx.lineWidth = 0.3 * s;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(q.x, q.y);
+      ctx.stroke();
+      const vert = b.c < 0.5 ? [52, 120, 82] : [70, 140, 90];
+      ctx.fillStyle = teinte(vert, t);
+      for (const [dx, dy, rr] of [[0, -0.3, 1.3], [-0.7, 0.3, 0.9], [0.7, 0.2, 1]]) {
+        ctx.beginPath();
+        ctx.arc(q.x + dx * s, q.y + dy * s, rr * s, 0, 7);
+        ctx.fill();
+      }
+    } else if (b.k == 'lampadaire') {
+      ctx.strokeStyle = teinte([70, 76, 96], t);
+      ctx.lineWidth = 0.14 * s;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(q.x, q.y);
+      ctx.lineTo(q.x - b.s * 0.7 * s, q.y);
+      ctx.stroke();
+      const lx2 = q.x - b.s * 0.7 * s;
+      if (PAL.nuit > 0.4 && DETAIL > 1) {
+        const g = ctx.createRadialGradient(lx2, q.y, 0, lx2, q.y, 2.2 * s);
+        g.addColorStop(0, 'rgba(255,220,140,.55)');
+        g.addColorStop(1, 'rgba(255,220,140,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(lx2, q.y, 2.2 * s, 0, 7);
+        ctx.fill();
+      }
+      ctx.fillStyle = PAL.nuit > 0.4 ? '#ffe9a8' : teinte([230, 230, 220], t);
+      ctx.beginPath();
+      ctx.ellipse(lx2, q.y + 0.08 * s, 0.25 * s, 0.12 * s, 0, 0, 7);
+      ctx.fill();
+    }
+  }
+
+  // murs, voies, traverses, rails ; fresques colorées sur les murs
+  function dessinerVoies() {
+    const z0 = cam.z + PRES,
+      zf = cam.z + VUE;
+    for (let z = Math.floor(z0 / 15) * 15; z < zf; z += 15) {
+      const za = Math.max(z, z0),
+        z2 = Math.min(zf, z + 15),
+        t = brume(za - cam.z);
+      for (const s of [-1, 1]) {
+        pave(s < 0 ? -4.1 : 3.7, s < 0 ? -3.7 : 4.1, 0, 0.7, za, z2, PAL.mur, false);
+        // fresque sur la face intérieure, une tranche sur trois environ
+        const h = Math.abs(Math.sin(z * 12.9898 + s * 78.233) * 43758.5453) % 1;
+        if (DETAIL > 1 && h < 0.4 && z2 - za > 6) {
+          const xf = s < 0 ? -3.69 : 3.69,
+            c1 = TRAINS[Math.floor(h * 100) % TRAINS.length],
+            c2 = TRAINS[Math.floor(h * 1000) % TRAINS.length];
+          poly(quadX(xf, 0.08, 0.62, za + 1, z2 - 1), teinte(c1, t));
+          poly(quadX(xf, 0.18, 0.45, za + 3, z2 - 4), teinte(c2, t));
+        }
+      }
+      for (let l = 0; l < 3; l++) {
+        const x = lx(l);
+        poly(quadY(x - 1.05, x + 1.05, 0, za, z2), teinte(PAL.ballast, t));
+      }
+    }
+    const pasT = 1.6;
+    for (let z = Math.ceil(z0 / pasT) * pasT; z < cam.z + (DETAIL ? 75 : 50); z += pasT) {
+      const c = teinte(TRAVERSE, brume(z - cam.z));
+      for (let l = 0; l < 3; l++) poly(quadY(lx(l) - 0.9, lx(l) + 0.9, 0.03, z, z + 0.42), c);
+    }
+    for (let z = z0; z < zf; z += 15) {
+      const z2 = Math.min(zf, z + 15),
+        c = teinte(RAIL, brume(z - cam.z), 1);
+      for (let l = 0; l < 3; l++) for (const s of [-0.55, 0.55]) poly(quadY(lx(l) + s - 0.06, lx(l) + s + 0.06, 0.12, z, z2), c);
+    }
+  }
 
   // éléments du parcours triés de l'arrière vers l'avant ; les wagons sont découpés en morceaux
   // pour que l'ordre de dessin reste juste à côté des autres obstacles
@@ -666,32 +1336,44 @@
     const L = [],
       n = cam.z + PRES,
       f = cam.z + VUE;
-    // un morceau de wagon ou une rampe sous les pieds du coureur se dessine avant lui, pas par-dessus
+    // un morceau de wagon, une rampe ou une caisse sous les pieds du coureur se dessine avant lui
     const dessous = (o, a, b, haut) => Math.abs(P.x - lx(o.l)) < DEMI + LARG && a <= P.z + 0.3 && b >= P.z - 0.3 && P.y >= haut - 0.1;
     const cle = (o, a, b, haut) => (dessous(o, a, b, haut) ? P.z : Math.max(a, n));
     for (const o of objs) {
-      if (o.casse || o.z1 <= n || o.z0 >= f) continue;
-      if (o.t != 'train') {
-        L.push({ k: o.z0, l: Math.abs(lx(o.l) - cam.x), f: () => barriere(o) });
-        continue;
-      }
-      let z = o.z0;
-      if (o.ramp) {
-        const hr = (H_TRAIN * Math.min(RAMPE, Math.max(0, P.z - o.z0))) / RAMPE;
-        L.push({ k: cle(o, z, z + RAMPE, hr), l: Math.abs(lx(o.l) - cam.x), f: () => rampe(o) });
-        z += RAMPE;
-      }
-      for (let i = 0; z < o.z1; i++, z += 5) {
-        const a = z,
-          b = Math.min(o.z1, z + 5),
-          premier = i == 0;
-        if (b <= n || a >= f) continue;
-        L.push({ k: cle(o, a, b, H_TRAIN), l: Math.abs(lx(o.l) - cam.x), f: () => wagon(o, a, b, premier) });
+      if (o.casse || o.z1 <= n || o.z0 >= f - 4) continue;
+      const lat = Math.abs(centre(o) - cam.x);
+      if (o.t == 'pad') L.push({ k: o.z1 + 1000, l: lat, f: () => accelerateur(o) });
+      else if (o.t == 'arrivee') L.push({ k: o.z0, l: 0, f: () => arrivee(o) });
+      else if (o.t == 'drone') L.push({ k: o.z0, l: lat, f: () => drone(o) });
+      else if (o.t == 'caisse') L.push({ k: cle(o, o.z0, o.z1, o.y0 + H_CAISSE), l: lat, f: () => caisse(o) });
+      else if (o.t != 'train') L.push({ k: o.z0, l: lat, f: () => barriere(o) });
+      else {
+        let z = o.z0;
+        if (o.ramp) {
+          const hr = (H_TRAIN * Math.min(RAMPE, Math.max(0, P.z - o.z0))) / RAMPE;
+          L.push({ k: cle(o, z, z + RAMPE, hr), l: lat, f: () => rampe(o) });
+          z += RAMPE;
+        }
+        for (let i = 0; z < o.z1; i++, z += 5) {
+          const a = z,
+            b = Math.min(o.z1, z + 5),
+            premier = i == 0;
+          if (b <= n || a >= f) continue;
+          L.push({ k: cle(o, a, b, H_TRAIN), l: lat, f: () => wagon(o, a, b, premier) });
+        }
       }
     }
+    // portiques de caténaires tous les 32 m, passerelles
+    const pc = DETAIL > 1 ? 32 : 64;
+    for (let z = Math.ceil(n / pc) * pc; z < (DETAIL ? f : cam.z + 90); z += pc) L.push({ k: z, l: 9, f: () => catenaire(z) });
+    for (const p of ponts) if (p.z1 > n && p.z0 < f) L.push({ k: Math.max(p.z0, n), l: 0, f: () => passerelle(p) });
     for (const c of pieces) if (!c.pris && c.z > n && c.z < f) L.push({ k: c.z, l: 0, f: () => dessinPiece(c) });
     for (const b of bonus) if (!b.pris && b.z > n && b.z < f) L.push({ k: b.z, l: 0, f: () => dessinBonus(b) });
     L.push({ k: P.z - 0.3, l: 0, f: dessinCoureur });
+    if (S.poursuite > 0.02 && !S.demo) {
+      const zc = P.z - 2.7 - (1 - S.poursuite) * 5;
+      if (zc > n) L.push({ k: zc - 0.3, l: 0, f: () => poursuivant(zc) });
+    }
     L.sort((a, b) => b.k - a.k || b.l - a.l);
     for (const e of L) e.f();
     for (const q of parts) {
@@ -712,22 +1394,27 @@
       x0 = x - DEMI,
       x1 = x + DEMI;
     pave(x0, x1, 0, H_TRAIN, a, b, c, premier, (t, z0, coupe) => {
+      const vitres = PAL.nuit > 0.6 ? [255, 226, 150] : [44, 54, 78];
       bandeCotes(x0, x1, 0, 0.35, z0, b, [60, 66, 84], t);
-      bandeCotes(x0, x1, 1.25, 1.85, z0 + 0.5, b - 0.5, [44, 54, 78], t);
-      if (cam.y > H_TRAIN) poly([proj(x - 0.45, H_TRAIN, z0), proj(x + 0.45, H_TRAIN, z0), proj(x + 0.45, H_TRAIN, b), proj(x - 0.45, H_TRAIN, b)], teinte(c, t, 1.22));
+      bandeCotes(x0, x1, 0.5, 0.62, z0, b, [255, 255, 255], t);
+      // fenêtres séparées par les portes
+      if (DETAIL > 1 && z0 - cam.z < 70) for (let zw = Math.ceil(z0 / 2.5) * 2.5; zw < b - 0.4; zw += 2.5) bandeCotes(x0, x1, 1.25, 1.85, Math.max(z0, zw + 0.3), Math.min(b, zw + 2.1), vitres, t, PAL.nuit > 0.6);
+      else bandeCotes(x0, x1, 1.25, 1.85, z0, b, vitres, t, PAL.nuit > 0.6);
+      if (cam.y > H_TRAIN) poly(quadY(x - 0.45, x + 0.45, H_TRAIN, z0, b), teinte(c, t, 1.22));
       if (premier && !coupe) {
-        poly([proj(x - 0.72, 1.2, z0), proj(x + 0.72, 1.2, z0), proj(x + 0.62, 1.95, z0), proj(x - 0.62, 1.95, z0)], teinte([40, 52, 80], t));
-        poly([proj(x0, 0, z0), proj(x1, 0, z0), proj(x1, 0.35, z0), proj(x0, 0.35, z0)], teinte([60, 66, 84], t));
+        poly(quadZ(x - 0.72, x + 0.72, 1.2, 1.95, z0), teinte([40, 52, 80], t));
+        poly(quadZ(x0, x1, 0, 0.35, z0), teinte([60, 66, 84], t));
+        poly(quadZ(x0, x1, 0.5, 0.62, z0), teinte([255, 255, 255], t));
         for (const s of [-0.62, 0.62]) {
-          const p = proj(x + s, 0.7, z0),
+          const p = proj(x + s, 0.82, z0),
             rr = (0.14 * F) / p.d;
-          if (o.vit) {
+          if (o.vit || PAL.nuit > 0.5) {
             ctx.fillStyle = 'rgba(255,240,170,.35)';
             ctx.beginPath();
             ctx.arc(p.x, p.y, rr * 2.6, 0, 7);
             ctx.fill();
           }
-          ctx.fillStyle = o.vit ? '#fff6c8' : teinte([255, 236, 190], t);
+          ctx.fillStyle = o.vit || PAL.nuit > 0.5 ? '#fff6c8' : teinte([255, 236, 190], t);
           ctx.beginPath();
           ctx.arc(p.x, p.y, rr, 0, 7);
           ctx.fill();
@@ -751,14 +1438,13 @@
     if (cam.x < x0) poly([proj(x0, 0, a), proj(x0, 0, b), proj(x0, H_TRAIN, b), proj(x0, ha, a)], teinte(c, t, 0.78));
     if (cam.x > x1) poly([proj(x1, 0, a), proj(x1, 0, b), proj(x1, H_TRAIN, b), proj(x1, ha, a)], teinte(c, t, 0.78));
     poly([proj(x0, ha, a), proj(x1, ha, a), proj(x1, H_TRAIN, b), proj(x0, H_TRAIN, b)], teinte(c, t, 1.05));
-    // marches
+    ctx.strokeStyle = teinte([120, 132, 156], t);
     for (let i = 1; i < 6; i++) {
       const z = o.z0 + i,
         y = (H_TRAIN * i) / RAMPE;
       if (z <= a) continue;
       const p = proj(x0 + 0.1, y, z),
         q = proj(x1 - 0.1, y, z);
-      ctx.strokeStyle = teinte([120, 132, 156], t);
       ctx.lineWidth = Math.max(1, (0.05 * F) / p.d);
       ctx.beginPath();
       ctx.moveTo(p.x, p.y);
@@ -783,9 +1469,95 @@
       for (let i = 0; i < 6; i += 2) {
         const a = x - DEMI + (i * 2 * DEMI) / 6,
           b = a + (2 * DEMI) / 6;
-        poly([proj(a, y0, zz), proj(b, y0, zz), proj(b, y1, zz), proj(a, y1, zz)], teinte(c1, t));
+        poly(quadZ(a, b, y0, y1, zz), teinte(c1, t));
       }
     });
+  }
+
+  // caisse en bois, marquée d'un point d'interrogation : s'écrase en glissant depuis un saut
+  function caisse(o) {
+    const x = lx(o.l),
+      y0 = o.y0,
+      y1 = y0 + H_CAISSE;
+    pave(x - 0.55, x + 0.55, y0, y1, o.z0, o.z1, [214, 160, 92], true, (t, zz, coupe) => {
+      const f = [150, 100, 52];
+      bandeCotes(x - 0.55, x + 0.55, y0 + 0.06, y0 + 0.14, zz, o.z1, f, t);
+      bandeCotes(x - 0.55, x + 0.55, y1 - 0.14, y1 - 0.06, zz, o.z1, f, t);
+      if (coupe) return;
+      poly(quadZ(x - 0.5, x + 0.5, y0 + 0.06, y0 + 0.14, zz), teinte(f, t));
+      poly(quadZ(x - 0.5, x + 0.5, y1 - 0.14, y1 - 0.06, zz), teinte(f, t));
+      const p = proj(x, (y0 + y1) / 2, zz);
+      ctx.fillStyle = teinte([255, 240, 200], t);
+      ctx.font = '700 ' + ((0.55 * F) / p.d).toFixed(1) + 'px "Bricolage Grotesque", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('?', p.x, p.y);
+    });
+  }
+
+  // drone à hélices, œil rouge, qui balaie deux voies
+  function drone(o) {
+    const x = droneX(o),
+      y = 1.38 + Math.sin(S.t * 6 + o.ph) * 0.04,
+      p = proj(x, y, o.z0);
+    if (p.d < PRES) return;
+    const s = F / p.d,
+      t = brume(p.d);
+    ctx.fillStyle = teinte([40, 46, 66], t);
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, 0.55 * s, 0.22 * s, 0, 0, 7);
+    ctx.fill();
+    ctx.fillStyle = teinte([70, 78, 104], t);
+    ctx.fillRect(p.x - 0.75 * s, p.y - 0.28 * s, 1.5 * s, 0.07 * s);
+    ctx.fillStyle = 'rgba(220,230,255,' + 0.5 * (1 - t) + ')';
+    for (const sx of [-0.72, 0.72]) {
+      ctx.beginPath();
+      ctx.ellipse(p.x + sx * s, p.y - 0.32 * s, 0.32 * s, 0.05 * s, 0, 0, 7);
+      ctx.fill();
+    }
+    ctx.fillStyle = Math.floor(S.t * 4) % 2 ? '#ff3b5c' : '#ff8fa3';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y + 0.02 * s, 0.1 * s, 0, 7);
+    ctx.fill();
+  }
+
+  // accélérateur : flèches lumineuses au sol
+  function accelerateur(o) {
+    if (o.pris && P.z > o.z1) return;
+    const x = lx(o.l),
+      t = brume(o.z0 - cam.z),
+      z0 = Math.max(o.z0, cam.z + PRES);
+    if (z0 >= o.z1) return;
+    poly(quadY(x - 0.85, x + 0.85, 0.06, z0, o.z1), teinte([40, 230, 200], t, 1, true));
+    const k = (S.t * 3) % 1;
+    for (let i = 0; i < 3; i++) {
+      const zc = o.z0 + 0.3 + (i + k) * 0.75;
+      if (zc < z0 || zc > o.z1 - 0.3) continue;
+      poly([proj(x - 0.6, 0.08, zc), proj(x, 0.08, zc + 0.5), proj(x + 0.6, 0.08, zc), proj(x, 0.08, zc + 0.2)], teinte([255, 255, 255], t, 1, true));
+    }
+  }
+
+  // arche d'arrivée des niveaux
+  function arrivee(o) {
+    const z = o.z0;
+    for (const s of [-1, 1]) pave(s * 3.9 - 0.2, s * 3.9 + 0.2, 0, 5, z, z + 0.4, [255, 255, 255]);
+    pave(-4.1, 4.1, 4, 5, z, z + 0.4, [255, 255, 255], true, (t, zz, coupe) => {
+      if (coupe) return;
+      for (let i = 0; i < 16; i++)
+        for (let j = 0; j < 2; j++) if ((i + j) % 2) poly(quadZ(-4.1 + (i * 8.2) / 16, -4.1 + ((i + 1) * 8.2) / 16, 4 + j * 0.5, 4.5 + j * 0.5, zz), teinte([30, 30, 40], t));
+    });
+    for (let l = 0; l < 3; l++) poly(quadY(lx(l) - 1, lx(l) + 1, 0.07, Math.max(z, cam.z + PRES), z + 0.6), teinte([255, 255, 255], brume(z - cam.z)));
+  }
+
+  function catenaire(z) {
+    const c = [120, 130, 150];
+    for (const s of [-1, 1]) pave(s * 4.45 - 0.12, s * 4.45 + 0.12, 0, 5.3, z, z + 0.24, c);
+    pave(-4.6, 4.6, 5.05, 5.3, z, z + 0.24, c);
+  }
+
+  function passerelle(p) {
+    pave(-14, 14, 5.7, 6.5, p.z0, p.z1, p.c);
+    for (const s of [-1, 1]) pave(s * 5.8 - 0.4, s * 5.8 + 0.4, 0, 5.7, p.z0 + 1.6, p.z0 + 2.4, mixer(p.c, [0, 0, 0], 0.15));
   }
 
   function dessinPiece(c) {
@@ -795,11 +1567,11 @@
     if (rr < 0.7) return;
     const w = Math.max(rr * 0.18, Math.abs(Math.cos(S.t * 4 + c.a)) * rr),
       t = brume(p.d);
-    ctx.fillStyle = teinte([230, 154, 0], t);
+    ctx.fillStyle = teinte([230, 154, 0], t, 1, true);
     ctx.beginPath();
     ctx.ellipse(p.x, p.y, w, rr, 0, 0, 7);
     ctx.fill();
-    ctx.fillStyle = teinte([255, 207, 64], t);
+    ctx.fillStyle = teinte([255, 207, 64], t, 1, true);
     ctx.beginPath();
     ctx.ellipse(p.x, p.y, w * 0.78, rr * 0.78, 0, 0, 7);
     ctx.fill();
@@ -816,7 +1588,7 @@
     ctx.beginPath();
     ctx.arc(p.x, p.y, rr * 1.35, 0, 7);
     ctx.fill();
-    ctx.fillStyle = BONUS[b.k].c;
+    ctx.fillStyle = b.k == 'lettre' ? '#ffb703' : BONUS[b.k].c;
     ctx.beginPath();
     ctx.arc(p.x, p.y, rr, 0, 7);
     ctx.fill();
@@ -846,18 +1618,28 @@
         ctx.lineTo(0.38, y);
       }
       ctx.stroke();
-    } else if (k == 'x2') {
-      ctx.font = '700 0.9px "Bricolage Grotesque", system-ui, sans-serif';
+    } else if (k == 'jetpack') {
+      ctx.fillRect(-0.4, -0.45, 0.32, 0.6);
+      ctx.fillRect(0.08, -0.45, 0.32, 0.6);
+      ctx.fillStyle = '#ffd166';
+      ctx.moveTo(-0.38, 0.22);
+      ctx.lineTo(-0.24, 0.6);
+      ctx.lineTo(-0.1, 0.22);
+      ctx.moveTo(0.1, 0.22);
+      ctx.lineTo(0.24, 0.6);
+      ctx.lineTo(0.38, 0.22);
+      ctx.fill();
+    } else if (k == 'bulle') {
+      ctx.arc(0, 0, 0.45, 0, 7);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(-0.15, -0.15, 0.1, 0, 7);
+      ctx.fill();
+    } else {
+      ctx.font = '700 ' + (k == 'x2' ? 0.9 : 1.1) + 'px "Bricolage Grotesque", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('×2', 0, 0.05);
-    } else {
-      ctx.moveTo(0, -0.5);
-      ctx.lineTo(0.42, -0.3);
-      ctx.quadraticCurveTo(0.4, 0.3, 0, 0.55);
-      ctx.quadraticCurveTo(-0.4, 0.3, -0.42, -0.3);
-      ctx.closePath();
-      ctx.fill();
+      ctx.fillText(k == 'x2' ? '×2' : motDuJour()[Math.min(D.mot.n, motDuJour().length - 1)], 0, 0.06);
     }
   }
 
@@ -873,121 +1655,249 @@
     ctx.closePath();
     ctx.fill();
   }
+  const ligne = (c, w, pts) => {
+    ctx.strokeStyle = c;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.moveTo(pts[0], pts[1]);
+    for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
+    ctx.stroke();
+  };
+  const ovale = (c, x, y, rx, ry) => {
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, 7);
+    ctx.fill();
+  };
 
-  // le coureur, vu de dos : sweat violet, sac à dos, casquette
+  // tête vue de dos, selon la coiffure du personnage
+  function tete(pr, y) {
+    ovale(pr.peau, -0.2, y + 0.03, 0.05, 0.07);
+    ovale(pr.peau, 0.2, y + 0.03, 0.05, 0.07);
+    if (pr.coiffure == 'couettes') {
+      ovale(pr.cheveux, -0.27, y + 0.08, 0.1, 0.16);
+      ovale(pr.cheveux, 0.27, y + 0.08, 0.1, 0.16);
+      ovale(pr.accessoire, -0.22, y - 0.03, 0.05, 0.04);
+      ovale(pr.accessoire, 0.22, y - 0.03, 0.05, 0.04);
+    }
+    ovale(pr.cheveux, 0, y, 0.2, 0.2);
+    ctx.fillStyle = pr.accessoire;
+    if (pr.coiffure == 'casquette') {
+      ctx.beginPath();
+      ctx.arc(0, y - 0.03, 0.21, Math.PI, 0);
+      ctx.fill();
+      ovale('#ffffff', 0, y - 0.22, 0.04, 0.03);
+    } else if (pr.coiffure == 'bonnet') {
+      ctx.beginPath();
+      ctx.arc(0, y - 0.02, 0.22, Math.PI, 0);
+      ctx.fill();
+      ovale('#ffffff', 0, y - 0.27, 0.07, 0.07);
+      arrondi(mixer3(pr.accessoire), -0.22, y - 0.06, 0.44, 0.07, 0.03);
+    } else if (pr.coiffure == 'crete') ovale(pr.cheveux, 0, y - 0.2, 0.06, 0.16);
+    else if (pr.coiffure == 'chignon') {
+      ovale(pr.cheveux, 0, y - 0.22, 0.11, 0.1);
+      arrondi(pr.accessoire, -0.09, y - 0.15, 0.18, 0.04, 0.02);
+    }
+  }
+  const mixer3 = hex => {
+    const n = parseInt(hex.slice(1), 16);
+    return 'rgb(' + (((n >> 16) & 255) * 0.8) + ',' + (((n >> 8) & 255) * 0.8) + ',' + ((n & 255) * 0.8) + ')';
+  };
+
+  // le coureur, vu de dos ; sur sa planche, avec son jetpack, dans sa bulle
   function dessinCoureur() {
     const p = proj(P.x, P.y, P.z);
     if (p.d < PRES) return;
     const s = F / p.d,
       o = proj(P.x, P.gy, P.z),
-      ht = P.y - P.gy;
-    ctx.fillStyle = 'rgba(30,40,70,' + 0.22 * Math.max(0.3, 1 - ht / 3) + ')';
+      ht = P.y - P.gy,
+      pr = PERSOS.find(x => x.id == D.perso) || PERSOS[0],
+      pl = PLANCHES.find(x => x.id == D.planche) || PLANCHES[0],
+      surPlanche = S.planche > 0 && !S.bonus.jetpack;
+    ctx.fillStyle = 'rgba(20,28,50,' + 0.22 * Math.max(0.25, 1 - ht / 4) + ')';
     ctx.beginPath();
-    ctx.ellipse(o.x, o.y, 0.5 * s * (1 - Math.min(0.4, ht / 6)), 0.15 * s, 0, 0, 7);
+    ctx.ellipse(o.x, o.y, 0.5 * s * (1 - Math.min(0.5, ht / 10)), 0.15 * s, 0, 0, 7);
     ctx.fill();
+    if (surPlanche) {
+      // planche en perspective sous les pieds, avec une lueur de flottement
+      const y = P.y + 0.12;
+      const g = proj(P.x, P.y + 0.02, P.z);
+      ctx.fillStyle = pl.lueur + '55';
+      ctx.beginPath();
+      ctx.ellipse(g.x, g.y, 0.5 * s, 0.14 * s, 0, 0, 7);
+      ctx.fill();
+      poly([proj(P.x - 0.4, y, P.z - 0.85), proj(P.x + 0.4, y, P.z - 0.85), proj(P.x + 0.34, y, P.z + 1), proj(P.x, y, P.z + 1.15), proj(P.x - 0.34, y, P.z + 1)], pl.c1);
+      poly([proj(P.x - 0.11, y + 0.01, P.z - 0.75), proj(P.x + 0.11, y + 0.01, P.z - 0.75), proj(P.x + 0.11, y + 0.01, P.z + 0.95), proj(P.x - 0.11, y + 0.01, P.z + 0.95)], pl.c2);
+      poly(quadZ(P.x - 0.4, P.x + 0.4, y - 0.1, y, P.z - 0.85), mixer3(pl.c1));
+    }
     ctx.save();
     if (S.invu > 0 && Math.floor(S.t * 16) % 2) ctx.globalAlpha = 0.45;
     ctx.translate(p.x, p.y);
     ctx.scale(s, s);
-    ctx.rotate((lx(P.voie) - P.x) * -0.1 + (S.mode == 'fin' ? P.chute * 1.25 : 0));
+    ctx.rotate((lx(P.voie) - P.x) * -0.1 + (S.mode == 'fin' && S.raison == 'choc' ? P.chute * 1.25 : 0));
     ctx.lineCap = ctx.lineJoin = 'round';
     const ph = P.course * 0.55,
-      sw = S.mode == 'fin' ? 0 : Math.sin(ph),
+      sw = S.mode == 'fin' && S.raison == 'choc' ? 0 : surPlanche ? 0 : Math.sin(ph),
       air = !P.sol,
-      chaussure = S.bonus.saut ? '#06d6a0' : '#ffffff',
-      sweat = '#7c5cff',
-      pantalon = '#2c3e6e';
-    const ligne = (c, w, pts) => {
-      ctx.strokeStyle = c;
-      ctx.lineWidth = w;
-      ctx.beginPath();
-      ctx.moveTo(pts[0], pts[1]);
-      for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
-      ctx.stroke();
-    };
-    const ovale = (c, x, y, rx, ry) => {
-      ctx.fillStyle = c;
-      ctx.beginPath();
-      ctx.ellipse(x, y, rx, ry, 0, 0, 7);
-      ctx.fill();
-    };
+      jet = !!S.bonus.jetpack,
+      chaussure = S.bonus.saut ? '#06d6a0' : '#ffffff';
+    if (surPlanche) ctx.translate(0, -0.18);
     if (P.glisse > 0 && P.sol) {
       // glissade : tout le corps ramassé près du sol
-      ligne(pantalon, 0.17, [-0.2, -0.3, -0.26, -0.06]);
-      ligne(pantalon, 0.17, [0.2, -0.3, 0.26, -0.06]);
+      ligne(pr.pantalon, 0.17, [-0.2, -0.3, -0.26, -0.06]);
+      ligne(pr.pantalon, 0.17, [0.2, -0.3, 0.26, -0.06]);
       ovale(chaussure, -0.27, -0.04, 0.11, 0.06);
       ovale(chaussure, 0.27, -0.04, 0.11, 0.06);
-      ovale(sweat, 0, -0.42, 0.42, 0.3);
-      ovale('#ff8fab', 0, -0.45, 0.25, 0.18);
-      ovale('#4a3426', 0, -0.72, 0.19, 0.17);
-      ctx.fillStyle = '#ff6b6b';
-      ctx.beginPath();
-      ctx.arc(0, -0.74, 0.2, Math.PI, 0);
-      ctx.fill();
+      ovale(pr.sweat, 0, -0.42, 0.42, 0.3);
+      ovale(pr.sac, 0, -0.45, 0.25, 0.18);
+      tete(pr, -0.72);
     } else {
-      ctx.translate(0, air ? 0 : -Math.abs(sw) * 0.05); // petit rebond de la course
-      // jambes
-      const pied = v => (air ? 0.38 : 0.04 + 0.34 * Math.max(0, v));
-      ligne(pantalon, 0.18, [-0.14, -0.78, -0.16, -0.4 - pied(sw) * 0.4, -0.17, -0.06 - pied(sw)]);
-      ligne(pantalon, 0.18, [0.14, -0.78, 0.16, -0.4 - pied(-sw) * 0.4, 0.17, -0.06 - pied(-sw)]);
-      ovale(chaussure, -0.17, -0.04 - pied(sw), 0.11, 0.07);
-      ovale(chaussure, 0.17, -0.04 - pied(-sw), 0.11, 0.07);
-      // bras
-      const main = v => (air ? -1.55 : -0.86 + 0.14 * v);
-      ligne('#6a4be8', 0.15, [-0.28, -1.2, -0.4, -1.0, -0.38, main(-sw)]);
-      ligne('#6a4be8', 0.15, [0.28, -1.2, 0.4, -1.0, 0.38, main(sw)]);
-      // torse et sac à dos
-      arrondi(sweat, -0.3, -1.34, 0.6, 0.62, 0.16);
-      arrondi('#ff8fab', -0.2, -1.26, 0.4, 0.4, 0.1);
-      arrondi('#ffd1dc', -0.12, -1.04, 0.24, 0.1, 0.04);
-      // tête et casquette
-      ovale('#f2c6a0', -0.2, -1.47, 0.05, 0.07);
-      ovale('#f2c6a0', 0.2, -1.47, 0.05, 0.07);
-      ovale('#4a3426', 0, -1.5, 0.2, 0.2);
-      ctx.fillStyle = '#ff6b6b';
-      ctx.beginPath();
-      ctx.arc(0, -1.53, 0.21, Math.PI, 0);
-      ctx.fill();
-      ovale('#ffffff', 0, -1.72, 0.04, 0.03);
+      ctx.translate(0, air || surPlanche ? 0 : -Math.abs(sw) * 0.05); // petit rebond de la course
+      const pied = v => (jet ? 0.25 : air ? 0.38 : 0.04 + 0.34 * Math.max(0, v));
+      const ec = surPlanche ? 0.24 : 0.17;
+      ligne(pr.pantalon, 0.18, [-0.14, -0.78, -0.16, -0.4 - pied(sw) * 0.4, -ec, -0.06 - pied(sw)]);
+      ligne(pr.pantalon, 0.18, [0.14, -0.78, 0.16, -0.4 - pied(-sw) * 0.4, ec, -0.06 - pied(-sw)]);
+      ovale(chaussure, -ec, -0.04 - pied(sw), 0.11, 0.07);
+      ovale(chaussure, ec, -0.04 - pied(-sw), 0.11, 0.07);
+      const main = v => (jet ? -1.0 : air ? -1.55 : surPlanche ? -1.05 : -0.86 + 0.14 * v),
+        ecart = surPlanche ? 0.62 : 0.38;
+      ligne(pr.bras, 0.15, [-0.28, -1.2, -0.4, -1.0, -ecart, main(-sw)]);
+      ligne(pr.bras, 0.15, [0.28, -1.2, 0.4, -1.0, ecart, main(sw)]);
+      arrondi(pr.sweat, -0.3, -1.34, 0.6, 0.62, 0.16);
+      if (jet) {
+        // jetpack à deux réservoirs, flammes vacillantes
+        for (const x of [-0.22, 0.04]) arrondi('#9aa3b8', x, -1.3, 0.18, 0.5, 0.08);
+        const fl = 0.3 + Math.random() * 0.2;
+        ctx.fillStyle = '#ffb703';
+        for (const x of [-0.13, 0.13]) {
+          ctx.beginPath();
+          ctx.moveTo(x - 0.08, -0.8);
+          ctx.lineTo(x, -0.8 + fl);
+          ctx.lineTo(x + 0.08, -0.8);
+          ctx.fill();
+        }
+      } else {
+        arrondi(pr.sac, -0.2, -1.26, 0.4, 0.4, 0.1);
+        arrondi('rgba(255,255,255,.45)', -0.12, -1.04, 0.24, 0.1, 0.04);
+      }
+      tete(pr, -1.5);
     }
     ctx.restore();
-    if (S.bonus.bouclier) {
-      ctx.fillStyle = 'rgba(76,201,240,.16)';
-      ctx.strokeStyle = 'rgba(76,201,240,.75)';
+    if (S.bonus.bulle) {
+      ctx.fillStyle = 'rgba(255,112,166,.18)';
+      ctx.strokeStyle = 'rgba(255,112,166,.8)';
       ctx.lineWidth = Math.max(1.5, 0.05 * s);
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y - 0.8 * s, 0.75 * s, 1.0 * s, 0, 0, 7);
+      ctx.ellipse(p.x, p.y - 0.8 * s, 0.78 * s, 1.02 * s, 0, 0, 7);
       ctx.fill();
+      ctx.stroke();
+      ovale('rgba(255,255,255,.6)', p.x - 0.35 * s, p.y - 1.35 * s, 0.12 * s, 0.08 * s);
+    }
+  }
+
+  // le poursuivant (un agent en gilet orange) et son chien robot, derrière le coureur
+  function poursuivant(zc) {
+    // décalé vers le centre des voies pour ne pas masquer le coureur
+    const x = P.x + (P.x > 0.5 ? -1 : 1) * 1.05,
+      p = proj(x, 0, zc);
+    if (p.d < PRES) return;
+    const s = F / p.d,
+      sw = Math.sin(S.t * 14);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(s, s);
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ligne('#25304d', 0.19, [-0.14, -0.78, -0.17, -0.06 - Math.max(0, sw) * 0.3]);
+    ligne('#25304d', 0.19, [0.14, -0.78, 0.17, -0.06 - Math.max(0, -sw) * 0.3]);
+    ligne('#25304d', 0.16, [-0.3, -1.2, -0.45, -0.95 - sw * 0.15]);
+    ligne('#25304d', 0.16, [0.3, -1.2, 0.45, -0.95 + sw * 0.15]);
+    arrondi('#ff8c2e', -0.32, -1.36, 0.64, 0.64, 0.14);
+    arrondi('#e8eaf0', -0.32, -1.08, 0.64, 0.07, 0.02);
+    ovale('#3b2a20', 0, -1.52, 0.2, 0.2);
+    ctx.fillStyle = '#25304d';
+    ctx.beginPath();
+    ctx.arc(0, -1.55, 0.22, Math.PI, 0);
+    ctx.fill();
+    // chien robot, de l'autre côté
+    ctx.translate((P.x > 0.5 ? -1 : 1) * -2.1, 0);
+    arrondi('#c9d1e3', -0.28, -0.62, 0.56, 0.32, 0.12);
+    arrondi('#c9d1e3', -0.15, -0.86, 0.3, 0.26, 0.1);
+    for (const x of [-0.2, 0.2]) ligne('#7a849c', 0.08, [x, -0.32, x, -0.04 - (x > 0 ? Math.max(0, sw) : Math.max(0, -sw)) * 0.15]);
+    ligne('#7a849c', 0.04, [0, -0.86, 0, -1.02]);
+    ovale(Math.floor(S.t * 6) % 2 ? '#4cc9f0' : '#bde8ff', 0, -1.05, 0.05, 0.05);
+    ctx.restore();
+  }
+
+  // traits de vitesse pendant le turbo et le jetpack
+  function vitesseTraits() {
+    const k = S.turbo > 0 ? 1 : S.bonus.jetpack ? 0.6 : 0;
+    if (!k || reduit) return;
+    ctx.strokeStyle = 'rgba(255,255,255,' + 0.35 * k + ')';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * 6.28 + ((S.t * 7) % 1) * 0.3,
+        r0 = Math.min(W, H) * (0.35 + ((S.t * 3 + i * 0.37) % 1) * 0.4);
+      ctx.beginPath();
+      ctx.moveTo(CX + Math.cos(a) * r0, HORIZON + Math.sin(a) * r0);
+      ctx.lineTo(CX + Math.cos(a) * (r0 + 60), HORIZON + Math.sin(a) * (r0 + 60));
       ctx.stroke();
     }
   }
 
   function dessiner() {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    // champ de vision un peu plus large à grande vitesse
+    F = F0 * (1 - Math.min(0.12, Math.max(0, S.v - 15) * 0.003) - (S.turbo > 0 ? 0.05 : 0));
+    HORIZON = CY - F * Math.tan(0.2);
     if (S.secousse > 0 && !reduit) {
       const a = S.secousse * 14;
       ctx.translate((Math.random() - 0.5) * a, (Math.random() - 0.5) * a);
     }
+    majPalette();
+    ciel();
     dessinerDecor();
+    dessinerVoies();
     dessinerParcours();
+    vitesseTraits();
   }
 
   // ---------- Interface ----------
   const $ = id => document.getElementById(id);
   const reduit = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fmt = n => Math.floor(n).toLocaleString('fr-FR');
-  const ECRANS = ['menu', 'aide', 'boutique', 'pause', 'fin'];
-  let ecranActuel = 'menu',
-    retourVers = 'menu';
+  const secondes = d => d.toLocaleString('fr-FR') + ' s';
+  const ECRANS = ['menu', 'aide', 'boutique', 'missions', 'niveaux', 'defi', 'pause', 'continuer', 'fin'];
+  let ecranActuel = 'menu';
 
   function ecran(id) {
     ecranActuel = id;
     for (const e of ECRANS) $(e).hidden = e != id;
-    $('hud').hidden = !(S.mode == 'jeu' || S.mode == 'fin') || id == 'menu' || id == 'aide' || id == 'boutique';
+    $('hud').hidden = !(S.mode == 'jeu' || S.mode == 'fin' || S.mode == 'continuer' || S.mode == 'pause') || ['menu', 'aide', 'boutique', 'missions', 'niveaux', 'defi'].includes(id);
     if (id) {
-      const b = $(id).querySelector('.btn:not(:disabled)');
+      const b = [...$(id).querySelectorAll('.btn:not(:disabled)')].find(x => !x.hidden);
       if (b) b.focus({ preventScroll: true });
     }
+  }
+
+  function menu() {
+    abandonner();
+    S.mode = 'menu';
+    musique(false);
+    nouveauMonde(true);
+    afficherMenu();
+  }
+  // retour au menu depuis un écran secondaire : le décor continue de défiler
+  function afficherMenu() {
+    majJour();
+    $('m-record').textContent = fmt(D.record);
+    $('m-pieces').textContent = fmt(D.pieces);
+    $('m-cles').textContent = fmt(D.cles);
+    $('m-multi').textContent = '×' + (D.multi + 1);
+    const nf = D.missions.filter(m => m.fait).length;
+    $('b-missions').querySelector('small').textContent = nf + ' / 3';
+    $('b-niveaux').querySelector('small').textContent = '★ ' + D.niveaux.reduce((s, x) => s + (x || 0), 0) + ' / ' + NIVEAUX.length * 3;
+    $('b-defi').querySelector('small').textContent = D.defi.meilleur ? 'meilleur : ' + fmt(D.defi.meilleur) : '60 secondes';
+    ecran('menu');
   }
 
   // course abandonnée (Recommencer ou Menu pendant la pause) : les pièces ramassées sont gardées
@@ -998,27 +1908,29 @@
     }
   }
 
-  function menu() {
+  function demarrer(type = 'libre', niveau = -1) {
     abandonner();
-    S.mode = 'menu';
-    nouveauMonde(true);
-    $('m-record').textContent = fmt(D.record);
-    $('m-pieces').textContent = fmt(D.pieces);
-    ecran('menu');
-  }
-
-  function demarrer() {
-    abandonner();
-    nouveauMonde(false);
+    majJour();
+    tutoT = -1;
+    nouveauMonde(false, type, niveau);
     S.mode = 'jeu';
     hudCache = {};
     ecran(null);
     $('hud').hidden = false;
+    $('h-prog').hidden = type != 'niveau';
+    $('h-temps').hidden = type != 'defi';
+    if (type == 'niveau') message(QUARTIERS[S.q].nom + ' · niveau ' + ((niveau % 3) + 1), 'quartier');
+    else if (type == 'defi') message('Défi du jour : 60 secondes !', 'quartier');
+    else message(QUARTIERS[S.qVu].nom, 'quartier');
+    musique(true);
   }
+  const rejouer = () => demarrer(S.type, S.niveau);
 
   function pause() {
     if (S.mode != 'jeu') return;
     S.mode = 'pause';
+    musique(false);
+    $('p-missions').innerHTML = listeMissions();
     ecran('pause');
   }
   function reprendre() {
@@ -1027,70 +1939,220 @@
     derniere = 0;
     ecran(null);
     $('hud').hidden = false;
+    musique(true);
+  }
+
+  function afficherContinuer(cout) {
+    $('c-cout').textContent = cout;
+    $('c-cles').textContent = fmt(D.cles);
+    $('b-continuer').innerHTML = 'Utiliser ' + cout + ' clé' + (cout > 1 ? 's' : '') + ' <span aria-hidden="true">🔑</span>';
+    ecran('continuer');
+  }
+  function majContinuer() {
+    $('c-barre').style.width = Math.max(0, (S.compte / 5) * 100) + '%';
   }
 
   function afficherFin() {
+    const v = S.raison == 'victoire',
+      tps = S.raison == 'temps';
+    $('t-fin').textContent = v ? 'Niveau terminé !' : tps ? 'Temps écoulé !' : S.type == 'niveau' ? 'Niveau raté' : 'Fin de la course';
     $('f-score').textContent = fmt(S.score);
     $('f-record').hidden = !S.nouveau;
+    $('f-etoiles').hidden = !v;
+    if (v) $('f-etoiles').innerHTML = [0, 1, 2].map(i => '<span class="' + (i < S.etoiles ? 'on' : '') + '">★</span>').join('') + '<small>Arrivée · ' + NIVEAUX[S.niveau].pieces + ' pièces · sans trébucher</small>';
     $('f-dist').textContent = fmt(S.dist) + ' m';
     $('f-pieces').textContent = fmt(S.pieces);
+    $('f-recompense').hidden = !S.recompense;
+    $('f-recompense').textContent = S.recompense;
+    $('f-missions').innerHTML = S.missionsFaites.map(t => '<li>✓ ' + t + '</li>').join('');
+    $('f-missions').hidden = !S.missionsFaites.length;
+    const suivant = S.type == 'niveau' && v && S.niveau + 1 < NIVEAUX.length;
+    $('b-suivant').hidden = !suivant;
+    $('b-rejouer').textContent = S.type == 'niveau' ? 'Recommencer le niveau' : 'Rejouer';
     ecran('fin');
+    if (suivant) $('b-suivant').focus({ preventScroll: true });
   }
 
-  function boutique() {
-    $('s-pieces').textContent = fmt(D.pieces);
-    $('amelio').innerHTML = ['aimant', 'saut', 'x2']
-      .map(k => {
-        const n = D.niv[k],
-          prix = COUT[n],
-          max = n >= 4;
-        return (
-          '<div class="amelio" style="--c:' + BONUS[k].c + '"><span class="bic" aria-hidden="true">' + { aimant: 'U', saut: '⇈', x2: '×2' }[k] + '</span><div><b>' + BONUS[k].nom + '</b><small>Durée : ' + secondes(dureeBonus(k)) + (max ? ' (maximum)' : ' → ' + secondes(dureeBonus(k, n + 1))) + '</small><span class="niv" aria-label="Niveau ' + n + ' sur 4">' + [0, 1, 2, 3].map(i => '<i class="' + (i < n ? 'on' : '') + '"></i>').join('') + '</span></div>' +
-          '<button type="button" class="acheter" data-k="' + k + '"' + (max || D.pieces < prix ? ' disabled' : '') + '>' + (max ? 'Max' : '<span class="piece-ic" aria-hidden="true"></span>' + fmt(prix)) + (max ? '' : '<span class="sr-only"> pièces</span>') + '</button></div>'
-        );
+  // ----- missions -----
+  function listeMissions() {
+    return D.missions
+      .map(m => {
+        const pc = Math.min(100, (100 * m.p) / m.n);
+        return '<li class="' + (m.fait ? 'fait' : '') + '"><span>' + (m.fait ? '✓ ' : '') + texteMission(m) + '</span><i><b style="width:' + pc + '%"></b></i><small>' + fmt(Math.min(m.p, m.n)) + ' / ' + fmt(m.n) + '</small></li>';
       })
       .join('');
+  }
+  function ecranMissions() {
+    majJour();
+    $('mi-multi').textContent = '×' + (D.multi + 1);
+    $('mi-liste').innerHTML = listeMissions();
+    const mot = motDuJour();
+    $('mi-mot').innerHTML = [...mot].map((c, i) => '<span class="' + (i < D.mot.n ? 'on' : '') + '">' + (i < D.mot.n ? c : '') + '</span>').join('');
+    $('mi-mot-txt').textContent = D.mot.n >= mot.length ? 'Mot trouvé aujourd\'hui, bravo ! Un nouveau demain.' : 'Ramasse les lettres pendant tes courses libres : le mot complet rapporte 1 clé et 300 pièces.';
+    ecran('missions');
+  }
+
+  // ----- niveaux -----
+  function ecranNiveaux() {
+    $('niv-total').textContent = D.niveaux.reduce((s, x) => s + (x || 0), 0) + ' / ' + NIVEAUX.length * 3;
+    $('niv-liste').innerHTML = QUARTIERS.map(
+      (q, qi) =>
+        '<div class="niv-q"><h3>' + q.nom + '</h3><div>' +
+        [0, 1, 2]
+          .map(i => {
+            const k = qi * 3 + i,
+              ouvert = k == 0 || (D.niveaux[k - 1] || 0) > 0,
+              e = D.niveaux[k] || 0;
+            return '<button type="button" class="niv" data-n="' + k + '"' + (ouvert ? '' : ' disabled') + ' aria-label="Niveau ' + (k + 1) + (ouvert ? ', ' + e + ' étoile' + (e > 1 ? 's' : '') + ' sur 3' : ', verrouillé') + '"><b>' + (ouvert ? k + 1 : '🔒') + '</b><span>' + [0, 1, 2].map(j => (j < e ? '★' : '☆')).join('') + '</span><small>' + fmt(NIVEAUX[k].long) + ' m</small></button>';
+          })
+          .join('') +
+        '</div></div>'
+    ).join('');
+    ecran('niveaux');
+  }
+  $('niv-liste').addEventListener('click', e => {
+    const b = e.target.closest('[data-n]');
+    if (b && !b.disabled) demarrer('niveau', +b.dataset.n);
+  });
+
+  function ecranDefi() {
+    majJour();
+    $('d-meilleur').textContent = fmt(D.defi.meilleur);
+    $('d-cle').textContent = D.defi.cle ? 'Clé du jour déjà gagnée.' : 'Tiens 60 secondes pour gagner une clé.';
+    ecran('defi');
+  }
+
+  // ----- boutique -----
+  let onglet = 'bonus';
+  function boutique(o) {
+    if (o) onglet = o;
+    $('s-pieces').textContent = fmt(D.pieces);
+    for (const b of document.querySelectorAll('.onglets button')) b.setAttribute('aria-selected', b.dataset.o == onglet ? 'true' : 'false');
+    const acheter = (cle, prix, txt, ok = true) => '<button type="button" class="acheter" data-a="' + cle + '"' + (!ok || D.pieces < prix ? ' disabled' : '') + '><span class="piece-ic" aria-hidden="true"></span>' + fmt(prix) + '<span class="sr-only"> pièces : ' + txt + '</span></button>';
+    let h = '';
+    if (onglet == 'bonus')
+      h = Object.keys(BONUS)
+        .map(k => {
+          const n = D.niv[k],
+            max = n >= 5,
+            prix = DON.prixAmelio[n];
+          return '<div class="amelio" style="--c:' + BONUS[k].c + '"><span class="bic" aria-hidden="true">' + { aimant: 'U', saut: '⇈', x2: '×2', jetpack: '▲', bulle: '◯' }[k] + '</span><div><b>' + BONUS[k].nom + '</b><small>Durée : ' + secondes(dureeBonus(k)) + (max ? ' (maximum)' : ' → ' + secondes(dureeBonus(k, n + 1))) + '</small><span class="niv-barre" aria-label="Niveau ' + n + ' sur 5">' + [0, 1, 2, 3, 4].map(i => '<i class="' + (i < n ? 'on' : '') + '"></i>').join('') + '</span></div>' + (max ? '<span class="max">Max</span>' : acheter('niv:' + k, prix, BONUS[k].nom)) + '</div>';
+        })
+        .join('');
+    else if (onglet == 'persos')
+      h = PERSOS.map(p => {
+        const a = D.persos.includes(p.id),
+          choisi = D.perso == p.id;
+        return '<div class="amelio"><span class="avatar" style="--s:' + p.sweat + ';--h:' + p.cheveux + ';--a:' + p.accessoire + '" aria-hidden="true"></span><div><b>' + p.nom + '</b><small>' + (choisi ? 'Ton personnage' : a ? 'Débloqué' : 'À débloquer') + '</small></div>' + (choisi ? '<span class="max">✓</span>' : a ? '<button type="button" class="choisir" data-a="perso:' + p.id + '">Choisir</button>' : acheter('perso:' + p.id, p.prix, p.nom)) + '</div>';
+      }).join('');
+    else if (onglet == 'planches')
+      h = PLANCHES.map(p => {
+        const a = D.planchesDeb.includes(p.id),
+          choisi = D.planche == p.id;
+        return '<div class="amelio"><span class="mini-planche" style="--c1:' + p.c1 + ';--c2:' + p.c2 + '" aria-hidden="true"></span><div><b>' + p.nom + '</b><small>' + (choisi ? 'Ta planche' : a ? 'Débloquée' : 'À débloquer') + '</small></div>' + (choisi ? '<span class="max">✓</span>' : a ? '<button type="button" class="choisir" data-a="planche:' + p.id + '">Choisir</button>' : acheter('planche:' + p.id, p.prix, p.nom)) + '</div>';
+      }).join('');
+    else
+      h =
+        '<div class="amelio"><span class="mini-planche" style="--c1:#ff6b6b;--c2:#fff" aria-hidden="true"></span><div><b>3 planches</b><small>Tu en as ' + D.planches + '. Elles encaissent un choc pendant 30 s.</small></div>' + acheter('planches', 300, '3 planches') + '</div>' +
+        '<div class="amelio"><span class="bic" style="--c:#ffb703" aria-hidden="true">🔑</span><div><b>1 clé</b><small>Tu en as ' + D.cles + '. Pour continuer après un choc.</small></div>' + acheter('cle', 1500, '1 clé') + '</div>';
+    $('amelio').innerHTML = h;
     ecran('boutique');
   }
+  document.querySelector('.onglets').addEventListener('click', e => {
+    const b = e.target.closest('[data-o]');
+    if (b) {
+      boutique(b.dataset.o);
+      b.focus();
+    }
+  });
   $('amelio').addEventListener('click', e => {
-    const b = e.target.closest('[data-k]');
+    const b = e.target.closest('[data-a]');
     if (!b || b.disabled) return;
-    const k = b.dataset.k,
-      prix = COUT[D.niv[k]];
-    if (D.niv[k] >= 4 || D.pieces < prix) return;
-    D.pieces -= prix;
-    D.niv[k]++;
+    const [a, id] = b.dataset.a.split(':');
+    const payer = prix => {
+      if (D.pieces < prix) return false;
+      D.pieces -= prix;
+      return true;
+    };
+    if (a == 'niv' && D.niv[id] < 5 && payer(DON.prixAmelio[D.niv[id]])) D.niv[id]++;
+    else if (a == 'perso') {
+      const p = PERSOS.find(x => x.id == id);
+      if (D.persos.includes(id) || payer(p.prix)) {
+        if (!D.persos.includes(id)) D.persos.push(id);
+        D.perso = id;
+      }
+    } else if (a == 'planche') {
+      const p = PLANCHES.find(x => x.id == id);
+      if (D.planchesDeb.includes(id) || payer(p.prix)) {
+        if (!D.planchesDeb.includes(id)) D.planchesDeb.push(id);
+        D.planche = id;
+      }
+    } else if (a == 'planches' && payer(300)) D.planches += 3;
+    else if (a == 'cle' && payer(1500)) D.cles++;
     ecrire();
     son('bonus');
     boutique();
-    const nb = $('amelio').querySelector('[data-k="' + k + '"]');
+    const nb = $('amelio').querySelector('[data-a="' + b.dataset.a + '"]');
     if (nb && !nb.disabled) nb.focus();
   });
 
+  // ----- affichage pendant la course -----
   let hudCache = {},
+    hudT = 0,
     msgMinuterie = 0;
+  // mis à jour 10 fois par seconde : redessiner le texte du score à chaque image coûte cher
   function majHUD() {
-    if (S.mode != 'jeu' && S.mode != 'fin') return;
-    const v = { s: fmt(S.score), p: fmt(S.pieces), m: S.mult > 1, b: Object.keys(S.bonus).sort().join() };
+    if (S.mode != 'jeu' && S.mode != 'fin' && S.mode != 'continuer') return;
+    const maintenant = performance.now();
+    if (maintenant - hudT < 100) return;
+    hudT = maintenant;
+    const actifs = Object.keys(S.bonus).filter(k => BONUS[k]);
+    if (S.planche > 0) actifs.push('planche');
+    if (S.turbo > 0) actifs.push('turbo');
+    const v = { s: fmt(S.score), p: fmt(S.pieces), m: S.mult, x2: !!S.bonus.x2, b: actifs.join(), pl: D.planches + (S.planche > 0 ? 'a' : ''), t: Math.ceil(S.temps) };
     if (v.s != hudCache.s) $('h-score').textContent = v.s;
     if (v.p != hudCache.p) $('h-pieces').textContent = v.p;
-    if (v.m != hudCache.m) $('h-mult').hidden = !v.m;
-    if (v.b != hudCache.b) $('h-bonus').innerHTML = Object.keys(S.bonus).map(k => '<div class="pil" style="--c:' + BONUS[k].c + '">' + BONUS[k].nom + '<i data-b="' + k + '"></i></div>').join('');
-    for (const i of $('h-bonus').querySelectorAll('i')) i.style.width = Math.max(0, (100 * S.bonus[i.dataset.b]) / dureeBonus(i.dataset.b)) + '%';
+    if (v.m != hudCache.m || v.x2 != hudCache.x2) {
+      $('h-mult').textContent = '×' + v.m;
+      $('h-mult').classList.toggle('x2', v.x2);
+    }
+    if (v.b != hudCache.b)
+      $('h-bonus').innerHTML = actifs
+        .map(k => {
+          const nom = k == 'planche' ? 'Planche' : k == 'turbo' ? 'Turbo' : BONUS[k].nom,
+            c = k == 'planche' ? (PLANCHES.find(x => x.id == D.planche) || PLANCHES[0]).c1 : k == 'turbo' ? '#28e6c8' : BONUS[k].c;
+          return '<div class="pil" style="--c:' + c + '">' + nom + '<i data-b="' + k + '"></i></div>';
+        })
+        .join('');
+    for (const i of $('h-bonus').querySelectorAll('i')) {
+      const k = i.dataset.b,
+        f = k == 'planche' ? S.planche / DUREE_PLANCHE : k == 'turbo' ? S.turbo / 2.4 : S.bonus[k] / dureeBonus(k);
+      i.style.width = Math.max(0, Math.min(1, f)) * 100 + '%';
+    }
+    if (v.pl != hudCache.pl) {
+      $('h-planches').textContent = D.planches;
+      $('b-planche').disabled = D.planches < 1 || S.planche > 0;
+    }
+    if (S.type == 'niveau') $('h-prog-barre').style.width = Math.min(100, (100 * P.z) / S.long) + '%';
+    if (S.type == 'defi' && v.t != hudCache.t) {
+      $('h-temps').textContent = Math.max(0, v.t) + ' s';
+      $('h-temps').classList.toggle('urgent', v.t <= 10);
+    }
     hudCache = v;
   }
 
-  function message(t, alerte) {
+  function message(t, genre = '', duree = 1300) {
     const m = $('h-msg');
     m.textContent = t;
     m.className = '';
     void m.offsetWidth;
-    m.className = 'on' + (alerte ? ' alerte' : '');
+    m.className = 'on ' + genre;
+    m.style.animationDuration = duree + 'ms';
     clearTimeout(msgMinuterie);
     msgMinuterie = setTimeout(() => {
       m.className = '';
       m.textContent = '';
-    }, 1200);
+    }, duree);
   }
 
   function vibrer(ms) {
@@ -1099,67 +2161,170 @@
     } catch (e) {}
   }
 
-  // ---------- Sons (synthétisés, aucun fichier) ----------
+  // ---------- Sons et musique (synthétisés, aucun fichier) ----------
   let AC = null,
-    dernierePiece = 0;
-  function son(k) {
-    if (!D.son) return;
+    dernierePiece = 0,
+    suitePieces = 0,
+    bruit = null;
+  function audio() {
     try {
       AC = AC || new (window.AudioContext || window.webkitAudioContext)();
       if (AC.state == 'suspended') AC.resume();
+      if (!bruit) {
+        bruit = AC.createBuffer(1, AC.sampleRate * 0.5, AC.sampleRate);
+        const d = bruit.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      }
+      return AC;
     } catch (e) {
-      return;
+      return null;
     }
+  }
+  function note(f, f2, d, type = 'sine', vol = 0.08, debut = 0, dest) {
+    const t = AC.currentTime + debut,
+      o = AC.createOscillator(),
+      g = AC.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g).connect(dest || AC.destination);
+    o.start(t);
+    o.stop(t + d + 0.02);
+  }
+  function souffle(d, vol, filtre, debut = 0, dest) {
+    const t = AC.currentTime + debut,
+      s = AC.createBufferSource(),
+      f = AC.createBiquadFilter(),
+      g = AC.createGain();
+    s.buffer = bruit;
+    f.type = 'highpass';
+    f.frequency.value = filtre;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    s.connect(f).connect(g).connect(dest || AC.destination);
+    s.start(t);
+    s.stop(t + d);
+  }
+  function son(k) {
+    if (!D.son || !audio()) return;
     const t = AC.currentTime;
-    const note = (f, f2, d, type = 'sine', vol = 0.08, debut = 0) => {
-      const o = AC.createOscillator(),
-        g = AC.createGain();
-      o.type = type;
-      o.frequency.setValueAtTime(f, t + debut);
-      if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + debut + d);
-      g.gain.setValueAtTime(0.0001, t + debut);
-      g.gain.exponentialRampToValueAtTime(vol, t + debut + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + debut + d);
-      o.connect(g).connect(AC.destination);
-      o.start(t + debut);
-      o.stop(t + debut + d + 0.02);
-    };
     if (k == 'piece') {
       if (t - dernierePiece < 0.05) return;
+      suitePieces = t - dernierePiece < 0.4 ? Math.min(8, suitePieces + 1) : 0; // les pièces à la suite montent d'une note
       dernierePiece = t;
-      note(988, 0, 0.07, 'sine', 0.06);
-      note(1319, 0, 0.12, 'sine', 0.06, 0.06);
+      const f = 988 * 2 ** (suitePieces / 12);
+      note(f, 0, 0.07, 'sine', 0.06);
+      note(f * 1.335, 0, 0.12, 'sine', 0.06, 0.06);
     } else if (k == 'saut') note(330, 660, 0.16, 'triangle', 0.1);
     else if (k == 'glisse') note(520, 200, 0.18, 'triangle', 0.08);
-    else if (k == 'voie') note(700, 820, 0.05, 'sine', 0.04);
+    else if (k == 'voie') souffle(0.06, 0.05, 3000);
     else if (k == 'bonus') [523, 659, 784, 1047].forEach((f, i) => note(f, 0, 0.12, 'triangle', 0.08, i * 0.06));
+    else if (k == 'mission') [784, 988, 1175, 1568].forEach((f, i) => note(f, 0, 0.16, 'square', 0.05, i * 0.08));
+    else if (k == 'lettre') [880, 1320].forEach((f, i) => note(f, 0, 0.15, 'triangle', 0.08, i * 0.08));
+    else if (k == 'victoire') [523, 659, 784, 1047, 1319].forEach((f, i) => note(f, 0, 0.25, 'triangle', 0.09, i * 0.1));
     else if (k == 'alerte') [440, 330].forEach((f, i) => note(f, 0, 0.12, 'square', 0.05, i * 0.13));
     else if (k == 'bouclier') note(900, 300, 0.3, 'sawtooth', 0.06);
-    else if (k == 'choc') {
+    else if (k == 'caisse' || k == 'casse') {
+      souffle(0.18, 0.2, 800);
+      note(160, 80, 0.15, 'square', 0.06);
+    } else if (k == 'ecrase') {
+      note(120, 40, 0.25, 'sine', 0.2);
+      souffle(0.15, 0.12, 400);
+    } else if (k == 'turbo') note(300, 1200, 0.35, 'sawtooth', 0.05);
+    else if (k == 'planche') {
+      note(200, 800, 0.25, 'sine', 0.08);
+      souffle(0.3, 0.06, 2000);
+    } else if (k == 'choc') {
       note(180, 50, 0.45, 'sawtooth', 0.12);
       note(90, 40, 0.5, 'square', 0.06);
     }
   }
+
+  // musique : boucle de 4 mesures (grosse caisse, caisse claire, charleston, basse, accords) selon le quartier
+  let musiqueMinuterie = 0,
+    musiqueGain = null,
+    prochain = 0,
+    pasMusique = 0;
+  const TEMPO = 112,
+    freq = m => 440 * 2 ** ((m - 69) / 12);
+  function musique(on) {
+    if (!on || !D.musique) {
+      clearInterval(musiqueMinuterie);
+      musiqueMinuterie = 0;
+      if (musiqueGain && AC) musiqueGain.gain.setTargetAtTime(0, AC.currentTime, 0.1);
+      return;
+    }
+    if (musiqueMinuterie || !audio()) return;
+    if (!musiqueGain) {
+      musiqueGain = AC.createGain();
+      musiqueGain.connect(AC.destination);
+    }
+    musiqueGain.gain.setTargetAtTime(0.55, AC.currentTime, 0.1);
+    prochain = AC.currentTime + 0.05;
+    musiqueMinuterie = setInterval(() => {
+      while (prochain < AC.currentTime + 0.25) {
+        jouerPas(pasMusique, prochain - AC.currentTime);
+        prochain += 60 / TEMPO / 4;
+        pasMusique = (pasMusique + 1) % 64;
+      }
+    }, 60);
+  }
+  function jouerPas(s, debut) {
+    const g = musiqueGain,
+      q = QUARTIERS[S.qVu || 0],
+      racine = q.musique[Math.floor(s / 16)],
+      b = s % 16;
+    if (b % 4 == 0) note(140, 45, 0.18, 'sine', 0.35, debut, g);
+    if (b == 4 || b == 12) souffle(0.12, 0.18, 1500, debut, g);
+    if (b % 2 == 0) souffle(0.03, 0.05, 7000, debut, g);
+    if ([0, 3, 6, 8, 10, 14].includes(b)) note(freq(racine + (b == 10 ? 7 : b == 14 ? 12 : 0)), 0, 0.16, 'triangle', 0.16, debut, g);
+    if (b == 0 || b == 8)
+      for (const i of [12, 16, 19]) note(freq(racine + i + (q.nuit > 0.5 ? -1 : 0) * (i == 16 ? 1 : 0)), 0, 0.5, 'sine', 0.025, debut, g);
+    if (b % 4 == 2 && (s * 7) % 5 < 2) note(freq(racine + 24 + [0, 3, 7, 10, 12][s % 5]), 0, 0.12, 'square', 0.02, debut, g);
+  }
+
   function majSon() {
-    $('b-son').textContent = 'Son : ' + (D.son ? 'oui' : 'non');
+    $('b-son').textContent = 'Sons : ' + (D.son ? 'oui' : 'non');
     $('b-son').setAttribute('aria-pressed', D.son ? 'true' : 'false');
+    $('b-musique').textContent = 'Musique : ' + (D.musique ? 'oui' : 'non');
+    $('b-musique').setAttribute('aria-pressed', D.musique ? 'true' : 'false');
   }
 
   // ---------- Commandes ----------
-  $('b-jouer').onclick = demarrer;
-  $('b-rejouer').onclick = demarrer;
-  $('b-recommencer').onclick = demarrer;
+  $('b-jouer').onclick = () => demarrer('libre');
+  $('b-rejouer').onclick = rejouer;
+  $('b-suivant').onclick = () => demarrer('niveau', S.niveau + 1);
+  $('b-recommencer').onclick = rejouer;
   $('b-reprendre').onclick = reprendre;
   $('b-pause').onclick = pause;
+  $('b-planche').onclick = utiliserPlanche;
+  $('b-continuer').onclick = continuer;
+  $('b-non').onclick = () => {
+    finPartie('choc');
+    ecran(null);
+    S.fin = 0.5;
+  };
   $('b-aide').onclick = () => ecran('aide');
-  $('b-boutique').onclick = boutique;
+  $('b-boutique').onclick = () => boutique();
+  $('b-missions').onclick = ecranMissions;
+  $('b-niveaux').onclick = ecranNiveaux;
+  $('b-defi').onclick = ecranDefi;
+  $('b-lancer-defi').onclick = () => demarrer('defi');
   $('b-son').onclick = () => {
     D.son = D.son ? 0 : 1;
     ecrire();
     majSon();
     son('voie');
   };
-  for (const b of document.querySelectorAll('[data-retour]')) b.onclick = () => ecran(retourVers);
+  $('b-musique').onclick = () => {
+    D.musique = D.musique ? 0 : 1;
+    ecrire();
+    majSon();
+  };
+  for (const b of document.querySelectorAll('[data-retour]')) b.onclick = afficherMenu;
   for (const b of document.querySelectorAll('[data-menu]')) b.onclick = menu;
 
   addEventListener('keydown', e => {
@@ -1178,6 +2343,8 @@
         w: sauter,
         ArrowDown: glisser,
         s: glisser,
+        b: utiliserPlanche,
+        Shift: utiliserPlanche,
         Escape: pause,
         p: pause
       }[k];
@@ -1188,14 +2355,16 @@
     } else if (S.mode == 'pause' && (k == 'Escape' || k == 'p')) {
       e.preventDefault();
       reprendre();
-    } else if (k == 'Escape' && (ecranActuel == 'aide' || ecranActuel == 'boutique')) ecran(retourVers);
+    } else if (k == 'Escape' && ['aide', 'boutique', 'missions', 'niveaux', 'defi'].includes(ecranActuel)) afficherMenu();
   });
 
-  // gestes tactiles (et souris) : un glissement = une action
+  // gestes tactiles (et souris) : un glissement = une action ; deux tapes rapides = la planche
   (() => {
-    let o = null;
+    let o = null,
+      derniereTape = 0;
     cv.addEventListener('pointerdown', e => {
       o = { x: e.clientX, y: e.clientY, fait: false };
+      audio();
       try {
         cv.setPointerCapture(e.pointerId);
       } catch (er) {}
@@ -1210,7 +2379,17 @@
       if (Math.abs(dx) > Math.abs(dy)) (dx < 0 ? gauche : droite)();
       else (dy < 0 ? sauter : glisser)();
     });
-    for (const t of ['pointerup', 'pointercancel']) cv.addEventListener(t, () => (o = null));
+    cv.addEventListener('pointerup', () => {
+      if (o && !o.fait) {
+        const t = performance.now();
+        if (t - derniereTape < 320) {
+          utiliserPlanche();
+          derniereTape = 0;
+        } else derniereTape = t;
+      }
+      o = null;
+    });
+    cv.addEventListener('pointercancel', () => (o = null));
   })();
 
   document.addEventListener('visibilitychange', () => {
@@ -1229,10 +2408,17 @@
     dessiner();
     majHUD();
     lent = dt > 0.024 ? lent + 1 : Math.max(0, lent - 1);
-    if (lent > 45 && maxDPR > 1) {
-      maxDPR = Math.max(1, Math.min(maxDPR, DPR) - 0.5);
+    if (lent > 45) {
+      // d'abord la résolution, puis le niveau de détail, et en dernier recours une image un peu plus floue
+      if (maxDPR > 1) {
+        maxDPR = Math.max(1, Math.min(maxDPR, DPR) - 0.5);
+        taille();
+      } else if (DETAIL > 0) DETAIL--;
+      else if (maxDPR > 0.75) {
+        maxDPR = 0.75;
+        taille();
+      }
       lent = 0;
-      taille();
     }
   }
 
@@ -1242,10 +2428,11 @@
 
   // pour les tests : état du jeu, génération du parcours, et avance image par image (60 images par seconde)
   window.VL = {
-    S, P, D, troncon, alea, vitesse, demarrer, menu, gauche, droite, sauter, glisser,
+    S, P, D, troncon, alea, vitesse, demarrer, menu, continuer, gauche, droite, sauter, glisser, utiliserPlanche, activerBonus,
     objs: () => objs,
     pieces: () => pieces,
     bonus: () => bonus,
+    detail: n => (n == null ? DETAIL : (DETAIL = n)),
     avancer: s => {
       for (let i = 0; i < Math.round(s * 60); i++) maj(1 / 60);
     }

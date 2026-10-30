@@ -8,7 +8,7 @@ Les cours mènent aux 5 matières, et chaque matière a sa propre page d'accueil
 index.html                      accueil général : cours ou jeux
 cours.html                      accueil des cours (recherche, sauvegarde de la progression)
 jeux.html                       accueil des jeux
-jeux/voie-libre/index.html      jeu Voie libre (course sans fin), fonctionne aussi en ouvrant ce fichier
+jeux/voie-libre/index.html      jeu Voie libre (course dans la ville), fonctionne aussi en ouvrant ce fichier
 algo/index.html                 Algorithmique : cycle1.html, cycle2.html
 systeme/index.html              Système : intro-systeme.html
 sql/index.html                  Bases de données : sql-requetes-simples.html
