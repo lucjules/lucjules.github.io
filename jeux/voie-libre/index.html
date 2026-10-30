@@ -75,6 +75,9 @@
       <li><b>Caisses « ? »</b> : écrase-les (glisser en plein saut) pour gagner pièces, bonus ou clés.</li>
       <li><b>Accélérateurs</b> au sol : turbo de vitesse qui brise tout sur ton passage.</li>
       <li><b>Tunnels</b> : il y fait sombre et le plafond est bas, même en jetpack.</li>
+      <li><b>Wagons plats</b> (bas, à rayures jaunes) : saute dessus et cours sur le plateau.</li>
+      <li>Sur la <b>planche</b>, chaque saut est une <b>figure</b> : enchaîne-les pour un combo.</li>
+      <li>Les <b>coffres mystère</b> (missions, caisses, cadeaux, boutique) cachent pièces, objets… ou un personnage.</li>
       <li>Heurter un wagon <b>de côté</b> te fait trébucher et l'agent te rattrape : deux fois de suite et c'est perdu.</li>
       <li>Après un choc, tu peux <b>continuer avec des clés</b>.</li>
     </ul>
@@ -85,7 +88,7 @@
       <p><span class="bic" style="--c:#8338ec">▲</span><span><b>Jetpack</b> : vole au-dessus de tout et ramasse les pièces du ciel.</span></p>
       <p><span class="bic" style="--c:#ff70a6">◯</span><span><b>Bulle</b> : encaisse un choc et fait sauter plus haut.</span></p>
     </div>
-    <p class="note">Les <b>missions</b> font monter ton multiplicateur de score, les <b>trophées</b> rapportent des pièces, et un <b>cadeau</b> t'attend chaque jour. Le <b>Tour de la ville</b> propose 12 niveaux à étoiles, et le <b>Défi du jour</b> le même parcours de 60 s pour tout le monde.</p>
+    <p class="note">Les <b>missions</b> font monter ton multiplicateur de score, les <b>trophées</b> rapportent des pièces, et un <b>cadeau</b> t'attend chaque jour. Le <b>Tour de la ville</b> propose 15 niveaux à étoiles dans 5 quartiers, et le <b>Défi du jour</b> le même parcours de 60 s pour tout le monde.</p>
     <button type="button" class="btn" data-retour>Retour</button>
   </div>
 </section>
@@ -166,6 +169,17 @@
   </div>
 </section>
 
+<section id="coffre" class="ecran" aria-labelledby="t-coffre" hidden>
+  <div class="carte">
+    <h2 id="t-coffre">Coffre mystère</h2>
+    <div id="co-boite" class="coffre" aria-hidden="true"><span class="co-lueur"></span><span class="co-caisse"></span><span class="co-couvercle"></span></div>
+    <p id="co-res" class="co-res" aria-live="polite"></p>
+    <p class="note">Coffres restants : <b id="co-n">0</b></p>
+    <button type="button" class="btn orange" id="b-ouvrir">Ouvrir</button>
+    <button type="button" class="btn second" id="b-coffre-retour">Retour à la boutique</button>
+  </div>
+</section>
+
 <section id="boutique" class="ecran" aria-labelledby="t-boutique" hidden>
   <div class="carte">
     <h2 id="t-boutique">Boutique</h2>
@@ -212,7 +226,7 @@
     <ul id="f-missions" class="faites" hidden></ul>
     <button type="button" class="btn vert" id="b-suivant" hidden>Niveau suivant</button>
     <button type="button" class="btn" id="b-rejouer">Rejouer</button>
-    <button type="button" class="btn second" data-menu>Menu</button>
+    <div class="ligne"><button type="button" class="btn second" id="b-partager">Partager mon score</button><button type="button" class="btn second" data-menu>Menu</button></div>
   </div>
 </section>
 

@@ -178,5 +178,22 @@ kbd{display:inline-block;min-width:1.7em;padding:.05em .4em;border-radius:6px;ba
 .jours li.auj small{color:#fff}
 .jours li:last-child{grid-column:span 2}
 
+/* Coffre mystère */
+.mini-coffre{flex:none;width:34px;height:28px;border-radius:6px;background:linear-gradient(#a0522d 0 38%,#ffd166 38% 48%,#c06a34 48%);box-shadow:inset 0 0 0 2px #7a3b18}
+.btn.alerte{box-shadow:0 5px 0 var(--second2),0 0 0 3px var(--orange)}
+.coffre{position:relative;width:150px;height:130px;margin:34px auto 4px}
+.co-caisse{position:absolute;left:10px;right:10px;bottom:6px;height:72px;border-radius:12px;background:linear-gradient(90deg,#9c4f22,#c4743c 50%,#9c4f22);box-shadow:inset 0 0 0 4px #6e3412,inset 0 -10px 0 rgba(0,0,0,.15)}
+.co-caisse::after{content:'';position:absolute;left:50%;top:-6px;width:26px;height:30px;margin-left:-13px;border-radius:6px;background:#ffd166;box-shadow:inset 0 0 0 3px #e0a400}
+.co-couvercle{position:absolute;left:4px;right:4px;bottom:74px;height:40px;border-radius:16px 16px 6px 6px;background:linear-gradient(90deg,#a85a2a,#d4844a 50%,#a85a2a);box-shadow:inset 0 0 0 4px #6e3412;transform-origin:10% 100%;transition:transform .45s cubic-bezier(.3,1.6,.5,1)}
+.co-lueur{position:absolute;left:50%;bottom:60px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:radial-gradient(#fff6c8,rgba(255,209,102,0) 70%);opacity:0;transition:transform .5s,opacity .5s}
+.coffre.secoue{animation:secoue .9s ease-in-out}
+@keyframes secoue{0%,100%{transform:none}10%,50%,90%{transform:rotate(-6deg) scale(1.03)}30%,70%{transform:rotate(6deg) scale(1.03)}}
+.coffre.ouvert .co-couvercle{transform:translateY(-8px) rotate(-30deg)}
+.coffre.ouvert .co-lueur{opacity:1;transform:scale(16)}
+.coffre.rare .co-lueur{background:radial-gradient(#fff,rgba(255,77,157,0) 70%)}
+.co-res{min-height:1.6em;margin:2px 0 6px;font:700 1.4rem var(--f-head);opacity:0;transform:scale(.8);transition:opacity .3s,transform .3s cubic-bezier(.3,1.6,.5,1)}
+.co-res.on{opacity:1;transform:none}
+.co-res.rare{color:#ff4d9d}
+
 @media (max-height:640px){.carte{padding-top:16px}.intro{margin-bottom:10px}.btn{padding:10px 14px;margin-bottom:9px}h1{font-size:2.3rem}}
 @media (prefers-reduced-motion:reduce){.carte,#h-msg.on,.h-temps.urgent{animation:none}#h-msg.on{opacity:1}}

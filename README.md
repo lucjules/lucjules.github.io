@@ -5,7 +5,7 @@ Mon site, en deux espaces choisis depuis l'accueil (`index.html`) :
 - **Mes cours** (`cours.html`) : site de révision pour le BUT1 Informatique, avec leçons, exercices corrigés automatiquement et outils pour s'entraîner ;
 - **Mes jeux** (`jeux.html`) : les jeux faits maison :
   - [Aérélia](https://lucjules.github.io/LunaPoke/), aventure rétro de capture de créatures, dans son propre dépôt (`LunaPoke`) ;
-  - [Voie libre](https://lucjules.github.io/jeux/voie-libre/), course à travers les quartiers d'une ville sur trois voies (course libre, Tour de la ville en 12 niveaux, Défi du jour), dans ce dépôt (`jeux/voie-libre/`).
+  - [Voie libre](https://lucjules.github.io/jeux/voie-libre/), course à travers les quartiers d'une ville sur trois voies (course libre, Tour de la ville en 15 niveaux, Défi du jour), dans ce dépôt (`jeux/voie-libre/`).
 
 **En ligne :** https://lucjules.github.io/
 
