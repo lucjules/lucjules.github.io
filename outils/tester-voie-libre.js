@@ -35,8 +35,10 @@ const verifier = (nom, ok, detail) => {
         objs.push(...t.o.filter(o => o.t == 'train'));
         z = t.fin;
       }
-      const mur = (l, z) => objs.some(o => o.l == l && (o.vit ? z >= o.z0 - 70 && z <= o.z1 : z >= o.z0 + (o.ramp ? RAMPE : 0) && z <= o.z1));
-      const rampe = (l, z) => objs.some(o => o.l == l && o.ramp && z >= o.z0 && z < o.z0 + RAMPE);
+      // une rampe se monte sur ses 6 premiers mètres ; un wagon plat se saute par l'avant (1,5 m)
+      const entree = o => (o.ramp ? RAMPE : o.plat ? 1.5 : 0);
+      const mur = (l, z) => objs.some(o => o.l == l && (o.vit ? z >= o.z0 - 70 && z <= o.z1 : z >= o.z0 + entree(o) && z <= o.z1));
+      const rampe = (l, z) => objs.some(o => o.l == l && entree(o) && z >= o.z0 && z < o.z0 + entree(o));
       const toit = (l, z) => objs.some(o => !o.vit && o.l == l && z >= o.z0 && z <= o.z1);
       let sol = [1, 1, 1], haut = [0, 0, 0];
       for (let zz = 45; zz < z - 1; zz += 0.5) {
@@ -132,6 +134,13 @@ const verifier = (nom, ok, detail) => {
       while (VL.S.mode == 'jeu' && i++ < 60 * 70) { VL.S.invu = 1e9; VL.avancer(1 / 60); }
       return VL.S.raison;
     })();
+    out.plat = [scen({ objs: [{ t: 'train', l: 1, z0: 15, z1: 40, ramp: false, plat: true, c: 0 }] }).mode, scen({ objs: [{ t: 'train', l: 1, z0: 15, z1: 60, ramp: false, plat: true, c: 0 }], actions: [[11, 'sauter']], duree: 1.6 }).y];
+    out.figures = scen({ planches: 1, actions: [[2, 'utiliserPlanche'], [6, 'sauter'], [22, 'sauter']], duree: 2.2 }).compteurs.figures;
+    out.coffre = (() => {
+      VL.D.coffres = 3;
+      const avant = VL.D.st.coffres, res = [VL.ouvrirCoffre(), VL.ouvrirCoffre(), VL.ouvrirCoffre()];
+      return [res.every(x => x && x.txt), VL.D.coffres, VL.D.st.coffres - avant, VL.ouvrirCoffre()];
+    })();
     out.trophees = VL.D.trophees.includes('depart');
     out.scores = VL.D.scores.length > 0;
     return out;
@@ -157,6 +166,9 @@ const verifier = (nom, ok, detail) => {
   egal('continuer avec une clé', R.continuer, ['continuer', 'jeu']);
   egal('niveau terminé et enregistré', R.niveau, ['victoire', true]);
   egal('défi : fin au bout de 60 s', R.defi, 'temps');
+  egal('wagon plat : heurté, sauté dessus', R.plat, ['fin', 1.1]);
+  egal('figures sur la planche', R.figures, 2);
+  egal('coffres mystère', R.coffre, [true, 0, 3, null]);
   egal('trophée et meilleurs scores enregistrés', [R.trophees, R.scores], [true, true]);
 
   console.log('Sauvegardes et rendu');
@@ -165,7 +177,7 @@ const verifier = (nom, ok, detail) => {
   // les trophées déjà mérités sont accordés tout de suite : premier départ (+100) et score de 10 000 (+200)
   const ancienne = await page.evaluate(() => [VL.D.record, VL.D.pieces, VL.D.niv.aimant, VL.D.missions.length, VL.D.trophees.sort()]);
   egal('ancienne sauvegarde reprise, trophées déjà mérités accordés', ancienne, [12840, 600, 2, 3, ['depart', 's10k']]);
-  for (const d of [200, 1400, 2600, 3800]) {
+  for (const d of [200, 1400, 2600, 3800, 5000]) {
     await page.evaluate(d => {
       VL.D.tuto = 1;
       VL.demarrer('libre');
@@ -174,7 +186,7 @@ const verifier = (nom, ok, detail) => {
     }, d);
     await page.waitForTimeout(300);
   }
-  for (const id of ['b-missions', 'b-trophees', 'b-niveaux', 'b-boutique']) {
+  for (const id of ['b-missions', 'b-trophees', 'b-niveaux', 'b-boutique', 'b-reglages', 'b-aide']) {
     await page.evaluate(() => VL.menu());
     await page.evaluate(id => document.getElementById(id).click(), id);
     await page.waitForTimeout(100);

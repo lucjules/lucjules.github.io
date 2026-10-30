@@ -31,7 +31,7 @@ var JEUX={
  'voie-libre':function(){var d=lire('voie-libre'),n=d&&Math.floor(+d.parties)>0?Math.floor(+d.parties):0;
   if(!n)return['Voie libre : pas encore joué',null];
   var e=Array.isArray(d.niveaux)?d.niveaux.reduce(function(s,x){return s+Math.min(3,Math.max(0,Math.floor(+x)||0))},0):0;
-  return['Voie libre : record '+Math.max(0,Math.floor(+d.record)||0).toLocaleString('fr-FR')+' · ★ '+e+' / 36 · '+n+' course'+(n>1?'s':''),null]}};
+  return['Voie libre : record '+Math.max(0,Math.floor(+d.record)||0).toLocaleString('fr-FR')+' · ★ '+e+' / 45 · '+n+' course'+(n>1?'s':''),null]}};
 function jeux(){document.querySelectorAll('[data-jeu]').forEach(function(p){var f=JEUX[p.dataset.jeu];if(!f)return;var r=f(),m=p.previousElementSibling,bar=m&&m.classList.contains('hmeter')?m.querySelector('i'):null;
  p.textContent=r[0];if(bar&&r[1]!=null)bar.style.width=Math.round(100*r[1])+'%'})}
 function maj(){prog();reprendre();jeux()}

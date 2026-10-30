@@ -15,6 +15,7 @@ window.VL_DONNEES = {
       nuit: 0,
       immeubles: [[176, 196, 214], [214, 226, 238], [150, 180, 205], [230, 214, 190], [196, 210, 200]],
       decor: ['conteneurs', 'conteneurs', 'grue', 'tunnel'],
+      pluie: true,
       musique: [45, 45, 48, 43] // notes de basse (MIDI), une par mesure
     },
     {
@@ -28,6 +29,7 @@ window.VL_DONNEES = {
       nuit: 0.1,
       immeubles: [[196, 92, 72], [214, 122, 86], [172, 82, 74], [226, 162, 112], [150, 102, 92]],
       decor: ['reservoir', 'passerelle', 'tunnel'],
+      pluie: true,
       musique: [41, 41, 43, 36]
     },
     {
@@ -55,6 +57,20 @@ window.VL_DONNEES = {
       immeubles: [[60, 64, 102], [76, 70, 122], [50, 80, 102], [90, 66, 110]],
       decor: ['arbre', 'lampadaire', 'passerelle', 'tunnel'],
       musique: [38, 38, 41, 33]
+    },
+    {
+      id: 'gare',
+      nom: 'Gare Centrale',
+      ciel: [126, 170, 222],
+      brume: [222, 230, 240],
+      sol: [196, 200, 210],
+      ballast: [186, 190, 202],
+      mur: [228, 230, 236],
+      nuit: 0.05,
+      immeubles: [[214, 196, 170], [190, 180, 168], [226, 214, 196], [176, 164, 150]],
+      decor: ['quais'],
+      pluie: true,
+      musique: [40, 43, 45, 38]
     }
   ],
 
@@ -101,7 +117,8 @@ window.VL_DONNEES = {
     { t: 'pads', txt: n => 'Passe sur ' + n + ' accélérateurs', n: k => 2 + k },
     { t: 'drones', txt: n => 'Glisse sous ' + n + ' drones', n: k => 3 + 2 * k },
     { t: 'voies', course: true, txt: n => 'Change de voie ' + n + ' fois en une course', n: k => 40 + 15 * k },
-    { t: 'planches', txt: n => 'Utilise ' + n + ' planche' + (n > 1 ? 's' : ''), n: k => 1 + Math.floor(k / 3) }
+    { t: 'planches', txt: n => 'Utilise ' + n + ' planche' + (n > 1 ? 's' : ''), n: k => 1 + Math.floor(k / 3) },
+    { t: 'figures', txt: n => 'Réussis ' + n + ' figures sur la planche (saute avec)', n: k => 3 + 2 * k }
   ],
 
   // Trophées : débloqués une fois pour toutes, chacun rapporte des pièces.
@@ -110,7 +127,7 @@ window.VL_DONNEES = {
     { id: 'depart', nom: 'Premier départ', txt: 'Termine ta première course', type: 'parties', n: 1, gain: 100 },
     { id: 'd1000', nom: 'Bon pied', txt: 'Cours 1 000 m en une course', type: 'distance', n: 1000, gain: 200 },
     { id: 'd3000', nom: 'Marathonien', txt: 'Cours 3 000 m en une course', type: 'distance', n: 3000, gain: 500 },
-    { id: 'quartiers', nom: 'Tour complet', txt: 'Traverse les 4 quartiers en une course (4 800 m)', type: 'distance', n: 4800, gain: 1000 },
+    { id: 'quartiers', nom: 'Tour complet', txt: 'Traverse les 5 quartiers en une course (6 000 m)', type: 'distance', n: 6000, gain: 1500 },
     { id: 's10k', nom: 'Beau score', txt: 'Fais un score de 10 000', type: 'score', n: 10000, gain: 200 },
     { id: 's50k', nom: 'Grand score', txt: 'Fais un score de 50 000', type: 'score', n: 50000, gain: 600 },
     { id: 's200k', nom: 'Légende de la ville', txt: 'Fais un score de 200 000', type: 'score', n: 200000, gain: 2000 },
@@ -121,7 +138,9 @@ window.VL_DONNEES = {
     { id: 'toits', nom: 'Funambule', txt: 'Cours 2 000 m sur les toits', type: 'toits', n: 2000, gain: 400 },
     { id: 'planches', nom: 'Glisse urbaine', txt: 'Utilise 10 planches', type: 'planches', n: 10, gain: 300 },
     { id: 'port', nom: 'Capitaine du port', txt: 'Termine les 3 niveaux du Port', type: 'niveauxPort', n: 3, gain: 300 },
-    { id: 'etoiles', nom: 'Toutes les étoiles', txt: 'Obtiens les 36 étoiles du Tour de la ville', type: 'etoiles', n: 36, gain: 3000 },
+    { id: 'etoiles', nom: 'Toutes les étoiles', txt: 'Obtiens les 45 étoiles du Tour de la ville', type: 'etoiles', n: 45, gain: 3000 },
+    { id: 'figures', nom: 'Acrobate', txt: 'Réussis 25 figures sur la planche', type: 'figures', n: 25, gain: 400 },
+    { id: 'coffres', nom: 'Chasseur de trésors', txt: 'Ouvre 10 coffres mystère', type: 'coffres', n: 10, gain: 500 },
     { id: 'x5', nom: 'Multiplicateur ×5', txt: 'Atteins le multiplicateur ×5 avec les missions', type: 'multi', n: 5, gain: 500 },
     { id: 'x10', nom: 'Multiplicateur ×10', txt: 'Atteins le multiplicateur ×10', type: 'multi', n: 10, gain: 1500 },
     { id: 'defi', nom: 'Défi relevé', txt: 'Tiens les 60 s d\'un défi du jour', type: 'defis', n: 1, gain: 200 },
@@ -137,17 +156,27 @@ window.VL_DONNEES = {
     { txt: '1 clé', cles: 1 },
     { txt: '500 pièces', pieces: 500 },
     { txt: '2 planches', planches: 2 },
-    { txt: '1 élan + 1 clé', elans: 1, cles: 1 }
+    { txt: '1 coffre + 1 clé', coffres: 1, cles: 1 }
+  ],
+
+  // Coffres mystère : tirage au sort pondéré (poids), une récompense par coffre
+  coffres: [
+    { poids: 46, txt: 'pièces', pieces: [150, 600] },
+    { poids: 16, txt: 'planche', planches: [1, 2] },
+    { poids: 12, txt: 'clé', cles: [1, 1] },
+    { poids: 10, txt: 'élan de départ', elans: [1, 2] },
+    { poids: 10, txt: 'gros lot', pieces: [1500, 2500] },
+    { poids: 6, txt: 'personnage', perso: true }
   ],
 
   // Mots de la chasse aux lettres (un par jour)
   mots: ['VILLE', 'METRO', 'RAILS', 'TURBO', 'WAGON', 'QUAI', 'PLANCHE', 'TOITS', 'DRONE', 'SPRINT'],
 
-  // Tour de la ville : trois niveaux par quartier, de plus en plus longs et rapides.
+  // Tour de la ville : trois niveaux par quartier (5 quartiers), de plus en plus longs et rapides.
   // Étoiles : arriver au bout, ramasser assez de pièces, ne jamais trébucher.
   niveaux: (() => {
     const n = [];
-    for (let q = 0; q < 4; q++)
+    for (let q = 0; q < 5; q++)
       for (let i = 0; i < 3; i++)
         n.push({ q, long: 700 + i * 350 + q * 150, depart: q * 500 + i * 250, pieces: 70 + 35 * i + 25 * q, graine: 7919 * (q * 3 + i + 1) });
     return n;

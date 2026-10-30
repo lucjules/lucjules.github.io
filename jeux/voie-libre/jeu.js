@@ -14,13 +14,15 @@
     MISSIONS = DON.missions,
     NIVEAUX = DON.niveaux,
     TROPHEES = DON.trophees,
-    QUOTIDIEN = DON.quotidien;
+    QUOTIDIEN = DON.quotidien,
+    COFFRES = DON.coffres;
 
   // ---------- Réglages ----------
   const VOIE = 2.2; // distance entre les centres de deux voies
   const DEMI = 1; // demi-largeur d'un obstacle
   const LARG = 0.35; // demi-largeur du coureur
   const H_TRAIN = 2.3;
+  const H_PLAT = 1.1; // wagon plat : on saute dessus
   const RAMPE = 6; // longueur de la rampe qui monte sur un wagon
   const H_DEBOUT = 1.5;
   const H_GLISSE = 0.7;
@@ -78,7 +80,8 @@
     mot: { jour: '', n: 0 },
     tuto: 0,
     elans: 0,
-    st: { pieces: 0, piecesCourse: 0, scoreMax: 0, caisses: 0, drones: 0, toits: 0, planches: 0, defis: 0, mots: 0 },
+    coffres: 0,
+    st: { pieces: 0, piecesCourse: 0, scoreMax: 0, caisses: 0, drones: 0, toits: 0, planches: 0, defis: 0, mots: 0, figures: 0, coffres: 0 },
     trophees: [],
     scores: [],
     quotidien: { jour: '', serie: 0, pris: true },
@@ -92,7 +95,7 @@
     } catch (e) {}
     if (!d || typeof d != 'object') return;
     const n = (v, max = 1e12) => (Number.isFinite(+v) && +v > 0 ? Math.min(max, Math.floor(+v)) : 0);
-    for (const k of ['record', 'pieces', 'parties', 'distance', 'cles', 'planches', 'elans']) if (d[k] != null) D[k] = n(d[k]);
+    for (const k of ['record', 'pieces', 'parties', 'distance', 'cles', 'planches', 'elans', 'coffres']) if (d[k] != null) D[k] = n(d[k]);
     if (d.st && typeof d.st == 'object') for (const k in D.st) D.st[k] = n(d.st[k]);
     if (Array.isArray(d.trophees)) D.trophees = d.trophees.filter(x => TROPHEES.some(t => t.id === x));
     if (Array.isArray(d.scores))
@@ -172,7 +175,7 @@
       pris = [],
       t = new Set();
     for (const i of melange(r, MISSIONS.map((_, i) => i))) {
-      if (t.has(MISSIONS[i].t) || (MISSIONS[i].t == 'planches' && D.planches < 1 && D.multi < 3)) continue;
+      if (t.has(MISSIONS[i].t) || ((MISSIONS[i].t == 'planches' || MISSIONS[i].t == 'figures') && D.planches < 1 && D.multi < 3)) continue;
       t.add(MISSIONS[i].t);
       pris.push({ i, n: MISSIONS[i].n(D.multi), p: 0, fait: false });
       if (pris.length == 3) break;
@@ -202,8 +205,9 @@
     }
     if (fini && D.missions.every(m => m.fait)) {
       D.multi = Math.min(29, D.multi + 1);
+      D.coffres++;
       nouvellesMissions();
-      annonce('Multiplicateur ×' + (D.multi + 1) + ' !');
+      annonce('Multiplicateur ×' + (D.multi + 1) + ' ! + 1 coffre mystère');
     }
     if (fini) ecrire();
   }
@@ -243,15 +247,18 @@
       ramp: r() < 0.4,
       c: Math.floor(r() * TRAINS.length)
     }));
-    if (n == 3 && !ts.some(t => t.ramp)) ts[Math.floor(r() * 3)].ramp = true;
+    // quelques wagons plats, bas : on saute dessus (jamais sur une rampe)
+    for (const t of ts) if (!t.ramp && d > 0.1 && r() < 0.2) t.plat = true;
+    if (n == 3 && !ts.some(t => t.ramp || t.plat)) ts[Math.floor(r() * 3)].ramp = true;
     let fin = z;
     for (const t of ts) {
       t.z1 = t.z0 + t.L + (t.ramp ? RAMPE : 0);
       delete t.L;
       o.push(t);
       fin = Math.max(fin, t.z1);
+      if (t.plat) for (let zc = t.z0 + 3; zc < t.z1 - 1; zc += 2.5) p.push(piece(t.l, H_PLAT + 0.5, zc));
     }
-    for (const t of ts) {
+    for (const t of ts.filter(t => !t.plat)) {
       // une caisse sur le toit des longs wagons à rampe
       let caisse = null;
       if (t.ramp && t.z1 - t.z0 > RAMPE + 14 && r() < 0.4) {
@@ -260,7 +267,7 @@
         o.push(caisse);
       }
       // pièces sur la rampe et le toit des wagons accessibles (à rampe, ou voisins d'un wagon à rampe)
-      const acces = t.ramp || ts.some(u => u.ramp && Math.abs(u.l - t.l) == 1);
+      const acces = t.ramp || ts.some(u => u.ramp && !u.plat && Math.abs(u.l - t.l) == 1);
       if (!acces || r() < 0.3) continue;
       for (let zc = t.z0 + 1.5; zc < t.z1 - 1; zc += 2.5) {
         if (caisse && Math.abs(zc - caisse.z0) < 2.5) continue;
@@ -363,7 +370,7 @@
     elanUtilise: false,
     ombre: 0
   };
-  const P = { voie: 1, voieAvant: 1, x: 0, y: 0, z: 0, vy: 0, gy: 0, sol: true, glisse: 0, tampon: 0, coyote: 0, course: 0, chute: 0, ecrase: false };
+  const P = { voie: 1, voieAvant: 1, x: 0, y: 0, z: 0, vy: 0, gy: 0, sol: true, glisse: 0, tampon: 0, coyote: 0, course: 0, chute: 0, ecrase: false, figure: 0 };
   const cam = { x: 0, y: 3.4, z: -6, base: 0, sp: Math.sin(0.2), cp: Math.cos(0.2) };
   let objs = [],
     pieces = [],
@@ -428,7 +435,9 @@
       ombre: 0,
       rang: 0
     });
-    Object.assign(P, { voie: 1, voieAvant: 1, x: 0, y: 0, z: 0, vy: 0, gy: 0, sol: true, glisse: 0, tampon: 0, coyote: 0, chute: 0, ecrase: false });
+    Object.assign(P, { voie: 1, voieAvant: 1, x: 0, y: 0, z: 0, vy: 0, gy: 0, sol: true, glisse: 0, tampon: 0, coyote: 0, chute: 0, ecrase: false, figure: 0 });
+    S.combo = 0;
+    S.derniereFigure = -9;
     Object.assign(cam, { x: 0, y: 3.4, z: -6, base: 0 });
     objs = [];
     pieces = [];
@@ -497,6 +506,23 @@
           for (let i = 0; i < n; i++) decor.push({ k: 'conteneur', x0: s > 0 ? a : -e, x1: s > 0 ? e : -a, y0: i * 2.6, h: (i + 1) * 2.6, z0, z1, c: CONTENEURS[Math.floor(rDecor() * CONTENEURS.length)] });
           if (rDecor() < 0.15) decor.push({ k: 'grue', x: s * (11 + rDecor() * 3), z: z0 + 3, h: 15 + rDecor() * 5, s });
           decZ[c] = z1 + 0.6 + rDecor() * 2;
+          continue;
+        }
+        if (q.decor.includes('quais')) {
+          // un tronçon de quai couvert, et un bâtiment de la gare derrière
+          z1 = z0 + 20;
+          const qx = (u, v) => (s > 0 ? [u, v] : [-v, -u]);
+          const [q0, q1] = qx(4.15, 9.6);
+          decor.push({ k: 'quai', x0: q0, x1: q1, z0, z1, s });
+          for (const zp of [z0 + 4, z0 + 14]) {
+            const [p0, p1] = qx(9.6, 9.95);
+            decor.push({ k: 'pilier', x0: p0, x1: p1, z0: zp, z1: zp + 0.35 });
+          }
+          const [a0, a1] = qx(4.7, 10.3);
+          decor.push({ k: 'auvent', x0: a0, x1: a1, z0, z1, s, panneau: rDecor() < 0.35 });
+          const [b0, b1] = qx(11 + rDecor() * 2, 18 + rDecor() * 3);
+          decor.push({ k: 'immeuble', x0: b0, x1: b1, y0: 0, h: 7 + rDecor() * 8, z0: z0 + 1, z1: z1 - 1, c: coul(), nuit: q.nuit });
+          decZ[c] = z1;
           continue;
         }
         if (q.id == 'couchant') {
@@ -582,7 +608,7 @@
     for (const o of objs) {
       if (o.t != 'train' || o.casse || z < o.z0 || z > o.z1 || Math.abs(x - lx(o.l)) > DEMI) continue;
       const rampe = o.ramp && z < o.z0 + RAMPE,
-        h = rampe ? (H_TRAIN * (z - o.z0)) / RAMPE : H_TRAIN;
+        h = rampe ? (H_TRAIN * (z - o.z0)) / RAMPE : o.plat ? H_PLAT : H_TRAIN;
       if (y0 >= h - (rampe ? 0.7 : 0.45)) g = Math.max(g, h);
     }
     return g;
@@ -646,6 +672,17 @@
 
   function atterrir() {
     if (P.vy < -8) poussiere();
+    if (P.figure > 0) {
+      // figure réussie sur la planche ; enchaînées, elles rapportent de plus en plus
+      P.figure = 0;
+      S.combo = S.t - S.derniereFigure < 3 ? Math.min(10, S.combo + 1) : 1;
+      S.derniereFigure = S.t;
+      const g = 50 * S.combo * S.mult;
+      S.score += g;
+      flotte((S.combo > 1 ? 'Figure ×' + S.combo : 'Figure') + ' +' + g, P.x, P.y + 2.2, P.z + 1.5, [255, 214, 90]);
+      evenement('figures');
+      son('figure');
+    }
     if (P.ecrase) {
       // écrasement : onde de choc, et les caisses juste dessous se brisent
       P.ecrase = false;
@@ -667,7 +704,7 @@
         demi = o.t == 'drone' ? 0.75 : DEMI;
       if (Math.abs(P.x - c) >= demi + LARG) continue;
       let bas = o.y0 || 0,
-        haut = H_TRAIN;
+        haut = o.plat ? H_PLAT : H_TRAIN;
       if (o.t == 'bas') haut = bas + 0.65;
       else if (o.t == 'caisse') haut = bas + H_CAISSE;
       else if (o.t == 'haut' || o.t == 'drone') {
@@ -709,7 +746,11 @@
     evenement('caisses');
     son('caisse');
     const t = Math.random();
-    if (t < 0.12) {
+    if (t < 0.05) {
+      D.coffres++;
+      ecrire();
+      message('Coffre mystère !', 'or');
+    } else if (t < 0.15) {
       D.cles++;
       ecrire();
       message('+1 clé !', 'or');
@@ -918,6 +959,7 @@
       P.glisse = 0;
       P.tampon = 0;
       P.ecrase = false;
+      if (S.planche > 0) P.figure = 0.001; // sur la planche, chaque saut est une figure
       evenement('sauts');
       son('saut');
     } else P.tampon = 0.15; // appui un peu trop tôt : on saute dès l'atterrissage
@@ -969,7 +1011,7 @@
     D.pieces += S.pieces;
     D.distance = Math.max(D.distance, Math.floor(S.dist));
     if (S.nouveau) D.record = score;
-    for (const k of ['caisses', 'drones', 'toits', 'planches']) D.st[k] += Math.floor(S.compteurs[k] || 0);
+    for (const k of ['caisses', 'drones', 'toits', 'planches', 'figures']) D.st[k] += Math.floor(S.compteurs[k] || 0);
     D.st.pieces += S.pieces;
     D.st.piecesCourse = Math.max(D.st.piecesCourse, S.pieces);
     D.st.scoreMax = Math.max(D.st.scoreMax, score);
@@ -1034,6 +1076,8 @@
         return D.multi + 1;
       case 'persos':
         return D.persos.length;
+      case 'coffres':
+        return D.st.coffres;
       default:
         return (D.st[type] || 0) + (enCourse ? Math.floor(S.compteurs[type] || 0) : 0); // caisses, drones, toits, planches, défis, mots
     }
@@ -1069,9 +1113,51 @@
     D.planches += c.planches || 0;
     D.cles += c.cles || 0;
     D.elans += c.elans || 0;
+    D.coffres += c.coffres || 0;
     D.quotidien.pris = true;
     ecrire();
     son('bonus');
+  }
+
+  // ---------- Coffres mystère ----------
+  // ouvre un coffre : tirage pondéré, récompense appliquée tout de suite ; renvoie le texte à afficher
+  function ouvrirCoffre() {
+    if (D.coffres < 1) return null;
+    D.coffres--;
+    D.st.coffres++;
+    let t = Math.random() * COFFRES.reduce((s, c) => s + c.poids, 0),
+      c = COFFRES[0];
+    for (const x of COFFRES)
+      if ((t -= x.poids) < 0) {
+        c = x;
+        break;
+      }
+    const entre = ([a, b]) => a + Math.floor(Math.random() * (b - a + 1));
+    let res;
+    const bloques = PERSOS.filter(p => !D.persos.includes(p.id));
+    if (c.perso && bloques.length) {
+      const p = bloques[Math.floor(Math.random() * bloques.length)];
+      D.persos.push(p.id);
+      res = { txt: p.nom + ' te rejoint !', icone: '★', rare: true };
+    } else if (c.pieces || c.perso) {
+      const n = c.pieces ? entre(c.pieces) : 3000;
+      D.pieces += n;
+      res = { txt: fmt(n) + ' pièces', icone: '◉', rare: n >= 1500 };
+    } else if (c.planches) {
+      const n = entre(c.planches);
+      D.planches += n;
+      res = { txt: n + ' planche' + (n > 1 ? 's' : ''), icone: '▬' };
+    } else if (c.cles) {
+      D.cles += 1;
+      res = { txt: '1 clé', icone: '🔑' };
+    } else {
+      const n = entre(c.elans);
+      D.elans += n;
+      res = { txt: n + ' élan' + (n > 1 ? 's' : '') + ' de départ', icone: '»' };
+    }
+    ecrire();
+    verifierTrophees();
+    return res;
   }
 
   // ---------- Boucle ----------
@@ -1116,6 +1202,7 @@
       S.invu = Math.max(0, S.invu - dt);
       if (S.alerte <= 0) S.poursuite = Math.max(0, S.poursuite - dt * 0.35);
       P.glisse = Math.max(0, P.glisse - dt);
+      if (P.figure > 0) P.figure += dt;
       P.tampon = Math.max(0, P.tampon - dt);
       P.coyote = Math.max(0, P.coyote - dt);
       const n = Math.max(1, Math.ceil((S.v * dt) / 0.3));
@@ -1207,11 +1294,25 @@
   const brume = d => Math.min(1, Math.max(0, (d - BRUME) / (VUE - BRUME)));
 
   // couleurs du quartier courant, fondues pendant le passage d'un quartier à l'autre
+  // pluie : certains passages dans les quartiers qui s'y prêtent (même tirage pour une même course)
+  function pluieA(z) {
+    if (S.demo) return 0;
+    const i = S.type == 'niveau' ? S.niveau : Math.floor(Math.max(0, z) / LQ),
+      q = quartierA(z),
+      h = (k, qi) => (QUARTIERS[qi].pluie && ((Math.sin((k + 1) * 91.7 + S.graine * 0.013) * 43758.5) % 1 + 1) % 1 < 0.4 ? 1 : 0);
+    return h(i, q.a) * (1 - q.t) + h(i + 1, q.b) * q.t;
+  }
   function majPalette() {
     const q = S.demo && S.type == 'libre' ? { a: S.q, b: S.q, t: 0 } : quartierA(cam.z + 25),
       A = QUARTIERS[q.a],
       B = QUARTIERS[q.b];
     for (const k of ['ciel', 'brume', 'sol', 'ballast', 'mur']) PAL[k] = mixer(A[k], B[k], q.t);
+    PAL.pluie = pluieA(cam.z + 25);
+    if (PAL.pluie > 0) {
+      // ciel couvert
+      PAL.ciel = mixer(PAL.ciel, [128, 138, 156], 0.55 * PAL.pluie);
+      PAL.brume = mixer(PAL.brume, [176, 184, 198], 0.5 * PAL.pluie);
+    }
     PAL.nuit = A.nuit + (B.nuit - A.nuit) * q.t;
     PAL.lum = (1 - 0.32 * PAL.nuit) * (1 - 0.4 * S.ombre);
     PAL.brumeCiel = PAL.brume;
@@ -1287,7 +1388,7 @@
     fctx = fond.getContext('2d');
   let cleFond = '';
   function ciel() {
-    const cf = [W, H, DPR, Math.round(HORIZON), PAL.ciel, PAL.brumeCiel, PAL.sol, Math.round(PAL.nuit * 20)].join();
+    const cf = [W, H, DPR, Math.round(HORIZON), PAL.ciel.map(Math.round), PAL.brumeCiel.map(Math.round), PAL.sol, Math.round(PAL.nuit * 20)].join();
     if (cf != cleFond) {
       cleFond = cf;
       fond.width = cv.width;
@@ -1346,13 +1447,15 @@
   function dessinerDecor() {
     const n = cam.z + PRES,
       loin = cam.z + (DETAIL ? VUE : 110),
-      vis = decor.filter(b => b.z0 < loin && b.z1 > n && (DETAIL || b.k == 'immeuble' || b.k == 'conteneur' || b.z0 < cam.z + 60)).sort((a, b) => b.z0 - a.z0);
+      lat = b => (b.x0 != null ? Math.min(Math.abs(b.x0), Math.abs(b.x1)) : Math.abs(b.x)),
+      vis = decor.filter(b => b.z0 < loin && b.z1 > n && (DETAIL || b.k == 'immeuble' || b.k == 'conteneur' || b.k == 'quai' || b.z0 < cam.z + 60)).sort((a, b) => b.z0 - a.z0 || lat(b) - lat(a));
     const fen = [92, 112, 150],
       lumineux = [255, 214, 120];
     for (const b of vis) {
       if (b.k == 'immeuble')
         pave(b.x0, b.x1, 0, b.h, b.z0, b.z1, b.c, true, (t, z0, coupe) => {
-          if (z0 - cam.z > (DETAIL > 1 ? 85 : DETAIL ? 45 : 0)) return;
+          // pas de fenêtres trop près de la caméra : elles s'étirent en grandes traînées
+          if (z0 - cam.z > (DETAIL > 1 ? 85 : DETAIL ? 45 : 0) || z0 - cam.z < 7) return;
           const allume = PAL.nuit > 0.6,
             cf = allume ? lumineux : mixer(b.c, fen, 0.45);
           for (let y = 1.6; y < b.h - 0.8; y += 2.2) {
@@ -1381,7 +1484,29 @@
         for (const dz of [0, 3]) pave(x - 0.3, x + 0.3, 0, b.h, z + dz, z + dz + 0.5, c);
         pave(Math.min(x, x - b.s * 14), Math.max(x, x - b.s * 14), b.h, b.h + 0.9, z, z + 3.5, c);
         pave(Math.min(x, x + b.s * 5), Math.max(x, x + b.s * 5), b.h + 0.9, b.h + 1.4, z + 1.2, z + 2.3, [90, 90, 100]);
-      } else accessoire(b);
+      } else if (b.k == 'quai')
+        pave(b.x0, b.x1, 0, 1.1, b.z0, b.z1, [206, 208, 214], true, t => {
+          // bande jaune au bord du quai
+          const xb = b.s > 0 ? b.x0 : b.x1 - 0.35;
+          if (cam.y > 1.1) poly(quadY(xb, xb + 0.35, 1.11, Math.max(b.z0, n), b.z1), teinte([255, 204, 0], t));
+        });
+      else if (b.k == 'pilier') pave(b.x0, b.x1, 1.1, 4.7, b.z0, b.z1, [120, 128, 146]);
+      else if (b.k == 'auvent')
+        pave(b.x0, b.x1, 4.6, 4.95, b.z0, b.z1, [150, 168, 190], true, (t, z0, coupe) => {
+          if (!b.panneau || coupe) return;
+          // panneau suspendu « Gare Centrale »
+          const xm = b.s > 0 ? b.x0 + 1.4 : b.x1 - 1.4,
+            zm = z0 + 6;
+          if (zm > b.z1) return;
+          poly(quadZ(xm - 1.2, xm + 1.2, 3.7, 4.3, zm), teinte([28, 52, 110], t));
+          const p = proj(xm, 4, zm);
+          ctx.fillStyle = teinte([255, 255, 255], t, 1, true);
+          ctx.font = '700 ' + Math.max(6, (0.32 * F) / p.d).toFixed(1) + 'px "Bricolage Grotesque", system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('GARE CENTRALE', p.x, p.y);
+        });
+      else accessoire(b);
     }
   }
 
@@ -1551,7 +1676,7 @@
             b = Math.min(o.z1, z + 5),
             premier = i == 0;
           if (b <= n || a >= f) continue;
-          L.push({ k: cle(o, a, b, H_TRAIN), l: lat, f: () => wagon(o, a, b, premier) });
+          L.push({ k: cle(o, a, b, o.plat ? H_PLAT : H_TRAIN), l: lat, f: () => (o.plat ? plat(o, a, b, premier) : wagon(o, a, b, premier)) });
         }
       }
     }
@@ -1624,6 +1749,20 @@
           ctx.fill();
         }
       }
+    });
+  }
+
+  // wagon plat : plateau bas à rayures jaunes, ridelles aux coins
+  function plat(o, a, b, premier) {
+    const x = lx(o.l),
+      x0 = x - DEMI,
+      x1 = x + DEMI,
+      c = [132, 146, 176];
+    pave(x - 0.7, x + 0.7, 0, 0.35, Math.max(a, cam.z + PRES), b, [50, 54, 66], false); // châssis, sous le plateau
+    pave(x0, x1, 0.35, H_PLAT, a, b, c, premier, (t, z0, coupe) => {
+      bandeCotes(x0, x1, H_PLAT - 0.18, H_PLAT - 0.06, z0, b, [255, 196, 0], t);
+      if (premier && !coupe) poly(quadZ(x0, x1, H_PLAT - 0.18, H_PLAT - 0.06, z0), teinte([255, 196, 0], t));
+      if (cam.y > H_PLAT) for (const s of [-0.55, 0.55]) poly(quadY(x + s - 0.05, x + s + 0.05, H_PLAT + 0.01, z0, b), teinte([120, 130, 150], t));
     });
   }
 
@@ -2001,6 +2140,11 @@
     if (S.invu > 0 && Math.floor(S.t * 16) % 2) ctx.globalAlpha = 0.45;
     ctx.translate(p.x, p.y);
     ctx.scale(s, s);
+    if (P.figure > 0) {
+      // tour complet sur soi-même pendant le saut
+      const c = Math.cos(Math.min(1, P.figure / 0.5) * Math.PI * 2);
+      ctx.scale(Math.sign(c || 1) * Math.max(0.12, Math.abs(c)), 1);
+    }
     ctx.rotate((lx(P.voie) - P.x) * -0.1 + (S.mode == 'fin' && S.raison == 'choc' ? P.chute * 1.25 : 0));
     ctx.lineCap = ctx.lineJoin = 'round';
     const ph = P.course * 0.55,
@@ -2095,6 +2239,26 @@
     ctx.restore();
   }
 
+  // pluie : traits obliques qui tombent, sauf sous les tunnels
+  const gouttes = Array.from({ length: 90 }, () => [Math.random(), Math.random(), 0.6 + Math.random() * 0.8]);
+  function pluie() {
+    const k = PAL.pluie * (1 - S.ombre);
+    if (k < 0.05) return;
+    ctx.strokeStyle = 'rgba(220,230,245,' + 0.4 * k + ')';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    const n = DETAIL > 1 ? gouttes.length : 45;
+    for (let i = 0; i < n; i++) {
+      const [gx, gy, v] = gouttes[i],
+        y = ((gy + S.t * 1.6 * v) % 1) * H,
+        x = ((gx - S.t * 0.15 - cam.x * 0.01) % 1 + 1) % 1 * W,
+        L = 16 + 14 * v;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - L * 0.25, y + L);
+    }
+    ctx.stroke();
+  }
+
   // traits de vitesse pendant le turbo et le jetpack
   function vitesseTraits() {
     const k = S.turbo > 0 || S.elan > 0 ? 1 : S.bonus.jetpack ? 0.6 : 0;
@@ -2125,6 +2289,7 @@
     dessinerDecor();
     dessinerVoies();
     dessinerParcours();
+    pluie();
     vitesseTraits();
   }
 
@@ -2133,8 +2298,8 @@
   const reduit = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fmt = n => Math.floor(n).toLocaleString('fr-FR');
   const secondes = d => d.toLocaleString('fr-FR') + ' s';
-  const ECRANS = ['menu', 'aide', 'boutique', 'missions', 'niveaux', 'defi', 'trophees', 'reglages', 'cadeau', 'pause', 'continuer', 'fin'],
-    SECONDAIRES = ['aide', 'boutique', 'missions', 'niveaux', 'defi', 'trophees', 'reglages', 'cadeau'];
+  const ECRANS = ['menu', 'aide', 'boutique', 'missions', 'niveaux', 'defi', 'trophees', 'reglages', 'cadeau', 'coffre', 'pause', 'continuer', 'fin'],
+    SECONDAIRES = ['aide', 'boutique', 'missions', 'niveaux', 'defi', 'trophees', 'reglages', 'cadeau', 'coffre'];
   let ecranActuel = 'menu';
 
   function ecran(id) {
@@ -2167,6 +2332,8 @@
     $('b-defi').querySelector('small').textContent = D.defi.meilleur ? 'meilleur : ' + fmt(D.defi.meilleur) : '60 secondes';
     verifierTrophees();
     $('b-trophees').querySelector('small').textContent = D.trophees.length + ' / ' + TROPHEES.length;
+    $('b-boutique').querySelector('small').textContent = D.coffres ? D.coffres + ' coffre' + (D.coffres > 1 ? 's' : '') + ' à ouvrir' : 'persos, planches';
+    $('b-boutique').classList.toggle('alerte', D.coffres > 0);
     if (verifierQuotidien()) return ecranCadeau();
     ecran('menu');
   }
@@ -2176,6 +2343,58 @@
     $('ca-jours').innerHTML = QUOTIDIEN.map((c, i) => '<li class="' + (i + 1 < D.quotidien.serie ? 'pris' : i + 1 == D.quotidien.serie ? 'auj' : '') + '"><small>Jour ' + (i + 1) + '</small><b>' + c.txt + '</b></li>').join('');
     $('ca-serie').textContent = D.quotidien.serie > 1 ? D.quotidien.serie + ' jours d\'affilée !' : 'Reviens chaque jour pour de plus beaux cadeaux.';
     ecran('cadeau');
+  }
+
+  // ----- coffre mystère -----
+  function ecranCoffre() {
+    $('co-boite').className = 'coffre';
+    $('co-res').textContent = '';
+    $('co-res').className = 'co-res';
+    majCoffre();
+    ecran('coffre');
+  }
+  function majCoffre() {
+    $('co-n').textContent = D.coffres;
+    $('b-ouvrir').disabled = D.coffres < 1;
+    $('b-ouvrir').textContent = $('co-res').textContent ? (D.coffres ? 'Encore un !' : 'Plus de coffre') : 'Ouvrir';
+  }
+  $('b-ouvrir').onclick = () => {
+    if (D.coffres < 1 || $('co-boite').classList.contains('secoue')) return;
+    const boite = $('co-boite');
+    boite.className = 'coffre';
+    $('co-res').textContent = '';
+    $('co-res').className = 'co-res';
+    void boite.offsetWidth;
+    boite.className = 'coffre secoue';
+    $('b-ouvrir').disabled = true;
+    const res = ouvrirCoffre();
+    setTimeout(
+      () => {
+        boite.className = 'coffre ouvert' + (res.rare ? ' rare' : '');
+        $('co-res').innerHTML = '<span aria-hidden="true">' + res.icone + '</span> ' + res.txt;
+        $('co-res').className = 'co-res on' + (res.rare ? ' rare' : '');
+        son('coffre');
+        vibrer(res.rare ? 120 : 50);
+        majCoffre();
+      },
+      reduit ? 50 : 900
+    );
+  };
+
+  // ----- partager son score -----
+  async function partager() {
+    const b = $('b-partager'),
+      quoi = S.type == 'niveau' ? 'le niveau ' + (S.niveau + 1) + ' du Tour de la ville' : S.type == 'defi' ? 'le Défi du jour' : 'Voie libre';
+    const texte = 'J\'ai fait ' + fmt(S.score) + ' points sur ' + quoi + ' (' + fmt(S.dist) + ' m) ! Viens battre mon score :';
+    const url = location.href.split(/[?#]/)[0];
+    try {
+      if (navigator.share) await navigator.share({ title: 'Voie libre', text: texte, url });
+      else {
+        await navigator.clipboard.writeText(texte + ' ' + url);
+        b.textContent = 'Copié !';
+        setTimeout(() => (b.textContent = 'Partager mon score'), 1800);
+      }
+    } catch (e) {}
   }
 
   // ----- trophées et records -----
@@ -2378,6 +2597,7 @@
       h =
         '<div class="amelio"><span class="mini-planche" style="--c1:#ff6b6b;--c2:#fff" aria-hidden="true"></span><div><b>3 planches</b><small>Tu en as ' + D.planches + '. Elles encaissent un choc pendant 30 s.</small></div>' + acheter('planches', 300, '3 planches') + '</div>' +
         '<div class="amelio"><span class="bic" style="--c:#28c2a0" aria-hidden="true">»</span><div><b>3 élans de départ</b><small>Tu en as ' + D.elans + '. Au départ d\'une course libre : 6 s de vol à toute vitesse.</small></div>' + acheter('elans', 600, '3 élans de départ') + '</div>' +
+        '<div class="amelio"><span class="mini-coffre" aria-hidden="true"></span><div><b>Coffres mystère</b><small>Tu en as ' + D.coffres + '. Pièces, planches, clés… ou un personnage !</small></div>' + (D.coffres ? '<button type="button" class="choisir" data-a="ouvrir">Ouvrir</button>' : '') + acheter('coffre', 400, '1 coffre mystère') + '</div>' +
         '<div class="amelio"><span class="bic" style="--c:#ffb703" aria-hidden="true">🔑</span><div><b>1 clé</b><small>Tu en as ' + D.cles + '. Pour continuer après un choc.</small></div>' + acheter('cle', 1500, '1 clé') + '</div>';
     $('amelio').innerHTML = h;
     for (const c of $('amelio').querySelectorAll('[data-perso]')) dessinFace(c, PERSOS.find(x => x.id == c.dataset.perso));
@@ -2414,6 +2634,8 @@
       }
     } else if (a == 'planches' && payer(300)) D.planches += 3;
     else if (a == 'elans' && payer(600)) D.elans += 3;
+    else if (a == 'coffre' && payer(400)) D.coffres++;
+    else if (a == 'ouvrir') return ecranCoffre();
     else if (a == 'cle' && payer(1500)) D.cles++;
     ecrire();
     son('bonus');
@@ -2574,7 +2796,11 @@
     else if (k == 'victoire') [523, 659, 784, 1047, 1319].forEach((f, i) => note(f, 0, 0.25, 'triangle', 0.09, i * 0.1));
     else if (k == 'alerte') [440, 330].forEach((f, i) => note(f, 0, 0.12, 'square', 0.05, i * 0.13));
     else if (k == 'bouclier') note(900, 300, 0.3, 'sawtooth', 0.06);
-    else if (k == 'caisse' || k == 'casse') {
+    else if (k == 'figure') [660, 880, 1320].forEach((f, i) => note(f, 0, 0.1, 'triangle', 0.07, i * 0.05));
+    else if (k == 'coffre') {
+      souffle(0.4, 0.08, 1500);
+      [523, 784, 1047, 1568].forEach((f, i) => note(f, 0, 0.3, 'triangle', 0.08, 0.15 + i * 0.07));
+    } else if (k == 'caisse' || k == 'casse') {
       souffle(0.18, 0.2, 800);
       note(160, 80, 0.15, 'square', 0.06);
     } else if (k == 'ecrase') {
@@ -2649,6 +2875,8 @@
   $('b-pause').onclick = pause;
   $('b-planche').onclick = utiliserPlanche;
   $('b-elan').onclick = utiliserElan;
+  $('b-partager').onclick = partager;
+  $('b-coffre-retour').onclick = () => boutique('objets');
   $('b-trophees').onclick = ecranTrophees;
   $('b-reglages').onclick = ecranReglages;
   $('b-cadeau').onclick = () => {
@@ -2736,7 +2964,8 @@
     } else if (S.mode == 'pause' && (k == 'Escape' || k == 'p')) {
       e.preventDefault();
       reprendre();
-    } else if (k == 'Escape' && SECONDAIRES.includes(ecranActuel) && ecranActuel != 'cadeau') afficherMenu();
+    } else if (k == 'Escape' && ecranActuel == 'coffre') boutique('objets');
+    else if (k == 'Escape' && SECONDAIRES.includes(ecranActuel) && ecranActuel != 'cadeau') afficherMenu();
   });
 
   // gestes tactiles (et souris) : un glissement = une action ; deux tapes rapides = la planche
@@ -2809,7 +3038,7 @@
 
   // pour les tests : état du jeu, génération du parcours, et avance image par image (60 images par seconde)
   window.VL = {
-    S, P, D, troncon, alea, vitesse, demarrer, menu, continuer, gauche, droite, sauter, glisser, utiliserPlanche, utiliserElan, activerBonus, verifierTrophees,
+    S, P, D, troncon, alea, vitesse, demarrer, menu, continuer, ouvrirCoffre, gauche, droite, sauter, glisser, utiliserPlanche, utiliserElan, activerBonus, verifierTrophees,
     tunnels: () => tunnels,
     objs: () => objs,
     pieces: () => pieces,
