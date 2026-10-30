@@ -1,7 +1,7 @@
 {
   "name": "mes-cours-iut-outils",
   "private": true,
-  "description": "Outils de maintenance du site (index de recherche, liste hors ligne)",
-  "scripts": { "construire": "node construire.js" },
+  "description": "Outils de maintenance du site (index de recherche, liste hors ligne, tests du jeu Voie libre)",
+  "scripts": { "construire": "node construire.js", "tester": "node tester-voie-libre.js" },
   "devDependencies": { "playwright": "1.63.0" }
 }

@@ -48,6 +48,7 @@ assets/                styles (base.css + un fichier par matière), icônes, pol
 sw.js, manifest.webmanifest   application installable et hors ligne
 404.html               page « introuvable »
 outils/construire.js   régénère l'index de recherche et la liste hors ligne
+outils/tester-voie-libre.js   tests du jeu Voie libre (parcours franchissable, mécanismes, sauvegardes)
 .github/workflows/     lance outils/construire.js automatiquement sur GitHub
 ```
 
@@ -56,7 +57,7 @@ outils/construire.js   régénère l'index de recherche et la liste hors ligne
 1. Déposer le fichier `.html` du chapitre dans le dossier de la matière.
 2. Ajouter sa carte dans le `index.html` de la matière.
 3. Dans `cours.html`, ajouter le chapitre à l'attribut `data-prog` de la carte de la matière et mettre à jour le nombre de chapitres.
-4. C'est tout : à chaque modification de `main`, une GitHub Action (`.github/workflows/construire.yml`) régénère l'index de recherche et la liste hors ligne, puis enregistre le résultat. L'onglet **Actions** du dépôt montre son déroulement.
+4. C'est tout : à chaque modification de `main`, une GitHub Action (`.github/workflows/construire.yml`) régénère l'index de recherche et la liste hors ligne, puis enregistre le résultat. Elle lance aussi les tests du jeu Voie libre (`outils/tester-voie-libre.js`), sur `main` comme sur chaque demande de fusion. L'onglet **Actions** du dépôt montre son déroulement.
 
 ## Ajouter un jeu
 

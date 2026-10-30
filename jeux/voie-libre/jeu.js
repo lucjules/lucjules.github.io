@@ -12,7 +12,9 @@
     PLANCHES = DON.planches,
     BONUS = DON.bonus,
     MISSIONS = DON.missions,
-    NIVEAUX = DON.niveaux;
+    NIVEAUX = DON.niveaux,
+    TROPHEES = DON.trophees,
+    QUOTIDIEN = DON.quotidien;
 
   // ---------- Réglages ----------
   const VOIE = 2.2; // distance entre les centres de deux voies
@@ -74,7 +76,13 @@
     niveaux: [],
     defi: { jour: '', meilleur: 0, cle: 0 },
     mot: { jour: '', n: 0 },
-    tuto: 0
+    tuto: 0,
+    elans: 0,
+    st: { pieces: 0, piecesCourse: 0, scoreMax: 0, caisses: 0, drones: 0, toits: 0, planches: 0, defis: 0, mots: 0 },
+    trophees: [],
+    scores: [],
+    quotidien: { jour: '', serie: 0, pris: true },
+    reglages: { vib: 1, sens: 1, qualite: 'auto' }
   };
   for (const k in BONUS) D.niv[k] = 0;
   (() => {
@@ -84,7 +92,17 @@
     } catch (e) {}
     if (!d || typeof d != 'object') return;
     const n = (v, max = 1e12) => (Number.isFinite(+v) && +v > 0 ? Math.min(max, Math.floor(+v)) : 0);
-    for (const k of ['record', 'pieces', 'parties', 'distance', 'cles', 'planches']) if (d[k] != null) D[k] = n(d[k]);
+    for (const k of ['record', 'pieces', 'parties', 'distance', 'cles', 'planches', 'elans']) if (d[k] != null) D[k] = n(d[k]);
+    if (d.st && typeof d.st == 'object') for (const k in D.st) D.st[k] = n(d.st[k]);
+    if (Array.isArray(d.trophees)) D.trophees = d.trophees.filter(x => TROPHEES.some(t => t.id === x));
+    if (Array.isArray(d.scores))
+      D.scores = d.scores
+        .filter(x => x && n(x.s) > 0)
+        .slice(0, 5)
+        .map(x => ({ s: n(x.s), d: n(x.d), j: /^\d{4}-\d\d-\d\d$/.test(x.j) ? x.j : '', p: PERSOS.some(o => o.id === x.p) ? x.p : 'lune' }));
+    if (d.quotidien && typeof d.quotidien == 'object') D.quotidien = { jour: String(d.quotidien.jour || ''), serie: n(d.quotidien.serie, 7), pris: d.quotidien.pris !== false };
+    if (d.reglages && typeof d.reglages == 'object')
+      D.reglages = { vib: d.reglages.vib === 0 ? 0 : 1, sens: [0.7, 1, 1.4].includes(d.reglages.sens) ? d.reglages.sens : 1, qualite: ['auto', 'basse', 'haute'].includes(d.reglages.qualite) ? d.reglages.qualite : 'auto' };
     D.multi = n(d.multi, 29);
     D.tuto = d.tuto ? 1 : 0;
     if (d.niv && typeof d.niv == 'object') for (const k in D.niv) D.niv[k] = n(d.niv[k], 5);
@@ -107,6 +125,8 @@
     } catch (e) {}
   }
   const dureeBonus = (k, niv = D.niv[k]) => BONUS[k].base + BONUS[k].pas * niv;
+  const plancheChoisie = () => PLANCHES.find(x => x.id == D.planche) || PLANCHES[0];
+  const dureePlanche = () => (plancheChoisie().pouvoir == 'duree' ? 45 : DUREE_PLANCHE);
 
   // ---------- Hasard reproductible, jour ----------
   function alea(graine) {
@@ -135,6 +155,10 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
   const nombreJour = () => +jour().replace(/-/g, '');
+  const hier = () => {
+    const d = new Date(Date.now() - 864e5);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  };
   const motDuJour = () => DON.mots[nombreJour() % DON.mots.length];
   function majJour() {
     const j = jour();
@@ -172,14 +196,14 @@
         m.fait = true;
         fini = true;
         S.missionsFaites.push(texteMission(m));
-        message('Mission accomplie !', 'or');
+        annonce('Mission accomplie !');
         son('mission');
       }
     }
     if (fini && D.missions.every(m => m.fait)) {
       D.multi = Math.min(29, D.multi + 1);
       nouvellesMissions();
-      setTimeout(() => message('Multiplicateur ×' + (D.multi + 1) + ' !', 'or'), 1300);
+      annonce('Multiplicateur ×' + (D.multi + 1) + ' !');
     }
     if (fini) ecrire();
   }
@@ -334,7 +358,10 @@
     depart: 0,
     temps: 0,
     q: 0,
-    raison: ''
+    raison: '',
+    elan: 0,
+    elanUtilise: false,
+    ombre: 0
   };
   const P = { voie: 1, voieAvant: 1, x: 0, y: 0, z: 0, vy: 0, gy: 0, sol: true, glisse: 0, tampon: 0, coyote: 0, course: 0, chute: 0, ecrase: false };
   const cam = { x: 0, y: 3.4, z: -6, base: 0, sp: Math.sin(0.2), cp: Math.cos(0.2) };
@@ -343,6 +370,7 @@
     bonus = [],
     decor = [],
     ponts = [],
+    tunnels = [],
     parts = [];
   let r = Math.random,
     rDecor = Math.random,
@@ -350,6 +378,7 @@
     decZ = [0, 0],
     propZ = [0, 0],
     pontZ = 0,
+    tunZ = 0,
     zLettre = 0,
     nettoyage = 0,
     tutoT = -1;
@@ -393,7 +422,11 @@
       depart: 0,
       temps: 0,
       raison: '',
-      nouveau: false
+      nouveau: false,
+      elan: 0,
+      elanUtilise: false,
+      ombre: 0,
+      rang: 0
     });
     Object.assign(P, { voie: 1, voieAvant: 1, x: 0, y: 0, z: 0, vy: 0, gy: 0, sol: true, glisse: 0, tampon: 0, coyote: 0, chute: 0, ecrase: false });
     Object.assign(cam, { x: 0, y: 3.4, z: -6, base: 0 });
@@ -402,6 +435,7 @@
     bonus = [];
     decor = [];
     ponts = [];
+    tunnels = [];
     parts = [];
     if (type == 'niveau') {
       const n = NIVEAUX[niveau];
@@ -421,6 +455,7 @@
     decZ = [-12, -12];
     propZ = [-12, -12];
     pontZ = 120;
+    tunZ = 260;
     zLettre = 300 + r() * 400;
     S.qVu = quartierIndex(0);
     generer();
@@ -496,10 +531,18 @@
         } else propZ[c] = z + 20;
       }
     }
-    // passerelles au-dessus des voies
+    // tunnels, puis passerelles au-dessus des voies (jamais dans un tunnel)
+    while (tunZ < fin) {
+      const q = QUARTIERS[quartierIndex(tunZ)];
+      if (!S.demo && q.decor.includes('tunnel') && rDecor() < 0.55) {
+        const L = 50 + rDecor() * 50;
+        tunnels.push({ z0: tunZ, z1: tunZ + L, c: q.mur });
+        tunZ += L + 300 + rDecor() * 300;
+      } else tunZ += 200 + rDecor() * 200;
+    }
     while (pontZ < fin) {
       const q = QUARTIERS[quartierIndex(pontZ)];
-      if (!S.demo && q.decor.includes('passerelle') && rDecor() < 0.6) ponts.push({ z0: pontZ, z1: pontZ + 4, c: q.mur });
+      if (!S.demo && q.decor.includes('passerelle') && rDecor() < 0.6 && !enTunnel(pontZ, 8) && !enTunnel(pontZ + 4)) ponts.push({ z0: pontZ, z1: pontZ + 4, c: q.mur });
       pontZ += 160 + rDecor() * 140;
     }
   }
@@ -511,6 +554,22 @@
     bonus = bonus.filter(b => !b.pris && b.z > z);
     decor = decor.filter(b => b.z1 > z);
     ponts = ponts.filter(b => b.z1 > z);
+    tunnels = tunnels.filter(b => b.z1 > z);
+  }
+
+  // dans un tunnel à la position z (marge : un peu avant l'entrée)
+  const enTunnel = (z, marge = 0) => tunnels.some(t => z >= t.z0 - marge && z <= t.z1);
+  // hauteur de vol en jetpack : plus bas sous les tunnels
+  const hauteurVol = z => (enTunnel(z, 18) ? 3.6 : H_JETPACK);
+  const vole = () => !!S.bonus.jetpack || S.elan > 0;
+  // une traînée de pièces dans le ciel, qui change de voie de temps en temps
+  function traineePieces(duree, v) {
+    let l = P.voie;
+    const fin = P.z + 12 + v * duree;
+    for (let z = P.z + 14; z < fin; z += 2.4) {
+      if (Math.random() < 0.06) l = Math.max(0, Math.min(2, l + (Math.random() < 0.5 ? -1 : 1)));
+      pieces.push({ x: lx(l), y: hauteurVol(z) + 0.6, z, a: z });
+    }
   }
 
   // ---------- Physique ----------
@@ -551,9 +610,9 @@
           o.z1 -= o.vit * h;
         }
       }
-    if (S.bonus.jetpack) {
-      // en vol : on monte en douceur à la hauteur du jetpack
-      P.vy = (H_JETPACK - P.y) * 5;
+    if (vole()) {
+      // en vol : on monte en douceur à la hauteur du jetpack (plus bas sous les tunnels)
+      P.vy = (hauteurVol(P.z) - P.y) * 5;
       P.y += P.vy * h;
       P.sol = false;
       P.gy = sol(P.x, P.z, 99);
@@ -569,11 +628,16 @@
         P.sol = true;
         P.coyote = 0.1;
       } else if (P.y > g + 0.05) P.sol = false;
+      // plafond des tunnels
+      if (P.y > 4.3 && enTunnel(P.z)) {
+        P.y = 4.3;
+        P.vy = Math.min(P.vy, 0);
+      }
     }
     if (P.sol && P.tampon > 0) sauter();
     if (S.demo) return;
     if (P.sol && sol0 && P.y > 2.2) evenement('toits', S.v * h);
-    if (!S.bonus.jetpack) collisions(x0);
+    if (!vole()) collisions(x0);
     if (S.mode == 'jeu') {
       ramasser(h);
       accelerateurs();
@@ -635,6 +699,7 @@
     o.casse = true;
     eclats(o);
     S.score += 20 * S.mult;
+    flotte('+' + 20 * S.mult, centre(o), 1.6, Math.max(o.z0, P.z + 1));
     son('casse');
   }
 
@@ -654,7 +719,7 @@
       S.pieces += n;
       S.score += 5 * n * S.mult;
       evenement('pieces', n);
-      message('+' + n + ' pièces');
+      flotte('+' + n, lx(o.l), o.y0 + 1.4, o.z0, [255, 207, 64]);
       for (let i = 0; i < 10; i++) parts.push({ x: lx(o.l), y: o.y0 + 0.6, z: o.z0, vx: (Math.random() - 0.5) * 5, vy: 4 + Math.random() * 3, vz: S.v, v: 0.6, c: [255, 207, 64], r: 0.12 });
     }
   }
@@ -740,8 +805,8 @@
 
   function ramasser(h) {
     const hp = P.glisse > 0 ? H_GLISSE : H_DEBOUT,
-      aimant = !!S.bonus.aimant,
-      vol = !!S.bonus.jetpack,
+      aimant = !!S.bonus.aimant || (S.planche > 0 && plancheChoisie().pouvoir == 'aimant'),
+      vol = vole(),
       k = Math.min(1, 16 * h);
     for (const c of pieces) {
       if (c.pris) continue;
@@ -770,15 +835,7 @@
     S.bonus[k] = dureeBonus(k);
     son('bonus');
     message(BONUS[k].nom + ' !');
-    if (k == 'jetpack') {
-      // une traînée de pièces dans le ciel, qui change de voie de temps en temps
-      let l = P.voie;
-      const fin = P.z + 12 + S.v * dureeBonus(k);
-      for (let z = P.z + 14; z < fin; z += 2.4) {
-        if (Math.random() < 0.06) l = Math.max(0, Math.min(2, l + (Math.random() < 0.5 ? -1 : 1)));
-        pieces.push({ x: lx(l), y: H_JETPACK + 0.6, z, a: z });
-      }
-    }
+    if (k == 'jetpack') traineePieces(dureeBonus(k), S.v);
   }
 
   function lettre() {
@@ -790,7 +847,8 @@
     if (D.mot.n >= mot.length) {
       D.cles++;
       D.pieces += 300;
-      setTimeout(() => message('Mot « ' + mot + ' » trouvé : +1 clé, +300 pièces', 'or'), 1300);
+      D.st.mots++;
+      annonce('Mot « ' + mot + ' » trouvé : +1 clé, +300 pièces');
     }
     ecrire();
   }
@@ -820,6 +878,11 @@
       }
   }
 
+  // texte qui monte dans la scène (+20, +12…)
+  function flotte(txt, x, y, z, c = [255, 255, 255]) {
+    parts.push({ x, y, z, vx: 0, vy: 2.2, vz: S.v * 0.95, v: 0.9, c, r: 0.45, txt });
+  }
+
   function poussiere() {
     for (let i = 0; i < 6; i++)
       parts.push({ x: P.x + (Math.random() - 0.5) * 0.6, y: P.y + 0.05, z: P.z, vx: (Math.random() - 0.5) * 3, vy: 1 + Math.random(), vz: S.v * 0.6, v: 0.4, c: [210, 215, 228], r: 0.1 });
@@ -847,9 +910,9 @@
     son('voie');
   }
   function sauter() {
-    if (S.mode != 'jeu' || S.bonus.jetpack) return;
+    if (S.mode != 'jeu' || vole()) return;
     if (P.sol || P.coyote > 0) {
-      P.vy = S.bonus.saut ? SUPER_SAUT : S.bonus.bulle ? SAUT * 1.2 : SAUT;
+      P.vy = S.bonus.saut ? SUPER_SAUT : S.bonus.bulle ? SAUT * 1.2 : S.planche > 0 && plancheChoisie().pouvoir == 'saut' ? SAUT * 1.25 : SAUT;
       P.sol = false;
       P.coyote = 0;
       P.glisse = 0;
@@ -860,7 +923,7 @@
     } else P.tampon = 0.15; // appui un peu trop tôt : on saute dès l'atterrissage
   }
   function glisser() {
-    if (S.mode != 'jeu' || S.bonus.jetpack) return;
+    if (S.mode != 'jeu' || vole()) return;
     P.glisse = DUREE_GLISSE;
     P.tampon = 0;
     if (!P.sol) {
@@ -873,11 +936,22 @@
   function utiliserPlanche() {
     if (S.mode != 'jeu' || S.planche > 0 || D.planches < 1) return;
     D.planches--;
-    S.planche = DUREE_PLANCHE;
+    S.planche = dureePlanche();
     ecrire();
     evenement('planches');
     son('planche');
     message('Planche !');
+  }
+  // élan de départ : quelques secondes de vol à toute vitesse, au tout début d'une course libre
+  function utiliserElan() {
+    if (S.mode != 'jeu' || S.type != 'libre' || S.elanUtilise || D.elans < 1 || S.dist > 150) return;
+    D.elans--;
+    S.elanUtilise = true;
+    S.elan = 6;
+    ecrire();
+    traineePieces(6, vitesse(S.dist) * 2);
+    son('turbo');
+    message('Élan de départ !');
   }
 
   function finPartie(raison) {
@@ -895,6 +969,18 @@
     D.pieces += S.pieces;
     D.distance = Math.max(D.distance, Math.floor(S.dist));
     if (S.nouveau) D.record = score;
+    for (const k of ['caisses', 'drones', 'toits', 'planches']) D.st[k] += Math.floor(S.compteurs[k] || 0);
+    D.st.pieces += S.pieces;
+    D.st.piecesCourse = Math.max(D.st.piecesCourse, S.pieces);
+    D.st.scoreMax = Math.max(D.st.scoreMax, score);
+    S.rang = 0;
+    if (S.type == 'libre' && score > 0) {
+      const e = { s: score, d: Math.floor(S.dist), j: jour(), p: D.perso };
+      D.scores.push(e);
+      D.scores.sort((a, b) => b.s - a.s);
+      D.scores = D.scores.slice(0, 5);
+      S.rang = D.scores.indexOf(e) + 1;
+    }
     S.recompense = '';
     if (S.type == 'niveau' && raison == 'victoire') {
       const n = NIVEAUX[S.niveau],
@@ -918,10 +1004,74 @@
       if (raison == 'temps' && !D.defi.cle) {
         D.defi.cle = 1;
         D.cles++;
+        D.st.defis++;
         S.recompense = 'Défi réussi : +1 clé';
       }
     }
     ecrire();
+    verifierTrophees();
+  }
+
+  // ---------- Trophées ----------
+  function valeurTrophee(type) {
+    const enCourse = !S.demo && (S.mode == 'jeu' || S.mode == 'pause' || S.mode == 'continuer');
+    switch (type) {
+      case 'parties':
+        return D.parties;
+      case 'distance':
+        return Math.max(D.distance, enCourse ? S.dist : 0);
+      case 'score':
+        return Math.max(D.record, D.st.scoreMax, enCourse ? S.score : 0);
+      case 'piecesCourse':
+        return Math.max(D.st.piecesCourse, enCourse ? S.pieces : 0);
+      case 'piecesTotal':
+        return D.st.pieces + (enCourse ? S.pieces : 0);
+      case 'niveauxPort':
+        return [0, 1, 2].filter(i => D.niveaux[i] > 0).length;
+      case 'etoiles':
+        return D.niveaux.reduce((s, x) => s + (x || 0), 0);
+      case 'multi':
+        return D.multi + 1;
+      case 'persos':
+        return D.persos.length;
+      default:
+        return (D.st[type] || 0) + (enCourse ? Math.floor(S.compteurs[type] || 0) : 0); // caisses, drones, toits, planches, défis, mots
+    }
+  }
+  function verifierTrophees() {
+    let gagne = false;
+    for (const t of TROPHEES)
+      if (!D.trophees.includes(t.id) && valeurTrophee(t.type) >= t.n) {
+        D.trophees.push(t.id);
+        D.pieces += t.gain;
+        gagne = true;
+        annonce('Trophée : ' + t.nom + ' (+' + t.gain + ' pièces)');
+      }
+    if (gagne) {
+      son('mission');
+      ecrire();
+    }
+  }
+
+  // ---------- Récompense quotidienne ----------
+  function verifierQuotidien() {
+    const j = jour();
+    if (D.quotidien.jour != j) {
+      D.quotidien = { jour: j, serie: D.quotidien.jour == hier() ? (D.quotidien.serie % 7) + 1 : 1, pris: false };
+      ecrire();
+    }
+    return !D.quotidien.pris;
+  }
+  function recupererQuotidien() {
+    if (D.quotidien.pris) return;
+    const c = QUOTIDIEN[D.quotidien.serie - 1] || QUOTIDIEN[0];
+    D.pieces += c.pieces || 0;
+    D.planches += c.planches || 0;
+    D.cles += c.cles || 0;
+    D.elans += c.elans || 0;
+    D.quotidien.pris = true;
+    ecrire();
+    son('bonus');
   }
 
   // ---------- Boucle ----------
@@ -954,10 +1104,11 @@
         afficherFin();
       }
     } else {
-      S.v = S.demo ? 9 : vitesse(S.dist + S.depart) * (S.turbo > 0 ? 1.5 : 1);
-      const jet = !!S.bonus.jetpack;
+      S.v = S.demo ? 9 : vitesse(S.dist + S.depart) * (S.turbo > 0 ? 1.5 : 1) * (S.elan > 0 ? 2 : 1);
+      const jet = vole();
       for (const k in S.bonus) if ((S.bonus[k] -= dt) <= 0) delete S.bonus[k];
-      if (jet && !S.bonus.jetpack) S.invu = Math.max(S.invu, 1.4); // atterrissage protégé
+      if (S.elan > 0) S.elan = Math.max(0, S.elan - dt);
+      if (jet && !vole()) S.invu = Math.max(S.invu, 1.4); // atterrissage protégé
       if (S.turbo > 0 && (S.turbo -= dt) <= 0) S.invu = Math.max(S.invu, 0.8);
       if (S.planche > 0) S.planche = Math.max(0, S.planche - dt);
       S.mult = (1 + D.multi) * (S.bonus.x2 ? 2 : 1);
@@ -978,13 +1129,16 @@
           message(QUARTIERS[q].nom, 'quartier');
         }
         tutoriel();
+        if (Math.floor(S.t) != Math.floor(S.t - dt)) verifierTrophees();
       }
     }
     // caméra : suit le coureur, et la hauteur des toits seulement quand il s'y pose (ou en jetpack)
-    if (P.sol || P.y < cam.base || S.bonus.jetpack) cam.base = P.y;
+    if (P.sol || P.y < cam.base || vole()) cam.base = P.y;
     cam.x += (P.x * 0.75 - cam.x) * (1 - Math.exp(-dt * 7));
-    cam.y += (cam.base + 3.4 - cam.y) * (1 - Math.exp(-dt * 4));
+    const sousTunnel = enTunnel(cam.z + 1) || enTunnel(P.z, 4);
+    cam.y += (Math.min(cam.base + 3.4, sousTunnel ? 5.2 : 99) - cam.y) * (1 - Math.exp(-dt * (sousTunnel ? 8 : 4)));
     cam.z = P.z - 6;
+    S.ombre += ((enTunnel(cam.z + 3) ? 1 : 0) - S.ombre) * (1 - Math.exp(-dt * 5));
     S.secousse = Math.max(0, S.secousse - dt);
     for (const q of parts) {
       q.x += q.vx * dt;
@@ -1059,7 +1213,9 @@
       B = QUARTIERS[q.b];
     for (const k of ['ciel', 'brume', 'sol', 'ballast', 'mur']) PAL[k] = mixer(A[k], B[k], q.t);
     PAL.nuit = A.nuit + (B.nuit - A.nuit) * q.t;
-    PAL.lum = 1 - 0.32 * PAL.nuit;
+    PAL.lum = (1 - 0.32 * PAL.nuit) * (1 - 0.4 * S.ombre);
+    PAL.brumeCiel = PAL.brume;
+    PAL.brume = mixer(PAL.brume, [18, 20, 30], 0.85 * S.ombre); // au fond d'un tunnel, tout se fond dans le noir
   }
 
   // couleur c éclaircie ou assombrie par s, assombrie la nuit, puis noyée dans le brouillard selon t
@@ -1131,7 +1287,7 @@
     fctx = fond.getContext('2d');
   let cleFond = '';
   function ciel() {
-    const cf = [W, H, DPR, Math.round(HORIZON), PAL.ciel, PAL.brume, PAL.sol, Math.round(PAL.nuit * 20)].join();
+    const cf = [W, H, DPR, Math.round(HORIZON), PAL.ciel, PAL.brumeCiel, PAL.sol, Math.round(PAL.nuit * 20)].join();
     if (cf != cleFond) {
       cleFond = cf;
       fond.width = cv.width;
@@ -1159,7 +1315,7 @@
   function cielFixe() {
     const g = ctx.createLinearGradient(0, 0, 0, HORIZON);
     g.addColorStop(0, rgb(PAL.ciel));
-    g.addColorStop(1, rgb(PAL.brume));
+    g.addColorStop(1, rgb(PAL.brumeCiel));
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, HORIZON + 1);
     const m = Math.min(W, H);
@@ -1178,9 +1334,10 @@
       ctx.fill();
     }
     const gs = ctx.createLinearGradient(0, HORIZON, 0, H);
-    gs.addColorStop(0, rgb(PAL.brume));
-    gs.addColorStop(0.3, teinte(PAL.sol, 0));
-    gs.addColorStop(1, teinte(PAL.sol, 0));
+    const sol = rgb(PAL.sol.map(v => v * (1 - 0.32 * PAL.nuit)));
+    gs.addColorStop(0, rgb(PAL.brumeCiel));
+    gs.addColorStop(0.3, sol);
+    gs.addColorStop(1, sol);
     ctx.fillStyle = gs;
     ctx.fillRect(0, HORIZON, W, H - HORIZON);
   }
@@ -1293,10 +1450,45 @@
     }
   }
 
+  // intérieur d'un tunnel : parois, plafond, bandeaux et plafonniers lumineux (dessiné avant les voies)
+  function tunnelInterieur(t) {
+    const a = Math.max(t.z0, cam.z + PRES),
+      b = Math.min(t.z1, cam.z + VUE);
+    if (a >= b) return;
+    const paroi = [96, 100, 116],
+      plafond = [70, 74, 90],
+      bandeau = [255, 214, 140];
+    for (let z = a; z < b; z += 10) {
+      const z2 = Math.min(b, z + 10),
+        tt = brume(z - cam.z);
+      for (const x of [-4.1, 4.1]) {
+        poly(quadX(x, 0, 6, z, z2), teinte(paroi, tt, 0.9));
+        poly(quadX(x * 0.998, 3, 3.15, z, z2), teinte(bandeau, tt, 1, true));
+      }
+      if (cam.y < 6) poly(quadY(-4.1, 4.1, 6, z, z2), teinte(plafond, tt));
+    }
+    if (cam.y < 6) for (let z = Math.ceil(a / 7) * 7; z < b - 1.4; z += 7) poly(quadY(-0.35, 0.35, 5.98, z, z + 1.4), teinte([255, 240, 200], brume(z - cam.z), 1, true));
+  }
+
+  // entrée d'un tunnel : un grand mur percé d'une ouverture au-dessus des voies
+  function tunnelFacade(t) {
+    const z = t.z0,
+      c = mixer(t.c, [130, 120, 112], 0.55);
+    pave(-22, -4.1, 0, 12, z, z + 1.5, c);
+    pave(4.1, 22, 0, 12, z, z + 1.5, c);
+    pave(-4.1, 4.1, 6, 12, z, z + 1.5, c);
+    if (z < cam.z + PRES) return;
+    const f = teinte([58, 62, 78], brume(z - cam.z));
+    poly(quadZ(-4.7, -4.1, 0, 6.6, z - 0.02), f);
+    poly(quadZ(4.1, 4.7, 0, 6.6, z - 0.02), f);
+    poly(quadZ(-4.7, 4.7, 6, 6.6, z - 0.02), f);
+  }
+
   // murs, voies, traverses, rails ; fresques colorées sur les murs
   function dessinerVoies() {
     const z0 = cam.z + PRES,
       zf = cam.z + VUE;
+    for (const t of tunnels) tunnelInterieur(t);
     for (let z = Math.floor(z0 / 15) * 15; z < zf; z += 15) {
       const za = Math.max(z, z0),
         z2 = Math.min(zf, z + 15),
@@ -1365,7 +1557,8 @@
     }
     // portiques de caténaires tous les 32 m, passerelles
     const pc = DETAIL > 1 ? 32 : 64;
-    for (let z = Math.ceil(n / pc) * pc; z < (DETAIL ? f : cam.z + 90); z += pc) L.push({ k: z, l: 9, f: () => catenaire(z) });
+    for (let z = Math.ceil(n / pc) * pc; z < (DETAIL ? f : cam.z + 90); z += pc) if (!enTunnel(z, 1)) L.push({ k: z, l: 9, f: () => catenaire(z) });
+    for (const t of tunnels) if (t.z0 > n && t.z0 < f) L.push({ k: t.z0, l: 0, f: () => tunnelFacade(t) });
     for (const p of ponts) if (p.z1 > n && p.z0 < f) L.push({ k: Math.max(p.z0, n), l: 0, f: () => passerelle(p) });
     for (const c of pieces) if (!c.pris && c.z > n && c.z < f) L.push({ k: c.z, l: 0, f: () => dessinPiece(c) });
     for (const b of bonus) if (!b.pris && b.z > n && b.z < f) L.push({ k: b.z, l: 0, f: () => dessinBonus(b) });
@@ -1381,6 +1574,17 @@
       if (p.d < PRES) continue;
       ctx.globalAlpha = Math.min(1, q.v * 3);
       ctx.fillStyle = rgb(q.c);
+      if (q.txt) {
+        ctx.font = '700 ' + Math.max(10, (q.r * F) / p.d).toFixed(1) + 'px "Bricolage Grotesque", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.strokeStyle = 'rgba(22,33,58,.55)';
+        ctx.lineWidth = 3;
+        ctx.strokeText(q.txt, p.x, p.y);
+        ctx.fillText(q.txt, p.x, p.y);
+        ctx.globalAlpha = 1;
+        continue;
+      }
       ctx.beginPath();
       ctx.arc(p.x, p.y, Math.max(1, (q.r * F) / p.d), 0, 7);
       ctx.fill();
@@ -1704,6 +1908,69 @@
     return 'rgb(' + (((n >> 16) & 255) * 0.8) + ',' + (((n >> 8) & 255) * 0.8) + ',' + ((n & 255) * 0.8) + ')';
   };
 
+  // aperçu d'un personnage vu de face, dans un petit canvas (boutique)
+  function dessinFace(cvs, pr) {
+    const vrai = ctx;
+    ctx = cvs.getContext('2d');
+    const w = cvs.width,
+      h = cvs.height;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.translate(w / 2, h * 0.97);
+    ctx.scale(h / 1.95, h / 1.95);
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ligne(pr.pantalon, 0.18, [-0.14, -0.78, -0.16, -0.08]);
+    ligne(pr.pantalon, 0.18, [0.14, -0.78, 0.16, -0.08]);
+    ovale('#ffffff', -0.18, -0.05, 0.12, 0.07);
+    ovale('#ffffff', 0.18, -0.05, 0.12, 0.07);
+    ligne(pr.bras, 0.15, [-0.28, -1.2, -0.42, -0.98, -0.42, -0.8]);
+    ligne(pr.bras, 0.15, [0.28, -1.2, 0.42, -0.98, 0.42, -0.8]);
+    ovale(pr.peau, -0.42, -0.75, 0.07, 0.07);
+    ovale(pr.peau, 0.42, -0.75, 0.07, 0.07);
+    arrondi(pr.sweat, -0.3, -1.34, 0.6, 0.62, 0.16);
+    ligne(pr.sac, 0.06, [-0.17, -1.3, -0.15, -0.98]);
+    ligne(pr.sac, 0.06, [0.17, -1.3, 0.15, -0.98]);
+    const y = -1.52;
+    if (pr.coiffure == 'couettes') {
+      ovale(pr.cheveux, -0.27, y + 0.08, 0.1, 0.16);
+      ovale(pr.cheveux, 0.27, y + 0.08, 0.1, 0.16);
+    }
+    ovale(pr.cheveux, 0, y - 0.03, 0.22, 0.21);
+    ovale(pr.peau, 0, y + 0.03, 0.18, 0.18);
+    ovale('#1d1d2b', -0.07, y + 0.02, 0.025, 0.035);
+    ovale('#1d1d2b', 0.07, y + 0.02, 0.025, 0.035);
+    ctx.strokeStyle = '#1d1d2b';
+    ctx.lineWidth = 0.025;
+    ctx.beginPath();
+    ctx.arc(0, y + 0.07, 0.06, 0.25, Math.PI - 0.25);
+    ctx.stroke();
+    ctx.fillStyle = pr.cheveux;
+    ctx.beginPath();
+    ctx.arc(0, y - 0.02, 0.19, Math.PI * 1.05, Math.PI * 1.95);
+    ctx.fill();
+    ctx.fillStyle = pr.accessoire;
+    if (pr.coiffure == 'casquette') {
+      ctx.beginPath();
+      ctx.arc(0, y - 0.06, 0.21, Math.PI, 0);
+      ctx.fill();
+      ovale(mixer3(pr.accessoire), 0, y - 0.07, 0.25, 0.05);
+    } else if (pr.coiffure == 'bonnet') {
+      ctx.beginPath();
+      ctx.arc(0, y - 0.05, 0.22, Math.PI, 0);
+      ctx.fill();
+      arrondi(mixer3(pr.accessoire), -0.23, y - 0.1, 0.46, 0.08, 0.03);
+      ovale('#ffffff', 0, y - 0.3, 0.07, 0.07);
+    } else if (pr.coiffure == 'crete') ovale(pr.cheveux, 0, y - 0.23, 0.06, 0.15);
+    else if (pr.coiffure == 'chignon') {
+      ovale(pr.cheveux, 0, y - 0.25, 0.11, 0.1);
+      arrondi(pr.accessoire, -0.09, y - 0.18, 0.18, 0.04, 0.02);
+    } else if (pr.coiffure == 'couettes') {
+      ovale(pr.accessoire, -0.22, y - 0.02, 0.05, 0.04);
+      ovale(pr.accessoire, 0.22, y - 0.02, 0.05, 0.04);
+    }
+    ctx = vrai;
+  }
+
   // le coureur, vu de dos ; sur sa planche, avec son jetpack, dans sa bulle
   function dessinCoureur() {
     const p = proj(P.x, P.y, P.z);
@@ -1713,7 +1980,7 @@
       ht = P.y - P.gy,
       pr = PERSOS.find(x => x.id == D.perso) || PERSOS[0],
       pl = PLANCHES.find(x => x.id == D.planche) || PLANCHES[0],
-      surPlanche = S.planche > 0 && !S.bonus.jetpack;
+      surPlanche = S.planche > 0 && !vole();
     ctx.fillStyle = 'rgba(20,28,50,' + 0.22 * Math.max(0.25, 1 - ht / 4) + ')';
     ctx.beginPath();
     ctx.ellipse(o.x, o.y, 0.5 * s * (1 - Math.min(0.5, ht / 10)), 0.15 * s, 0, 0, 7);
@@ -1739,7 +2006,7 @@
     const ph = P.course * 0.55,
       sw = S.mode == 'fin' && S.raison == 'choc' ? 0 : surPlanche ? 0 : Math.sin(ph),
       air = !P.sol,
-      jet = !!S.bonus.jetpack,
+      jet = vole(),
       chaussure = S.bonus.saut ? '#06d6a0' : '#ffffff';
     if (surPlanche) ctx.translate(0, -0.18);
     if (P.glisse > 0 && P.sol) {
@@ -1830,7 +2097,7 @@
 
   // traits de vitesse pendant le turbo et le jetpack
   function vitesseTraits() {
-    const k = S.turbo > 0 ? 1 : S.bonus.jetpack ? 0.6 : 0;
+    const k = S.turbo > 0 || S.elan > 0 ? 1 : S.bonus.jetpack ? 0.6 : 0;
     if (!k || reduit) return;
     ctx.strokeStyle = 'rgba(255,255,255,' + 0.35 * k + ')';
     ctx.lineWidth = 2;
@@ -1866,13 +2133,14 @@
   const reduit = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fmt = n => Math.floor(n).toLocaleString('fr-FR');
   const secondes = d => d.toLocaleString('fr-FR') + ' s';
-  const ECRANS = ['menu', 'aide', 'boutique', 'missions', 'niveaux', 'defi', 'pause', 'continuer', 'fin'];
+  const ECRANS = ['menu', 'aide', 'boutique', 'missions', 'niveaux', 'defi', 'trophees', 'reglages', 'cadeau', 'pause', 'continuer', 'fin'],
+    SECONDAIRES = ['aide', 'boutique', 'missions', 'niveaux', 'defi', 'trophees', 'reglages', 'cadeau'];
   let ecranActuel = 'menu';
 
   function ecran(id) {
     ecranActuel = id;
     for (const e of ECRANS) $(e).hidden = e != id;
-    $('hud').hidden = !(S.mode == 'jeu' || S.mode == 'fin' || S.mode == 'continuer' || S.mode == 'pause') || ['menu', 'aide', 'boutique', 'missions', 'niveaux', 'defi'].includes(id);
+    $('hud').hidden = !(S.mode == 'jeu' || S.mode == 'fin' || S.mode == 'continuer' || S.mode == 'pause') || id == 'menu' || SECONDAIRES.includes(id);
     if (id) {
       const b = [...$(id).querySelectorAll('.btn:not(:disabled)')].find(x => !x.hidden);
       if (b) b.focus({ preventScroll: true });
@@ -1897,7 +2165,61 @@
     $('b-missions').querySelector('small').textContent = nf + ' / 3';
     $('b-niveaux').querySelector('small').textContent = '★ ' + D.niveaux.reduce((s, x) => s + (x || 0), 0) + ' / ' + NIVEAUX.length * 3;
     $('b-defi').querySelector('small').textContent = D.defi.meilleur ? 'meilleur : ' + fmt(D.defi.meilleur) : '60 secondes';
+    verifierTrophees();
+    $('b-trophees').querySelector('small').textContent = D.trophees.length + ' / ' + TROPHEES.length;
+    if (verifierQuotidien()) return ecranCadeau();
     ecran('menu');
+  }
+
+  // ----- cadeau du jour -----
+  function ecranCadeau() {
+    $('ca-jours').innerHTML = QUOTIDIEN.map((c, i) => '<li class="' + (i + 1 < D.quotidien.serie ? 'pris' : i + 1 == D.quotidien.serie ? 'auj' : '') + '"><small>Jour ' + (i + 1) + '</small><b>' + c.txt + '</b></li>').join('');
+    $('ca-serie').textContent = D.quotidien.serie > 1 ? D.quotidien.serie + ' jours d\'affilée !' : 'Reviens chaque jour pour de plus beaux cadeaux.';
+    ecran('cadeau');
+  }
+
+  // ----- trophées et records -----
+  function ecranTrophees() {
+    verifierTrophees();
+    $('tr-total').textContent = D.trophees.length + ' / ' + TROPHEES.length;
+    $('tr-liste').innerHTML = TROPHEES.map(t => {
+      const ok = D.trophees.includes(t.id),
+        v = Math.min(t.n, valeurTrophee(t.type));
+      return '<li class="' + (ok ? 'fait' : '') + '"><span>' + (ok ? '🏆 ' : '') + t.nom + '<small>' + t.txt + ' · +' + fmt(t.gain) + ' pièces</small></span><i><b style="width:' + (100 * v) / t.n + '%"></b></i><small>' + (ok ? '✓' : fmt(v) + ' / ' + fmt(t.n)) + '</small></li>';
+    }).join('');
+    const nomPerso = id => (PERSOS.find(x => x.id == id) || PERSOS[0]).nom;
+    $('tr-scores').innerHTML = D.scores.length
+      ? D.scores.map((e, i) => '<li><b>' + (i + 1) + '</b><span>' + fmt(e.s) + '</span><small>' + fmt(e.d) + ' m · ' + nomPerso(e.p) + (e.j ? ' · ' + e.j.split('-').reverse().join('/') : '') + '</small></li>').join('')
+      : '<li class="vide">Pas encore de score : lance une course libre !</li>';
+    $('tr-stats').innerHTML = [
+      ['Courses', D.parties],
+      ['Pièces ramassées', D.st.pieces],
+      ['Meilleure distance', fmt(D.distance) + ' m'],
+      ['Caisses écrasées', D.st.caisses],
+      ['Drones évités', D.st.drones],
+      ['Sur les toits', fmt(D.st.toits) + ' m']
+    ].map(([k, v]) => '<div><span>' + k + '</span><b>' + (typeof v == 'number' ? fmt(v) : v) + '</b></div>').join('');
+    ecran('trophees');
+  }
+
+  // ----- réglages -----
+  function ecranReglages() {
+    majReglages();
+    ecran('reglages');
+  }
+  function majReglages() {
+    majSon();
+    $('b-vib').textContent = 'Vibrations : ' + (D.reglages.vib ? 'oui' : 'non');
+    $('b-vib').setAttribute('aria-pressed', D.reglages.vib ? 'true' : 'false');
+    for (const b of document.querySelectorAll('[data-sens]')) b.setAttribute('aria-pressed', +b.dataset.sens == D.reglages.sens ? 'true' : 'false');
+    for (const b of document.querySelectorAll('[data-qualite]')) b.setAttribute('aria-pressed', b.dataset.qualite == D.reglages.qualite ? 'true' : 'false');
+  }
+  function appliquerQualite() {
+    const q = D.reglages.qualite;
+    DETAIL = q == 'basse' ? 0 : 2;
+    maxDPR = q == 'basse' ? 1 : 2;
+    lent = 0;
+    taille();
   }
 
   // course abandonnée (Recommencer ou Menu pendant la pause) : les pièces ramassées sont gardées
@@ -1957,7 +2279,8 @@
       tps = S.raison == 'temps';
     $('t-fin').textContent = v ? 'Niveau terminé !' : tps ? 'Temps écoulé !' : S.type == 'niveau' ? 'Niveau raté' : 'Fin de la course';
     $('f-score').textContent = fmt(S.score);
-    $('f-record').hidden = !S.nouveau;
+    $('f-record').hidden = !S.nouveau && !S.rang;
+    $('f-record').textContent = S.nouveau ? 'Nouveau record !' : S.rang ? S.rang + (S.rang == 1 ? 'er' : 'e') + ' meilleur score' : '';
     $('f-etoiles').hidden = !v;
     if (v) $('f-etoiles').innerHTML = [0, 1, 2].map(i => '<span class="' + (i < S.etoiles ? 'on' : '') + '">★</span>').join('') + '<small>Arrivée · ' + NIVEAUX[S.niveau].pieces + ' pièces · sans trébucher</small>';
     $('f-dist').textContent = fmt(S.dist) + ' m';
@@ -2043,19 +2366,21 @@
       h = PERSOS.map(p => {
         const a = D.persos.includes(p.id),
           choisi = D.perso == p.id;
-        return '<div class="amelio"><span class="avatar" style="--s:' + p.sweat + ';--h:' + p.cheveux + ';--a:' + p.accessoire + '" aria-hidden="true"></span><div><b>' + p.nom + '</b><small>' + (choisi ? 'Ton personnage' : a ? 'Débloqué' : 'À débloquer') + '</small></div>' + (choisi ? '<span class="max">✓</span>' : a ? '<button type="button" class="choisir" data-a="perso:' + p.id + '">Choisir</button>' : acheter('perso:' + p.id, p.prix, p.nom)) + '</div>';
+        return '<div class="amelio"><canvas class="apercu" data-perso="' + p.id + '" width="96" height="120" aria-hidden="true"></canvas><div><b>' + p.nom + '</b><small>' + (choisi ? 'Ton personnage' : a ? 'Débloqué' : 'À débloquer') + '</small></div>' + (choisi ? '<span class="max">✓</span>' : a ? '<button type="button" class="choisir" data-a="perso:' + p.id + '">Choisir</button>' : acheter('perso:' + p.id, p.prix, p.nom)) + '</div>';
       }).join('');
     else if (onglet == 'planches')
       h = PLANCHES.map(p => {
         const a = D.planchesDeb.includes(p.id),
           choisi = D.planche == p.id;
-        return '<div class="amelio"><span class="mini-planche" style="--c1:' + p.c1 + ';--c2:' + p.c2 + '" aria-hidden="true"></span><div><b>' + p.nom + '</b><small>' + (choisi ? 'Ta planche' : a ? 'Débloquée' : 'À débloquer') + '</small></div>' + (choisi ? '<span class="max">✓</span>' : a ? '<button type="button" class="choisir" data-a="planche:' + p.id + '">Choisir</button>' : acheter('planche:' + p.id, p.prix, p.nom)) + '</div>';
+        return '<div class="amelio"><span class="mini-planche" style="--c1:' + p.c1 + ';--c2:' + p.c2 + '" aria-hidden="true"></span><div><b>' + p.nom + '</b><small>' + p.txt + (choisi ? ' · ta planche' : '') + '</small></div>' + (choisi ? '<span class="max">✓</span>' : a ? '<button type="button" class="choisir" data-a="planche:' + p.id + '">Choisir</button>' : acheter('planche:' + p.id, p.prix, p.nom)) + '</div>';
       }).join('');
     else
       h =
         '<div class="amelio"><span class="mini-planche" style="--c1:#ff6b6b;--c2:#fff" aria-hidden="true"></span><div><b>3 planches</b><small>Tu en as ' + D.planches + '. Elles encaissent un choc pendant 30 s.</small></div>' + acheter('planches', 300, '3 planches') + '</div>' +
+        '<div class="amelio"><span class="bic" style="--c:#28c2a0" aria-hidden="true">»</span><div><b>3 élans de départ</b><small>Tu en as ' + D.elans + '. Au départ d\'une course libre : 6 s de vol à toute vitesse.</small></div>' + acheter('elans', 600, '3 élans de départ') + '</div>' +
         '<div class="amelio"><span class="bic" style="--c:#ffb703" aria-hidden="true">🔑</span><div><b>1 clé</b><small>Tu en as ' + D.cles + '. Pour continuer après un choc.</small></div>' + acheter('cle', 1500, '1 clé') + '</div>';
     $('amelio').innerHTML = h;
+    for (const c of $('amelio').querySelectorAll('[data-perso]')) dessinFace(c, PERSOS.find(x => x.id == c.dataset.perso));
     ecran('boutique');
   }
   document.querySelector('.onglets').addEventListener('click', e => {
@@ -2088,9 +2413,11 @@
         D.planche = id;
       }
     } else if (a == 'planches' && payer(300)) D.planches += 3;
+    else if (a == 'elans' && payer(600)) D.elans += 3;
     else if (a == 'cle' && payer(1500)) D.cles++;
     ecrire();
     son('bonus');
+    verifierTrophees();
     boutique();
     const nb = $('amelio').querySelector('[data-a="' + b.dataset.a + '"]');
     if (nb && !nb.disabled) nb.focus();
@@ -2126,9 +2453,13 @@
         .join('');
     for (const i of $('h-bonus').querySelectorAll('i')) {
       const k = i.dataset.b,
-        f = k == 'planche' ? S.planche / DUREE_PLANCHE : k == 'turbo' ? S.turbo / 2.4 : S.bonus[k] / dureeBonus(k);
+        f = k == 'planche' ? S.planche / dureePlanche() : k == 'turbo' ? S.turbo / 2.4 : S.bonus[k] / dureeBonus(k);
       i.style.width = Math.max(0, Math.min(1, f)) * 100 + '%';
     }
+    const elan = S.mode == 'jeu' && S.type == 'libre' && !S.elanUtilise && D.elans > 0 && S.dist < 150;
+    if (elan != hudCache.elan) $('b-elan').hidden = !elan;
+    v.elan = elan;
+    if (elan) $('h-elans').textContent = D.elans;
     if (v.pl != hudCache.pl) {
       $('h-planches').textContent = D.planches;
       $('b-planche').disabled = D.planches < 1 || S.planche > 0;
@@ -2155,7 +2486,23 @@
     }, duree);
   }
 
+  // annonces importantes (missions, trophées), affichées l'une après l'autre
+  const annonces = [];
+  function annonce(t) {
+    annonces.push(t);
+    if (annonces.length == 1) suivante();
+  }
+  function suivante() {
+    if (!annonces.length) return;
+    message(annonces[0], 'or', 2000);
+    setTimeout(() => {
+      annonces.shift();
+      suivante();
+    }, 2100);
+  }
+
   function vibrer(ms) {
+    if (!D.reglages.vib) return;
     try {
       if (navigator.vibrate) navigator.vibrate(ms);
     } catch (e) {}
@@ -2301,6 +2648,39 @@
   $('b-reprendre').onclick = reprendre;
   $('b-pause').onclick = pause;
   $('b-planche').onclick = utiliserPlanche;
+  $('b-elan').onclick = utiliserElan;
+  $('b-trophees').onclick = ecranTrophees;
+  $('b-reglages').onclick = ecranReglages;
+  $('b-cadeau').onclick = () => {
+    recupererQuotidien();
+    afficherMenu();
+  };
+  $('b-vib').onclick = () => {
+    D.reglages.vib = D.reglages.vib ? 0 : 1;
+    ecrire();
+    majReglages();
+    vibrer(40);
+  };
+  for (const b of document.querySelectorAll('[data-sens]'))
+    b.onclick = () => {
+      D.reglages.sens = +b.dataset.sens;
+      ecrire();
+      majReglages();
+    };
+  for (const b of document.querySelectorAll('[data-qualite]'))
+    b.onclick = () => {
+      D.reglages.qualite = b.dataset.qualite;
+      ecrire();
+      appliquerQualite();
+      majReglages();
+    };
+  $('b-effacer').onclick = () => {
+    if (!confirm('Effacer toute ta progression (record, pièces, personnages, trophées…) ? C\'est définitif.')) return;
+    try {
+      localStorage.removeItem(CLE);
+    } catch (e) {}
+    location.reload();
+  };
   $('b-continuer').onclick = continuer;
   $('b-non').onclick = () => {
     finPartie('choc');
@@ -2345,6 +2725,7 @@
         s: glisser,
         b: utiliserPlanche,
         Shift: utiliserPlanche,
+        e: utiliserElan,
         Escape: pause,
         p: pause
       }[k];
@@ -2355,7 +2736,7 @@
     } else if (S.mode == 'pause' && (k == 'Escape' || k == 'p')) {
       e.preventDefault();
       reprendre();
-    } else if (k == 'Escape' && ['aide', 'boutique', 'missions', 'niveaux', 'defi'].includes(ecranActuel)) afficherMenu();
+    } else if (k == 'Escape' && SECONDAIRES.includes(ecranActuel) && ecranActuel != 'cadeau') afficherMenu();
   });
 
   // gestes tactiles (et souris) : un glissement = une action ; deux tapes rapides = la planche
@@ -2373,7 +2754,7 @@
       if (!o || o.fait) return;
       const dx = e.clientX - o.x,
         dy = e.clientY - o.y,
-        seuil = Math.max(22, Math.min(W, H) * 0.04);
+        seuil = Math.max(16, Math.min(W, H) * 0.04) / D.reglages.sens;
       if (Math.hypot(dx, dy) < seuil) return;
       o.fait = true;
       if (Math.abs(dx) > Math.abs(dy)) (dx < 0 ? gauche : droite)();
@@ -2408,7 +2789,7 @@
     dessiner();
     majHUD();
     lent = dt > 0.024 ? lent + 1 : Math.max(0, lent - 1);
-    if (lent > 45) {
+    if (lent > 45 && D.reglages.qualite == 'auto') {
       // d'abord la résolution, puis le niveau de détail, et en dernier recours une image un peu plus floue
       if (maxDPR > 1) {
         maxDPR = Math.max(1, Math.min(maxDPR, DPR) - 0.5);
@@ -2428,7 +2809,8 @@
 
   // pour les tests : état du jeu, génération du parcours, et avance image par image (60 images par seconde)
   window.VL = {
-    S, P, D, troncon, alea, vitesse, demarrer, menu, continuer, gauche, droite, sauter, glisser, utiliserPlanche, activerBonus,
+    S, P, D, troncon, alea, vitesse, demarrer, menu, continuer, gauche, droite, sauter, glisser, utiliserPlanche, utiliserElan, activerBonus, verifierTrophees,
+    tunnels: () => tunnels,
     objs: () => objs,
     pieces: () => pieces,
     bonus: () => bonus,
@@ -2438,7 +2820,7 @@
     }
   };
 
-  taille();
+  appliquerQualite();
   majSon();
   menu();
   requestAnimationFrame(boucle);

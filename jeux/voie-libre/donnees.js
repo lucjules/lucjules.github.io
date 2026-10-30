@@ -14,7 +14,7 @@ window.VL_DONNEES = {
       mur: [236, 241, 247],
       nuit: 0,
       immeubles: [[176, 196, 214], [214, 226, 238], [150, 180, 205], [230, 214, 190], [196, 210, 200]],
-      decor: ['conteneurs', 'conteneurs', 'grue'],
+      decor: ['conteneurs', 'conteneurs', 'grue', 'tunnel'],
       musique: [45, 45, 48, 43] // notes de basse (MIDI), une par mesure
     },
     {
@@ -27,7 +27,7 @@ window.VL_DONNEES = {
       mur: [242, 228, 216],
       nuit: 0.1,
       immeubles: [[196, 92, 72], [214, 122, 86], [172, 82, 74], [226, 162, 112], [150, 102, 92]],
-      decor: ['reservoir', 'passerelle'],
+      decor: ['reservoir', 'passerelle', 'tunnel'],
       musique: [41, 41, 43, 36]
     },
     {
@@ -53,7 +53,7 @@ window.VL_DONNEES = {
       mur: [116, 122, 150],
       nuit: 1,
       immeubles: [[60, 64, 102], [76, 70, 122], [50, 80, 102], [90, 66, 110]],
-      decor: ['arbre', 'lampadaire', 'passerelle'],
+      decor: ['arbre', 'lampadaire', 'passerelle', 'tunnel'],
       musique: [38, 38, 41, 33]
     }
   ],
@@ -67,12 +67,12 @@ window.VL_DONNEES = {
     { id: 'yuna', nom: 'Yuna', prix: 8000, sweat: '#ef476f', bras: '#d63c61', pantalon: '#073b4c', sac: '#ffffff', peau: '#f5d0b0', cheveux: '#0b0b0b', coiffure: 'chignon', accessoire: '#ffd166' }
   ],
 
-  // Planches (protègent d'un choc pendant 30 s ; double-tape ou touche B)
+  // Planches (protègent d'un choc pendant 30 s ; double-tape ou touche B), chacune avec son pouvoir
   planches: [
-    { id: 'classique', nom: 'Classique', prix: 0, c1: '#ff6b6b', c2: '#ffffff', lueur: '#7fdcff' },
-    { id: 'eclair', nom: 'Éclair', prix: 2000, c1: '#ffd60a', c2: '#1d1d1d', lueur: '#ffe066' },
-    { id: 'ocean', nom: 'Océan', prix: 3500, c1: '#0096c7', c2: '#90e0ef', lueur: '#48cae4' },
-    { id: 'neon', nom: 'Néon', prix: 6000, c1: '#ff4d9d', c2: '#00f5d4', lueur: '#ff8fd8' }
+    { id: 'classique', nom: 'Classique', prix: 0, c1: '#ff6b6b', c2: '#ffffff', lueur: '#7fdcff', pouvoir: null, txt: 'Encaisse un choc' },
+    { id: 'eclair', nom: 'Éclair', prix: 2000, c1: '#ffd60a', c2: '#1d1d1d', lueur: '#ffe066', pouvoir: 'saut', txt: 'Sauts plus hauts sur la planche' },
+    { id: 'ocean', nom: 'Océan', prix: 3500, c1: '#0096c7', c2: '#90e0ef', lueur: '#48cae4', pouvoir: 'aimant', txt: 'Attire les pièces tant qu\'elle dure' },
+    { id: 'neon', nom: 'Néon', prix: 6000, c1: '#ff4d9d', c2: '#00f5d4', lueur: '#ff8fd8', pouvoir: 'duree', txt: 'Dure 45 s au lieu de 30' }
   ],
 
   // Bonus ramassés pendant la course ; les durées augmentent avec les améliorations (5 niveaux)
@@ -102,6 +102,42 @@ window.VL_DONNEES = {
     { t: 'drones', txt: n => 'Glisse sous ' + n + ' drones', n: k => 3 + 2 * k },
     { t: 'voies', course: true, txt: n => 'Change de voie ' + n + ' fois en une course', n: k => 40 + 15 * k },
     { t: 'planches', txt: n => 'Utilise ' + n + ' planche' + (n > 1 ? 's' : ''), n: k => 1 + Math.floor(k / 3) }
+  ],
+
+  // Trophées : débloqués une fois pour toutes, chacun rapporte des pièces.
+  // type : la valeur suivie (voir valeurTrophee dans jeu.js), n : le seuil à atteindre
+  trophees: [
+    { id: 'depart', nom: 'Premier départ', txt: 'Termine ta première course', type: 'parties', n: 1, gain: 100 },
+    { id: 'd1000', nom: 'Bon pied', txt: 'Cours 1 000 m en une course', type: 'distance', n: 1000, gain: 200 },
+    { id: 'd3000', nom: 'Marathonien', txt: 'Cours 3 000 m en une course', type: 'distance', n: 3000, gain: 500 },
+    { id: 'quartiers', nom: 'Tour complet', txt: 'Traverse les 4 quartiers en une course (4 800 m)', type: 'distance', n: 4800, gain: 1000 },
+    { id: 's10k', nom: 'Beau score', txt: 'Fais un score de 10 000', type: 'score', n: 10000, gain: 200 },
+    { id: 's50k', nom: 'Grand score', txt: 'Fais un score de 50 000', type: 'score', n: 50000, gain: 600 },
+    { id: 's200k', nom: 'Légende de la ville', txt: 'Fais un score de 200 000', type: 'score', n: 200000, gain: 2000 },
+    { id: 'p100', nom: 'Tirelire', txt: 'Ramasse 100 pièces en une course', type: 'piecesCourse', n: 100, gain: 150 },
+    { id: 'p5000', nom: 'Trésor', txt: 'Ramasse 5 000 pièces au total', type: 'piecesTotal', n: 5000, gain: 500 },
+    { id: 'caisses', nom: 'Démolisseur', txt: 'Écrase 25 caisses', type: 'caisses', n: 25, gain: 300 },
+    { id: 'drones', nom: 'Sous les radars', txt: 'Glisse sous 40 drones', type: 'drones', n: 40, gain: 300 },
+    { id: 'toits', nom: 'Funambule', txt: 'Cours 2 000 m sur les toits', type: 'toits', n: 2000, gain: 400 },
+    { id: 'planches', nom: 'Glisse urbaine', txt: 'Utilise 10 planches', type: 'planches', n: 10, gain: 300 },
+    { id: 'port', nom: 'Capitaine du port', txt: 'Termine les 3 niveaux du Port', type: 'niveauxPort', n: 3, gain: 300 },
+    { id: 'etoiles', nom: 'Toutes les étoiles', txt: 'Obtiens les 36 étoiles du Tour de la ville', type: 'etoiles', n: 36, gain: 3000 },
+    { id: 'x5', nom: 'Multiplicateur ×5', txt: 'Atteins le multiplicateur ×5 avec les missions', type: 'multi', n: 5, gain: 500 },
+    { id: 'x10', nom: 'Multiplicateur ×10', txt: 'Atteins le multiplicateur ×10', type: 'multi', n: 10, gain: 1500 },
+    { id: 'defi', nom: 'Défi relevé', txt: 'Tiens les 60 s d\'un défi du jour', type: 'defis', n: 1, gain: 200 },
+    { id: 'mot', nom: 'Chasseur de lettres', txt: 'Trouve un mot du jour', type: 'mots', n: 1, gain: 200 },
+    { id: 'bande', nom: 'Toute la bande', txt: 'Débloque les 5 personnages', type: 'persos', n: 5, gain: 1000 }
+  ],
+
+  // Récompense quotidienne : un cadeau par jour, de plus en plus beau sur 7 jours d'affilée
+  quotidien: [
+    { txt: '100 pièces', pieces: 100 },
+    { txt: '1 planche', planches: 1 },
+    { txt: '250 pièces', pieces: 250 },
+    { txt: '1 clé', cles: 1 },
+    { txt: '500 pièces', pieces: 500 },
+    { txt: '2 planches', planches: 2 },
+    { txt: '1 élan + 1 clé', elans: 1, cles: 1 }
   ],
 
   // Mots de la chasse aux lettres (un par jour)
