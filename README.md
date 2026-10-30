@@ -3,7 +3,9 @@
 Mon site, en deux espaces choisis depuis l'accueil (`index.html`) :
 
 - **Mes cours** (`cours.html`) : site de révision pour le BUT1 Informatique, avec leçons, exercices corrigés automatiquement et outils pour s'entraîner ;
-- **Mes jeux** (`jeux.html`) : les jeux faits maison, publiés chacun depuis son propre dépôt (par exemple [Aérélia](https://lucjules.github.io/LunaPoke/), dépôt `LunaPoke`).
+- **Mes jeux** (`jeux.html`) : les jeux faits maison :
+  - [Aérélia](https://lucjules.github.io/LunaPoke/), aventure rétro de capture de créatures, dans son propre dépôt (`LunaPoke`) ;
+  - [Voie libre](https://lucjules.github.io/jeux/voie-libre/), course sans fin sur trois voies, dans ce dépôt (`jeux/voie-libre/`).
 
 **En ligne :** https://lucjules.github.io/
 
@@ -32,7 +34,8 @@ Mon site, en deux espaces choisis depuis l'accueil (`index.html`) :
 ```
 index.html             accueil général : choix entre les cours et les jeux
 cours.html             accueil des cours (recherche, sauvegarde de la progression)
-jeux.html              accueil des jeux (partie en cours de chaque jeu)
+jeux.html              accueil des jeux (partie en cours ou record de chaque jeu)
+jeux/voie-libre/       jeu Voie libre : index.html, style.css, jeu.js (rendu 3D sur canvas, sans bibliothèque)
 <matière>/index.html   accueil d'une matière, avec une carte par chapitre
 <matière>/*.html       un fichier par chapitre (application complète)
 maths/app.js           code commun aux 5 pages de maths
@@ -56,7 +59,12 @@ outils/construire.js   régénère l'index de recherche et la liste hors ligne
 
 ## Ajouter un jeu
 
-Chaque jeu vit dans son propre dépôt GitHub publié par GitHub Pages (il est alors en ligne à l'adresse `https://lucjules.github.io/<dépôt>/`). Il suffit d'ajouter sa carte dans `jeux.html` (et son nom dans les étiquettes de la carte « Mes jeux » de `index.html`). Le service worker du site laisse de côté les adresses des jeux : chacun gère son propre mode hors ligne.
+Deux possibilités :
+
+- **Dans ce dépôt**, dans un dossier `jeux/<nom>/` (comme Voie libre) : il est publié avec le site et fonctionne hors ligne sans rien faire de plus, puisque `outils/construire.js` ajoute ses fichiers à la liste hors ligne. Sa page enregistre le service worker du site (`../../sw.js`).
+- **Dans un dépôt à part** publié par GitHub Pages (comme Aérélia, à l'adresse `https://lucjules.github.io/<dépôt>/`) : il gère alors son propre mode hors ligne, et le service worker du site laisse ses adresses de côté.
+
+Dans les deux cas, ajouter sa carte dans `jeux.html` et son nom dans les étiquettes de la carte « Mes jeux » de `index.html`. Pour afficher sa progression sur ces cartes (`<p class="hprog" data-jeu="<nom>">`), ajouter une fonction dans `JEUX` (`assets/hub.js`) qui lit sa sauvegarde.
 
 ## Régénérer à la main
 
