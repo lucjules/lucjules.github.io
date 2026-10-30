@@ -195,5 +195,16 @@ kbd{display:inline-block;min-width:1.7em;padding:.05em .4em;border-radius:6px;ba
 .co-res.on{opacity:1;transform:none}
 .co-res.rare{color:#ff4d9d}
 
+/* Événement saisonnier */
+.btn.evenement{background:var(--c,#ff8c2e);box-shadow:0 5px 0 rgba(0,0,0,.25);margin-bottom:10px;font-size:1rem}
+.paliers{list-style:none;margin:0 0 12px;padding:0;text-align:left}
+.paliers li{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--line)}
+.paliers li>span:not(.bic):not(.mini-planche){flex:1;min-width:0}
+.paliers li b{display:block}
+.paliers li small{color:var(--ink2);font-size:.8rem}
+.paliers li em{font-style:normal;font-weight:700;color:var(--ink2);font-size:.85rem;white-space:nowrap}
+.paliers li.fait em{color:var(--vert)}
+.amelio.verrou{opacity:.7}
+
 @media (max-height:640px){.carte{padding-top:16px}.intro{margin-bottom:10px}.btn{padding:10px 14px;margin-bottom:9px}h1{font-size:2.3rem}}
 @media (prefers-reduced-motion:reduce){.carte,#h-msg.on,.h-temps.urgent{animation:none}#h-msg.on{opacity:1}}

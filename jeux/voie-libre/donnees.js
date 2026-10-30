@@ -16,7 +16,8 @@ window.VL_DONNEES = {
       immeubles: [[176, 196, 214], [214, 226, 238], [150, 180, 205], [230, 214, 190], [196, 210, 200]],
       decor: ['conteneurs', 'conteneurs', 'grue', 'tunnel'],
       pluie: true,
-      musique: [45, 45, 48, 43] // notes de basse (MIDI), une par mesure
+      musique: [45, 45, 48, 43],
+      melodie: [12, null, 15, null, 17, null, 15, 12, null, 10, 12, null, 15, null, null, null] // notes de basse (MIDI), une par mesure
     },
     {
       id: 'briques',
@@ -30,7 +31,8 @@ window.VL_DONNEES = {
       immeubles: [[196, 92, 72], [214, 122, 86], [172, 82, 74], [226, 162, 112], [150, 102, 92]],
       decor: ['reservoir', 'passerelle', 'tunnel'],
       pluie: true,
-      musique: [41, 41, 43, 36]
+      musique: [41, 41, 43, 36],
+      melodie: [19, null, 17, 15, null, 12, null, 15, 17, null, null, 19, 22, null, 19, null]
     },
     {
       id: 'couchant',
@@ -43,7 +45,8 @@ window.VL_DONNEES = {
       nuit: 0.25,
       immeubles: [[255, 182, 193], [221, 160, 221], [255, 218, 185], [176, 224, 230], [255, 200, 150]],
       decor: ['palmier', 'palmier'],
-      musique: [43, 40, 36, 38]
+      musique: [43, 40, 36, 38],
+      melodie: [16, null, null, 19, null, 21, 19, null, 16, null, 14, null, 12, null, null, null]
     },
     {
       id: 'parc',
@@ -56,7 +59,8 @@ window.VL_DONNEES = {
       nuit: 1,
       immeubles: [[60, 64, 102], [76, 70, 122], [50, 80, 102], [90, 66, 110]],
       decor: ['arbre', 'lampadaire', 'passerelle', 'tunnel'],
-      musique: [38, 38, 41, 33]
+      musique: [38, 38, 41, 33],
+      melodie: [15, null, 12, null, 10, null, 12, null, 15, null, 17, null, 15, null, 12, null]
     },
     {
       id: 'gare',
@@ -70,7 +74,8 @@ window.VL_DONNEES = {
       immeubles: [[214, 196, 170], [190, 180, 168], [226, 214, 196], [176, 164, 150]],
       decor: ['quais'],
       pluie: true,
-      musique: [40, 43, 45, 38]
+      musique: [40, 43, 45, 38],
+      melodie: [12, 14, 16, null, 19, null, 16, null, 14, null, 12, null, 9, null, null, null]
     }
   ],
 
@@ -80,6 +85,9 @@ window.VL_DONNEES = {
     { id: 'malo', nom: 'Malo', prix: 1500, sweat: '#06d6a0', bras: '#05b386', pantalon: '#3a3a4a', sac: '#ffd166', peau: '#d9a07a', cheveux: '#1d1a17', coiffure: 'bonnet', accessoire: '#ef476f' },
     { id: 'ines', nom: 'Inès', prix: 3000, sweat: '#ffd166', bras: '#f2b93b', pantalon: '#264653', sac: '#118ab2', peau: '#8d5a3b', cheveux: '#2b1a12', coiffure: 'couettes', accessoire: '#ef476f' },
     { id: 'sacha', nom: 'Sacha', prix: 5000, sweat: '#22223b', bras: '#1a1a2e', pantalon: '#4a4e69', sac: '#00f5d4', peau: '#f0c8a8', cheveux: '#ff4d9d', coiffure: 'crete', accessoire: '#00f5d4' },
+    { id: 'spectre', nom: 'Spectre', evenement: 'halloween', sweat: '#f1f2f8', bras: '#e2e4ee', pantalon: '#c9ccda', sac: '#ff8c2e', peau: '#e8e9f2', cheveux: '#f1f2f8', coiffure: 'capuche', accessoire: '#ff8c2e' },
+    { id: 'lutin', nom: 'Lutin', evenement: 'hiver', sweat: '#2a9d5c', bras: '#23864e', pantalon: '#c1272d', sac: '#ffffff', peau: '#f2c6a0', cheveux: '#8b4513', coiffure: 'bonnet', accessoire: '#c1272d' },
+    { id: 'sol', nom: 'Sol', evenement: 'ete', sweat: '#00b4d8', bras: '#0096c7', pantalon: '#ffb703', sac: '#fb8500', peau: '#c68642', cheveux: '#1d1d1d', coiffure: 'couettes', accessoire: '#ffd166' },
     { id: 'yuna', nom: 'Yuna', prix: 8000, sweat: '#ef476f', bras: '#d63c61', pantalon: '#073b4c', sac: '#ffffff', peau: '#f5d0b0', cheveux: '#0b0b0b', coiffure: 'chignon', accessoire: '#ffd166' }
   ],
 
@@ -88,7 +96,10 @@ window.VL_DONNEES = {
     { id: 'classique', nom: 'Classique', prix: 0, c1: '#ff6b6b', c2: '#ffffff', lueur: '#7fdcff', pouvoir: null, txt: 'Encaisse un choc' },
     { id: 'eclair', nom: 'Éclair', prix: 2000, c1: '#ffd60a', c2: '#1d1d1d', lueur: '#ffe066', pouvoir: 'saut', txt: 'Sauts plus hauts sur la planche' },
     { id: 'ocean', nom: 'Océan', prix: 3500, c1: '#0096c7', c2: '#90e0ef', lueur: '#48cae4', pouvoir: 'aimant', txt: 'Attire les pièces tant qu\'elle dure' },
-    { id: 'neon', nom: 'Néon', prix: 6000, c1: '#ff4d9d', c2: '#00f5d4', lueur: '#ff8fd8', pouvoir: 'duree', txt: 'Dure 45 s au lieu de 30' }
+    { id: 'neon', nom: 'Néon', prix: 6000, c1: '#ff4d9d', c2: '#00f5d4', lueur: '#ff8fd8', pouvoir: 'duree', txt: 'Dure 45 s au lieu de 30' },
+    { id: 'citrouille', nom: 'Citrouille', evenement: 'halloween', c1: '#ff8c2e', c2: '#1d1d1d', lueur: '#ffb15c', pouvoir: 'saut', txt: 'Sauts plus hauts sur la planche' },
+    { id: 'flocon', nom: 'Flocon', evenement: 'hiver', c1: '#e8f4ff', c2: '#4cc9f0', lueur: '#bde8ff', pouvoir: 'duree', txt: 'Dure 45 s au lieu de 30' },
+    { id: 'soleil', nom: 'Soleil', evenement: 'ete', c1: '#ffd60a', c2: '#fb8500', lueur: '#ffe066', pouvoir: 'aimant', txt: 'Attire les pièces tant qu\'elle dure' }
   ],
 
   // Bonus ramassés pendant la course ; les durées augmentent avec les améliorations (5 niveaux)
@@ -118,7 +129,8 @@ window.VL_DONNEES = {
     { t: 'drones', txt: n => 'Glisse sous ' + n + ' drones', n: k => 3 + 2 * k },
     { t: 'voies', course: true, txt: n => 'Change de voie ' + n + ' fois en une course', n: k => 40 + 15 * k },
     { t: 'planches', txt: n => 'Utilise ' + n + ' planche' + (n > 1 ? 's' : ''), n: k => 1 + Math.floor(k / 3) },
-    { t: 'figures', txt: n => 'Réussis ' + n + ' figures sur la planche (saute avec)', n: k => 3 + 2 * k }
+    { t: 'figures', txt: n => 'Réussis ' + n + ' figures sur la planche (saute avec)', n: k => 3 + 2 * k },
+    { t: 'esquives', txt: n => 'Esquive de justesse ' + n + ' obstacles (change de voie au dernier moment)', n: k => 5 + 3 * k }
   ],
 
   // Trophées : débloqués une fois pour toutes, chacun rapporte des pièces.
@@ -140,6 +152,7 @@ window.VL_DONNEES = {
     { id: 'port', nom: 'Capitaine du port', txt: 'Termine les 3 niveaux du Port', type: 'niveauxPort', n: 3, gain: 300 },
     { id: 'etoiles', nom: 'Toutes les étoiles', txt: 'Obtiens les 45 étoiles du Tour de la ville', type: 'etoiles', n: 45, gain: 3000 },
     { id: 'figures', nom: 'Acrobate', txt: 'Réussis 25 figures sur la planche', type: 'figures', n: 25, gain: 400 },
+    { id: 'justesse', nom: 'Sang-froid', txt: 'Esquive de justesse 50 obstacles', type: 'esquives', n: 50, gain: 500 },
     { id: 'coffres', nom: 'Chasseur de trésors', txt: 'Ouvre 10 coffres mystère', type: 'coffres', n: 10, gain: 500 },
     { id: 'x5', nom: 'Multiplicateur ×5', txt: 'Atteins le multiplicateur ×5 avec les missions', type: 'multi', n: 5, gain: 500 },
     { id: 'x10', nom: 'Multiplicateur ×10', txt: 'Atteins le multiplicateur ×10', type: 'multi', n: 10, gain: 1500 },
@@ -167,6 +180,56 @@ window.VL_DONNEES = {
     { poids: 10, txt: 'élan de départ', elans: [1, 2] },
     { poids: 10, txt: 'gros lot', pieces: [1500, 2500] },
     { poids: 6, txt: 'personnage', perso: true }
+  ],
+
+  // Événements saisonniers (dates au format mois-jour, la fin peut tomber l'année suivante) :
+  // un décor, des jetons à ramasser pendant les courses, et des récompenses par paliers
+  evenements: [
+    {
+      id: 'halloween',
+      nom: 'Nuit des citrouilles',
+      debut: '10-20',
+      fin: '11-05',
+      jeton: 'citrouille',
+      jetons: 'citrouilles',
+      couleur: '#ff8c2e',
+      paliers: [
+        { n: 10, txt: '500 pièces', pieces: 500 },
+        { n: 30, txt: 'Planche Citrouille', planche: 'citrouille' },
+        { n: 60, txt: 'Personnage Spectre', perso: 'spectre' },
+        { n: 100, txt: '2 coffres mystère', coffres: 2 }
+      ]
+    },
+    {
+      id: 'hiver',
+      nom: 'Fêtes d\'hiver',
+      debut: '12-10',
+      fin: '01-06',
+      jeton: 'cadeau',
+      jetons: 'cadeaux',
+      couleur: '#c1272d',
+      paliers: [
+        { n: 10, txt: '500 pièces', pieces: 500 },
+        { n: 30, txt: 'Planche Flocon', planche: 'flocon' },
+        { n: 60, txt: 'Personnage Lutin', perso: 'lutin' },
+        { n: 100, txt: '2 coffres mystère', coffres: 2 }
+      ]
+    },
+    {
+      id: 'ete',
+      nom: 'Été en ville',
+      debut: '07-01',
+      fin: '08-15',
+      jeton: 'glace',
+      jetons: 'glaces',
+      couleur: '#00b4d8',
+      paliers: [
+        { n: 10, txt: '500 pièces', pieces: 500 },
+        { n: 30, txt: 'Planche Soleil', planche: 'soleil' },
+        { n: 60, txt: 'Personnage Sol', perso: 'sol' },
+        { n: 100, txt: '2 coffres mystère', coffres: 2 }
+      ]
+    }
   ],
 
   // Mots de la chasse aux lettres (un par jour)

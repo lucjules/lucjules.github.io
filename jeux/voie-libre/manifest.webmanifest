@@ -1,0 +1,17 @@
+{
+  "name": "Voie libre",
+  "short_name": "Voie libre",
+  "description": "Course à travers les quartiers d'une ville, sur trois voies : saute, glisse, monte sur les wagons et ramasse les pièces. Fonctionne hors connexion.",
+  "lang": "fr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#5b6cff",
+  "theme_color": "#5b6cff",
+  "icons": [
+    { "src": "icones/icone-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icones/icone-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icones/icone-masquable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

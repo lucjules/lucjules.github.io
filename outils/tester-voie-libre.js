@@ -141,6 +141,10 @@ const verifier = (nom, ok, detail) => {
       const avant = VL.D.st.coffres, res = [VL.ouvrirCoffre(), VL.ouvrirCoffre(), VL.ouvrirCoffre()];
       return [res.every(x => x && x.txt), VL.D.coffres, VL.D.st.coffres - avant, VL.ouvrirCoffre()];
     })();
+    out.justesse = [
+      scen({ objs: [mur], actions: [[11, 'gauche']], duree: 1.5 }).compteurs.esquives,
+      scen({ objs: [mur], actions: [[2, 'gauche']], duree: 1.5 }).compteurs.esquives
+    ];
     out.trophees = VL.D.trophees.includes('depart');
     out.scores = VL.D.scores.length > 0;
     return out;
@@ -169,7 +173,35 @@ const verifier = (nom, ok, detail) => {
   egal('wagon plat : heurté, sauté dessus', R.plat, ['fin', 1.1]);
   egal('figures sur la planche', R.figures, 2);
   egal('coffres mystère', R.coffre, [true, 0, 3, null]);
+  egal('esquive de justesse : au dernier moment oui, trop tôt non', R.justesse, [1, undefined]);
   egal('trophée et meilleurs scores enregistrés', [R.trophees, R.scores], [true, true]);
+
+  console.log('Événements saisonniers');
+  for (const id of ['halloween', 'hiver', 'ete']) {
+    await page.goto(PAGE + '?evenement=' + id);
+    const ev = await page.evaluate(() => {
+      VL.D.tuto = 1;
+      VL.demarrer('libre');
+      // (les dates réelles peuvent tomber pendant l'événement : on repart de zéro)
+      Object.assign(VL.D.ev, { n: 0, pris: [] });
+      const e = VL.ev(), z = VL.P.z, avant = VL.D.pieces;
+      VL.objs().length = 0;
+      VL.bonus().length = 0;
+      for (let i = 0; i < 30; i++) VL.bonus().push({ k: 'jeton', x: 0, y: 1, z: z + 6 + i * 3 });
+      for (let i = 0; i < 480; i++) { VL.S.invu = 1e9; VL.avancer(1 / 60); }
+      const p = e.paliers.find(x => x.planche);
+      return [e.id, VL.D.ev.n, VL.D.pieces - avant >= 500, VL.D.planchesDeb.includes(p.planche)];
+    });
+    egal('événement « ' + id + ' » : 30 jetons, 500 pièces, planche exclusive', ev, [id, 30, true, true]);
+    await page.waitForTimeout(300);
+  }
+  await page.goto(PAGE);
+
+  console.log('Appli installable');
+  const fs = require('fs');
+  const dossier = path.resolve(__dirname, '..', 'jeux/voie-libre');
+  const manifeste = JSON.parse(fs.readFileSync(path.join(dossier, 'manifest.webmanifest'), 'utf8'));
+  verifier('manifeste du jeu et ses icônes', manifeste.icons.every(i => fs.existsSync(path.join(dossier, i.src))) && manifeste.start_url && manifeste.name == 'Voie libre', manifeste);
 
   console.log('Sauvegardes et rendu');
   await page.evaluate(() => localStorage.setItem('voie-libre', JSON.stringify({ record: 12840, pieces: 300, parties: 14, distance: 900, niv: { aimant: 2, saut: 1, x2: 0 }, son: 1 })));
