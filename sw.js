@@ -3,7 +3,7 @@
    essayé d'abord (pour avoir la dernière version) et le cache sert de secours.
    VERSION et FICHIERS sont générés par outils/construire.js : ne pas les modifier à la main. */
 // <généré>
-const VERSION = 'ef85fac46e';
+const VERSION = '9c184edb02';
 const FICHIERS = [
   './',
   '404.html',
@@ -45,6 +45,18 @@ const FICHIERS = [
   'assets/systeme.css',
   'cours.html',
   'index.html',
+  'jeux/mine-clic/icones/icone-192.png',
+  'jeux/mine-clic/icones/icone-512.png',
+  'jeux/mine-clic/icones/icone-apple-180.png',
+  'jeux/mine-clic/icones/icone-masquable-512.png',
+  'jeux/mine-clic/index.html',
+  'jeux/mine-clic/js/donnees.js',
+  'jeux/mine-clic/js/jeu.js',
+  'jeux/mine-clic/js/textures.js',
+  'jeux/mine-clic/manifest.webmanifest',
+  'jeux/mine-clic/polices/pixelify-sans-latin-ext.woff2',
+  'jeux/mine-clic/polices/pixelify-sans-latin.woff2',
+  'jeux/mine-clic/style.css',
   'jeux/voie-libre/icones/icone-192.png',
   'jeux/voie-libre/icones/icone-512.png',
   'jeux/voie-libre/icones/icone-apple-180.png',

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Mine Clic · Mes jeux</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Mine Clic : un jeu de clic dans un monde de blocs. Mine, achète des pioches, des golems et des portails, ouvre les coffres, désamorce les creepers et voyage jusqu'au Nether et à l'End. Fonctionne hors connexion.">
+<meta name="theme-color" content="#5b8fd8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icones/icone-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icones/icone-apple-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mine Clic">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="barre">
+  <a class="btn-mc carre" href="../../jeux.html" aria-label="Retour à Mes jeux" title="Retour à Mes jeux"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 2h2v2h-2v2H8v2h2v2h2v2h-2v-2H8v-2H6V6h2V4h2z" fill="currentColor"/></svg></a>
+  <h1 class="titre">Mine<span>Clic</span></h1>
+  <button type="button" id="b-son" class="btn-mc carre" aria-pressed="true" aria-label="Couper le son" title="Son"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="hp" d="M2 6h3l4-3v10l-4-3H2z" fill="currentColor"/><path class="ondes" d="M11 5h1v1h1v4h-1v1h-1V5zm2-2h1v1h1v8h-1v1h-1V3z" fill="currentColor"/><path class="croix" d="M11 5h1v1h1v1h1V6h1V5h1v1h-1v1h-1v1h1v1h1v1h-1V9h-1V8h-1v1h-1v1h-1V9h1V8h1V7h-1V6h-1z" fill="currentColor"/></svg></button>
+</header>
+
+<main class="jeu">
+  <section id="mine" class="mine" aria-label="La mine">
+    <canvas id="eclats" aria-hidden="true"></canvas>
+    <div class="compteur">
+      <p class="c-blocs"><b id="n-blocs">0</b> <span id="n-unite">bloc</span></p>
+      <p class="c-cps">par seconde : <b id="n-cps">0</b></p>
+    </div>
+    <div id="effets" class="effets"></div>
+    <button type="button" id="bloc" class="bloc" aria-label="Miner le bloc"><canvas id="cube" width="300" height="300"></canvas></button>
+    <p class="bloc-info"><span id="bloc-nom">Bloc d'herbe</span> · <span id="bloc-coups" class="coups">0 / 5</span></p>
+    <div id="xp" class="xp" title="Progrès">
+      <span id="xp-niv" class="xp-niv">0</span>
+      <div class="xp-barre" aria-hidden="true"><i id="xp-i"></i></div>
+    </div>
+    <div id="dims" class="dims" role="group" aria-label="Dimensions"></div>
+    <button type="button" id="b-renaitre" class="btn-mc renaitre" hidden>Renaître</button>
+  </section>
+
+  <section class="panneau" aria-label="Boutique et informations">
+    <div class="onglets" role="tablist" aria-label="Rubriques">
+      <button type="button" class="onglet" role="tab" id="o-boutique" aria-controls="p-boutique" aria-selected="true">Boutique</button>
+      <button type="button" class="onglet" role="tab" id="o-progres" aria-controls="p-progres" aria-selected="false" tabindex="-1">Progrès</button>
+      <button type="button" class="onglet" role="tab" id="o-stats" aria-controls="p-stats" aria-selected="false" tabindex="-1">Stats</button>
+      <button type="button" class="onglet" role="tab" id="o-options" aria-controls="p-options" aria-selected="false" tabindex="-1">Options</button>
+    </div>
+    <div id="panneau-defile" class="defile">
+      <div id="p-boutique" class="page" role="tabpanel" aria-labelledby="o-boutique">
+        <h2>Améliorations</h2>
+        <div id="amels" class="amels"></div>
+        <p id="amels-vide" class="vide">Aucune amélioration pour l'instant : continue à miner !</p>
+        <div id="amel-info" class="info" hidden></div>
+        <div class="tete-machines">
+          <h2>Machines</h2>
+          <div class="qte" role="group" aria-label="Acheter par">
+            <button type="button" data-q="1" aria-pressed="true">×1</button><button type="button" data-q="10" aria-pressed="false">×10</button><button type="button" data-q="100" aria-pressed="false">×100</button>
+          </div>
+        </div>
+        <div id="machines" class="machines"></div>
+      </div>
+
+      <div id="p-progres" class="page" role="tabpanel" aria-labelledby="o-progres" hidden>
+        <h2>Progrès</h2>
+        <p id="prog-resume" class="sous"></p>
+        <div id="progres" class="trophees"></div>
+        <div id="prog-info" class="info" hidden></div>
+      </div>
+
+      <div id="p-stats" class="page" role="tabpanel" aria-labelledby="o-stats" hidden>
+        <h2>Statistiques</h2>
+        <dl id="stats" class="stats"></dl>
+        <div class="cadre-ren">
+          <h3><img id="ren-ic" alt="" class="ic-ren"> Renaissance</h3>
+          <p>En renaissant, tu recommences de zéro mais tu gagnes des <b class="jaune">étoiles du Nether</b> : chacune ajoute 2 % de production pour toujours. Plus tu as miné, plus tu en gagnes.</p>
+          <p id="ren-txt"></p>
+          <button type="button" id="o-renaitre" class="btn-mc">Renaître…</button>
+        </div>
+      </div>
+
+      <div id="p-options" class="page" role="tabpanel" aria-labelledby="o-options" hidden>
+        <h2>Options</h2>
+        <div class="options">
+          <button type="button" id="o-son" class="btn-mc" aria-pressed="true">Son : activé</button>
+          <button type="button" id="o-parts" class="btn-mc" aria-pressed="true">Éclats : activés</button>
+          <button type="button" id="o-sauver" class="btn-mc">Sauvegarder maintenant</button>
+        </div>
+        <h3>Transférer ma partie</h3>
+        <p class="sous">La partie est enregistrée dans ce navigateur, toute seule. Pour la passer sur un autre appareil, copie le code ici puis colle-le là-bas.</p>
+        <label class="sr-only" for="o-code">Code de sauvegarde</label>
+        <textarea id="o-code" class="code" rows="3" spellcheck="false" placeholder="Colle ici un code de sauvegarde…"></textarea>
+        <div class="options">
+          <button type="button" id="o-exporter" class="btn-mc">Copier mon code</button>
+          <button type="button" id="o-importer" class="btn-mc">Charger le code collé</button>
+        </div>
+        <h3>Recommencer</h3>
+        <div class="options"><button type="button" id="o-reset" class="btn-mc rouge">Effacer ma partie…</button></div>
+        <h3>Comment jouer</h3>
+        <ul class="aide">
+          <li><b>Clique sur le bloc</b> (ou touche-le, ou appuie sur Entrée) pour le miner. Après assez de coups, il casse et donne un gros bonus.</li>
+          <li>Achète des <b>machines</b> : elles minent toutes seules, même quand tu ne cliques pas.</li>
+          <li>Les <b>améliorations</b> doublent tes clics ou tes machines. Passe la souris dessus (ou touche-les une fois) pour les lire.</li>
+          <li>Un <b>coffre au trésor</b> apparaît de temps en temps : clique dessus avant qu'il disparaisse. Un <b>creeper</b> ? Clique vite pour le désamorcer !</li>
+          <li>Débloque de nouvelles <b>dimensions</b> : les grottes, les profondeurs, le Nether, l'End…</li>
+          <li>Quand tu reviens, tes machines ont travaillé pendant ton absence (à moitié de leur vitesse, jusqu'à 24 h).</li>
+        </ul>
+        <p class="sous petit">Jeu fait maison, inspiré des jeux de clic et des mondes en blocs. Toutes les images sont dessinées par le code. Police Pixelify Sans (licence SIL OFL 1.1).</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="evenements"></div>
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+<p id="annonce" class="annonce" role="status" aria-live="polite"></p>
+<dialog id="dialogue" class="dialogue" aria-labelledby="dlg-titre">
+  <h2 id="dlg-titre"></h2>
+  <div id="dlg-texte"></div>
+  <div id="dlg-boutons" class="dlg-boutons"></div>
+</dialog>
+
+<noscript><p class="noscript">Mine Clic a besoin de JavaScript pour fonctionner.</p></noscript>
+<script src="js/donnees.js"></script>
+<script src="js/textures.js"></script>
+<script src="js/jeu.js"></script>
+</body>
+</html>
