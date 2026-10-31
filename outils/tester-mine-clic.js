@@ -37,6 +37,7 @@ function serveur() {
   const navigateur = await chromium.launch();
   const ctx = await navigateur.newContext({ locale: 'fr-FR', viewport: { width: 1280, height: 800 } });
   const erreurs = [];
+  await ctx.addInitScript(() => { window.MC_SAISON = null; }); // pas d'événement saisonnier, sauf quand le test le demande
   const page = await ctx.newPage();
   page.on('pageerror', e => erreurs.push(e.message));
   page.on('console', m => { if (m.type() == 'error') erreurs.push(m.text()); });
@@ -47,7 +48,7 @@ function serveur() {
   await ouvrir();
   verifier('le jeu démarre', await ev(() => document.body.classList.contains('pret')));
   egal('partie neuve', await ev(() => [MC.etat().blocs, MC.etat().bloc, MC.etat().dim]), [0, 'herbe', 'surface']);
-  verifier('12 machines dans la boutique', (await page.$$('#machines .machine')).length == 12);
+  verifier('14 machines dans la boutique', (await page.$$('#machines .machine')).length == 14);
   verifier('le cube est dessiné', await ev(() => { const c = document.getElementById('cube'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n > 1000; }));
 
   console.log('Nombres');
@@ -96,16 +97,60 @@ function serveur() {
   verifier('chaque bloc se dessine', await ev(() => Object.keys(MC_DONNEES.BLOCS).every(b => { const t = MC_TEXTURES.texture(b); return t.dessus.width == 16 && t.couleurs.length > 5; })));
 
   console.log('Renaissance');
-  const ren = await ev(() => { const S = MC.etat(); S.totalAll = 8e9; const g = MC.gainEtoiles(); const m0 = MC.calc().mult; const ok = MC.renaitre(); return { g, ok, etoiles: S.etoiles, blocs: S.blocs, machines: Object.keys(S.machines).length, amels: S.amels.length, garde: S.progres.length > 5, rapport: MC.calc().mult / m0 }; });
-  egal('8 milliards minés : 2 étoiles du Nether', [ren.g, ren.ok, ren.etoiles], [2, true, 2]);
+  const ren = await ev(() => { const S = MC.etat(); S.totalAll = 8e8; const g = MC.gainEtoiles(); const m0 = MC.calc().mult; const ok = MC.renaitre(); return { g, ok, etoiles: S.etoiles, fragments: S.fragments, blocs: S.blocs, machines: Object.keys(S.machines).length, amels: S.amels.length, garde: S.progres.length > 5, rapport: MC.calc().mult / m0 }; });
+  egal('800 millions minés : 2 étoiles du Nether et 2 fragments', [ren.g, ren.ok, ren.etoiles, ren.fragments], [2, true, 2, 2]);
   egal('tout repart de zéro sauf les progrès', [ren.blocs, ren.machines, ren.amels, ren.garde], [0, 0, 0, true]);
   verifier('les étoiles augmentent la production', ren.rapport > 1.03, ren);
   verifier('pas de deuxième renaissance sans miner plus', !(await ev(() => MC.renaitre())));
 
+  console.log('Onglet Étoiles et boutique céleste');
+  await page.click('#o-etoiles');
+  const et = await ev(() => ({ titre: document.getElementById('et-nb').textContent, paliers: document.querySelectorAll('#et-paliers tr').length, pouvoirs: document.querySelectorAll('#pouvoirs .pouvoir').length, barre: document.getElementById('et-prochaine').textContent }));
+  verifier('l\'onglet Étoiles explique la renaissance', et.titre == '2 étoiles du Nether' && et.paliers >= 8 && et.pouvoirs == 16 && /Étoile n° 3/.test(et.barre), et);
+  verifier('seuils : 1 étoile à 100 millions, 3 à 2,7 milliards', await ev(() => MC.seuil(1) == 1e8 && MC.seuil(3) == 2.7e9));
+  await page.click('#pouvoirs .pouvoir:nth-child(2) button'); // Gant de golem (2 fragments)
+  egal('acheter le Gant de golem avec 2 fragments', await ev(() => [MC.etat().pouvoirs, MC.etat().fragments]), [['gant'], 0]);
+  verifier('pas assez de fragments : refusé', !(await ev(() => MC.acheterPouvoir('depart'))));
+  const gant = await ev(() => { const c0 = MC.calc().clicBase; MC.etat().fragments = 1; MC.acheterPouvoir('depart'); return { pouvoirs: MC.etat().pouvoirs.length, clic: c0 }; });
+  verifier('le gant double les clics (2 × 1,0x)', gant.clic >= 2 && gant.pouvoirs == 2, gant);
+  const depart = await ev(() => { const S = MC.etat(); S.totalAll = 2.7e9; MC.renaitre(); return [S.etoiles, S.machines.pioche, S.machines.mineur]; });
+  egal('le sac de départ redonne 10 pioches et 5 mineurs', depart, [3, 10, 5]);
+
+  console.log('Max, tout acheter, capacités, combo, blocs brillants, missions');
+  const max = await ev(() => { const S = MC.etat(); S.qte = 'max'; S.blocs = 1e5; const q = MC.maxAchetable('mineur'); const n0 = S.machines.mineur; MC.acheterMachine('mineur'); return { q, achete: S.machines.mineur - n0, reste: S.blocs, suivant: MC.prixMachine(MC_DONNEES.MACHINES[1], S.machines.mineur, 1) }; });
+  verifier('Max achète le plus possible', max.q > 10 && max.achete == max.q && max.reste < max.suivant, max);
+  await page.click('#o-boutique');
+  await page.click('.qte button[data-q="max"]');
+  egal('bouton Max sélectionné', await ev(() => [MC.etat().qte, document.querySelector('.qte button[data-q="max"]').getAttribute('aria-pressed')]), ['max', 'true']);
+  await page.click('.qte button[data-q="1"]');
+  const tout = await ev(() => { const S = MC.etat(); S.blocs = 1e9; S.total = 1e9; MC.recalculer(); const n0 = S.amels.length; const n = MC.acheterTout(); return { n, gagne: S.amels.length - n0 }; });
+  verifier('« Tout acheter » achète plusieurs améliorations', tout.n > 5 && tout.n == tout.gagne, tout);
+  const capa = await ev(() => { const S = MC.etat(); S.blocs = 1e9; S.total = Math.max(S.total, 1e9); S.qte = 1; MC.acheterMachine('tnt'); MC.recalculer(); const vue = !!document.querySelector('.capa[data-id="tnt"]'); const c0 = S.casses, b0 = S.blocs; const ok = MC.utiliserCapacite('tnt'); return { vue, ok, casse: S.casses - c0, gain: S.blocs > b0, encore: MC.utiliserCapacite('tnt') }; });
+  egal('la TNT se débloque, casse le bloc, puis se recharge', [capa.vue, capa.ok, capa.casse, capa.gain, capa.encore], [true, true, 1, true, false]);
+  const hate = await ev(() => { const S = MC.etat(); S.clics = Math.max(S.clics, 300); const c0 = MC.calc().clicBase; MC.utiliserCapacite('hate'); return MC.calc().clicBase / c0; });
+  verifier('la potion de hâte multiplie les clics par 10', hate >= 10 && hate < 10.3, hate); // + 1 % si le progrès « Pouvoir activé » tombe en même temps
+  await page.waitForTimeout(1100);
+  for (let i = 0; i < 12; i++) await page.click('#bloc');
+  const co = await ev(() => ({ n: MC.combo.n, max: MC.etat().comboMax, vu: !document.getElementById('combo').hidden }));
+  verifier('cliquer vite fait monter le combo', co.n >= 10 && co.max >= 10 && co.vu, co);
+  const br = await ev(() => { const S = MC.etat(); S.brillant = true; const b0 = S.blocs, n0 = S.brillants; S.coups = MC_DONNEES.BLOCS[S.bloc].durete - 1; MC.frapper(400, 300); return { n: S.brillants - n0, gain: S.blocs - b0 }; });
+  verifier('un bloc brillant compte et rapporte gros', br.n == 1 && br.gain > 0, br);
+  const mi = await ev(() => { const S = MC.etat(); const m = S.missions.find(x => x.id != 'combo') || S.missions[0]; const n0 = S.missionsFaites, b0 = S.blocs; if (m.id == 'combo') m.max = m.but; else m.depart -= m.but; MC.verifierMissions(); return { nb: S.missions.length, faites: S.missionsFaites - n0, gain: S.blocs > b0 }; });
+  egal('3 missions ; en finir une rapporte et la remplace', [mi.nb, mi.faites, mi.gain], [3, 1, true]);
+  await page.click('#o-progres');
+  egal('missions affichées dans l\'onglet Progrès', await ev(() => document.querySelectorAll('#missions .mission').length), 3);
+  const saison = await ev(() => { window.MC_SAISON = 'halloween'; MC.apparaitre('coffre'); const img = document.querySelector('.evenement img').src; MC.finir(true); window.MC_SAISON = null; return { citrouilles: MC.etat().citrouilles, progres: MC.etat().progres.includes('halloween'), img: img.length > 100 }; });
+  egal('Halloween : une citrouille remplace le coffre', [saison.citrouilles, saison.progres, saison.img], [1, true, true]);
+  await page.click('#o-options');
+  await page.click('#o-notation');
+  egal('notation courte', await ev(() => MC.nombre(1234567)), '1,23 M');
+  await page.click('#o-notation'); await page.click('#o-notation');
+  egal('retour à la notation en mots', await ev(() => MC.nombre(1234567)), '1,234 million');
+
   console.log('Sauvegarde');
   await ev(() => { const S = MC.etat(); S.blocs = 5e5; S.total = 5e5; MC.acheterMachine('golem'); MC.acheterMachine('golem'); MC.sauver(); });
   await ouvrir();
-  egal('la partie revient après rechargement', await ev(() => [MC.etat().etoiles, MC.etat().machines.golem, MC.etat().coffres]), [2, 2, 2]);
+  egal('la partie revient après rechargement', await ev(() => [MC.etat().etoiles, MC.etat().machines.golem, MC.etat().pouvoirs.length, MC.etat().missions.length]), [3, 2, 2, 3]);
   const cpsAvant = await ev(() => MC.calc().cpsBase);
   // en quittant, le jeu enregistre l'heure : la sauvegarde est modifiée depuis une autre page du site
   await page.goto(base + 'jeux.html');
@@ -116,11 +161,11 @@ function serveur() {
   proche('et la moitié de la production d\'une heure', absence.blocs - blocsAvant, cpsAvant * 3600 * 0.5, 0.01);
   await page.click('#dlg-boutons button');
   const code = await ev(() => { const c = MC.codeSauvegarde(); const d = MC.lireCode(c); return [typeof c, d && d.etoiles, d && d.machines.golem, MC.lireCode('pas un code')]; });
-  egal('code de sauvegarde : aller-retour', code, ['string', 2, 2, null]);
+  egal('code de sauvegarde : aller-retour', code, ['string', 3, 2, null]);
   await page.goto(base + 'jeux.html');
-  await ev(() => localStorage.setItem('mine-clic', '{"blocs":"beaucoup","machines":{"pioche":-4,"truc":3},"amels":["inconnue","pioche-fer","pioche-fer"],"dim":"lune","bloc":"diamant"}'));
+  await ev(() => localStorage.setItem('mine-clic', '{"etoiles":4,"blocs":"beaucoup","machines":{"pioche":-4,"truc":3},"amels":["inconnue","pioche-fer","pioche-fer"],"dim":"lune","bloc":"diamant"}'));
   await ouvrir();
-  egal('sauvegarde abîmée : nettoyée sans erreur', await ev(() => [MC.etat().blocs, MC.etat().machines, MC.etat().amels, MC.etat().dim, MC.etat().bloc]), [0, {}, ['pioche-fer'], 'surface', 'herbe']);
+  egal('sauvegarde abîmée ou ancienne : nettoyée, fragments rendus', await ev(() => [MC.etat().blocs, MC.etat().machines, MC.etat().amels, MC.etat().dim, MC.etat().bloc, MC.etat().fragments]), [0, {}, ['pioche-fer'], 'surface', 'herbe', 4]);
   await page.goto(base + 'jeux.html');
   await ev(() => localStorage.setItem('mine-clic', '{pas du json'));
   await ouvrir();

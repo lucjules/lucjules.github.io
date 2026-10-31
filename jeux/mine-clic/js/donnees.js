@@ -50,7 +50,9 @@
     { id: 'balise', nom: 'Balise', pl: 'balises', prix: 5.1e9, cps: 260000, premier: "ta première balise", desc: 'Son rayon donne Célérité à tous les mineurs du monde.' },
     { id: 'end', nom: "Portail de l'End", pl: "portails de l'End", prix: 7.5e10, cps: 1.6e6, premier: "ton premier portail de l'End", desc: "Des îles flottantes entières à miner, de l'autre côté du vide." },
     { id: 'oeuf', nom: 'Œuf de dragon', pl: 'œufs de dragon', prix: 1e12, cps: 1e7, premier: "ton premier œuf de dragon", desc: 'Les dragons éclos creusent des cavernes grandes comme des montagnes.' },
-    { id: 'sculk', nom: 'Cœur de sculk', pl: 'cœurs de sculk', prix: 1.4e13, cps: 6.5e7, premier: "ton premier cœur de sculk", desc: "La cité antique s'éveille et dévore la roche dans un silence total." }
+    { id: 'sculk', nom: 'Cœur de sculk', pl: 'cœurs de sculk', prix: 1.4e13, cps: 6.5e7, premier: "ton premier cœur de sculk", desc: "La cité antique s'éveille et dévore la roche dans un silence total." },
+    { id: 'wither', nom: 'Wither apprivoisé', pl: 'withers apprivoisés', prix: 2.1e14, cps: 4.3e8, premier: "ton premier wither apprivoisé", desc: 'Ses trois têtes crachent des crânes qui pulvérisent des montagnes entières.' },
+    { id: 'monde', nom: 'Générateur de mondes', pl: 'générateurs de mondes', prix: 2.6e15, cps: 2.9e9, premier: "ton premier générateur de mondes", desc: 'Crée de nouveaux mondes remplis de minerai, prêts à être minés.' }
   ];
 
   /* ---------- Améliorations ----------
@@ -79,6 +81,12 @@
     amel({ id: 'fortune-' + (i + 1), nom: 'Fortune ' + r, prix: [1000, 2e5, 4e7][i], effet: 'fortune', icone: { s: 'gemme' },
       desc: 'Le bonus reçu quand un bloc casse est doublé.', cond: { casses: [5, 50, 250][i] } });
   });
+  amel({ id: 'fortune-4', nom: 'Fortune IV', prix: 8e9, effet: 'fortune', icone: { s: 'gemme' }, desc: 'Le bonus reçu quand un bloc casse est doublé.', cond: { casses: 1000 } });
+  amel({ id: 'combo-1', nom: 'Métronome', prix: 5e5, effet: 'combo', icone: { s: 'horloge' }, desc: 'Chaque niveau de combo ajoute 3 % au clic au lieu de 2 %.', cond: { comboMax: 20 } });
+  amel({ id: 'combo-2', nom: 'Rythme du forgeron', prix: 5e8, effet: 'combo', icone: { s: 'horloge' }, desc: 'Chaque niveau de combo ajoute 4 % au clic.', cond: { comboMax: 40 } });
+  amel({ id: 'brillance-1', nom: 'Loupe de mineur', prix: 2e6, effet: 'brillance', icone: { s: 'gemme', m: 'or' }, desc: 'Les blocs brillants donnent 20 fois le bonus au lieu de 10.', cond: { brillants: 3 } });
+  amel({ id: 'brillance-2', nom: 'Toucher doré', prix: 2e10, effet: 'brillance', icone: { s: 'gemme', m: 'or' }, desc: 'Les blocs brillants donnent 40 fois le bonus.', cond: { brillants: 15 } });
+  amel({ id: 'recharge-1', nom: 'Redstone accélérée', prix: 1e7, effet: 'recharge', icone: { s: 'foreuse' }, desc: 'Les capacités se rechargent 25 % plus vite.', cond: { capacites: 5 } });
   amel({ id: 'chance-1', nom: 'Chance de la mer I', prix: 7777, effet: 'chance', icone: { s: 'coffre' }, desc: 'Les coffres et les creepers apparaissent plus souvent.', cond: { coffres: 3 } });
   amel({ id: 'chance-2', nom: 'Chance de la mer II', prix: 7.77e6, effet: 'chance', icone: { s: 'coffre' }, desc: 'Les coffres et les creepers apparaissent encore plus souvent.', cond: { coffres: 10 } });
   amel({ id: 'duree-1', nom: 'Potion de longue durée', prix: 7.77e8, effet: 'duree', icone: { s: 'potion', m: 'violet' }, desc: 'Les effets des coffres durent 2 fois plus longtemps, et les coffres restent plus longtemps.', cond: { coffres: 25 } });
@@ -95,7 +103,10 @@
     ['celerite', 'Potion de célérité', 5e11, 15, { s: 'potion', m: 'bleu' }],
     ['enchantee', 'Pomme dorée enchantée', 5e12, 20, { s: 'pomme', m: 'enchantee' }],
     ['chorus', 'Fruit de chorus', 5e13, 20, { s: 'chorus' }],
-    ['souffle', 'Souffle du dragon', 5e14, 25, { s: 'potion', m: 'rose' }]
+    ['souffle', 'Souffle du dragon', 5e14, 25, { s: 'potion', m: 'rose' }],
+    ['steak', 'Steak grillé', 5e15, 25, { s: 'steak' }],
+    ['citrouille', 'Tarte de la fête', 5e16, 30, { s: 'citrouille' }],
+    ['regeneration', 'Potion de régénération', 5e17, 30, { s: 'potion', m: 'rose' }]
   ].forEach(function (f) {
     amel({ id: 'mange-' + f[0], nom: f[1], prix: f[2], effet: 'global', val: f[3], icone: f[4],
       desc: 'Toute la production augmente de ' + f[3] + ' %.', cond: { total: f[2] / 5 } });
@@ -125,7 +136,7 @@
   [
     [1, 'Premier coup de pioche'], [1000, 'Un bel établi'], [1e5, "L'âge de pierre"], [1e6, 'Ça brille, là-dedans !'],
     [1e8, 'Toujours plus profond'], [1e10, 'Fièvre du diamant'], [1e12, 'Le cœur du monde'], [1e14, 'Au-delà de la roche-mère'],
-    [1e16, 'Mineur de légende'], [1e18, 'Le monde entier y est passé']
+    [1e16, 'Mineur de légende'], [1e18, 'Le monde entier y est passé'], [1e21, 'Plus rien à miner ?']
   ].forEach(function (t, i) {
     prog('total-' + i, t[1], 'Miner ' + (t[0] == 1 ? 'ton premier bloc' : '{' + t[0] + '} blocs au total') + '.', { s: 'pioche', m: ['bois', 'pierre', 'fer', 'or', 'diamant', 'netherite'][Math.min(5, Math.floor(i / 2))] },
       function (S) { return S.totalAll >= t[0]; });
@@ -152,7 +163,9 @@
     balise: ['Rayon de lumière', 'Phare du monde', "Pyramide d'émeraude"],
     end: ['La fin du voyage ?', "Voyageur de l'End", "Maître de l'Ender"],
     oeuf: ["L'œuf ou le dragon ?", 'Nid de dragons', 'Couveuse légendaire'],
-    sculk: ['Chut…', 'Écho des profondeurs', 'La cité se réveille']
+    sculk: ['Chut…', 'Écho des profondeurs', 'La cité se réveille'],
+    wither: ["Trois têtes valent mieux qu'une", 'Armée de withers', 'Fin du monde'],
+    monde: ['Créateur', 'Multivers', "Architecte de l'infini"]
   };
   MACHINES.forEach(function (m) {
     [1, 50, 100].forEach(function (n, i) {
@@ -171,6 +184,66 @@
   prog('tour', 'Le tour du monde', 'Visiter toutes les dimensions.', { s: 'end' }, function (S) { return S.vues.length >= DIMENSIONS.length; });
   prog('renaitre-1', 'Une nouvelle vie', 'Renaître une première fois.', { s: 'etoile' }, function (S) { return S.renaissances >= 1; });
   prog('renaitre-5', 'Encore et encore', 'Renaître 5 fois.', { s: 'etoile' }, function (S) { return S.renaissances >= 5; });
+  prog('amel-100', 'Collectionneur', 'Acheter 100 améliorations.', { s: 'livre' }, function (S) { return S.amels.length >= 100; });
+  prog('brillant-1', 'Ça brille !', 'Casser un bloc brillant.', { s: 'gemme', m: 'or' }, function (S) { return S.brillants >= 1; });
+  prog('brillant-25', "Chercheur d'or", 'Casser 25 blocs brillants.', { s: 'gemme', m: 'or' }, function (S) { return S.brillants >= 25; });
+  prog('combo-25', 'En rythme', 'Atteindre un combo de 25.', { s: 'horloge' }, function (S) { return S.comboMax >= 25; });
+  prog('combo-50', 'Poignet en feu', 'Atteindre un combo de 50.', { s: 'horloge' }, function (S) { return S.comboMax >= 50; });
+  prog('missions-1', 'Au travail !', 'Terminer une mission.', { s: 'parchemin' }, function (S) { return S.missionsFaites >= 1; });
+  prog('missions-10', 'Mineur de confiance', 'Terminer 10 missions.', { s: 'parchemin' }, function (S) { return S.missionsFaites >= 10; });
+  prog('missions-50', 'Héros du village', 'Terminer 50 missions.', { s: 'parchemin' }, function (S) { return S.missionsFaites >= 50; });
+  prog('capacite-1', 'Pouvoir activé', 'Utiliser une capacité.', { s: 'tnt' }, function (S) { return S.capacites >= 1; });
+  prog('capacite-25', 'Expert en capacités', 'Utiliser 25 capacités.', { s: 'cloche' }, function (S) { return S.capacites >= 25; });
+  prog('max', 'Je prends tout !', 'Acheter 100 machines du même coup.', { s: 'wagonnet' }, function (S) { return S.maxAchat >= 100; });
+  prog('temps-1', 'Une heure sous terre', 'Jouer pendant une heure.', { s: 'horloge' }, function (S) { return S.tempsJeu >= 3600; });
+  prog('temps-10', 'Vraie taupe', 'Jouer pendant 10 heures.', { s: 'horloge' }, function (S) { return S.tempsJeu >= 36000; });
+  prog('pouvoir-1', 'Savoir céleste', 'Acheter un pouvoir dans la boutique céleste.', { s: 'etoile', m: 'fragment' }, function (S) { return S.pouvoirs.length >= 1; });
+  prog('pouvoir-tous', 'Être céleste', 'Acheter tous les pouvoirs de la boutique céleste.', { s: 'etoile', m: 'fragment' }, function (S) { return S.pouvoirs.length >= POUVOIRS.length; });
+  prog('etoiles-10', 'Constellation naissante', 'Posséder 10 étoiles du Nether.', { s: 'etoile' }, function (S) { return S.etoiles >= 10; });
+  prog('etoiles-100', 'Une galaxie entière', 'Posséder 100 étoiles du Nether.', { s: 'etoile' }, function (S) { return S.etoiles >= 100; });
+  prog('halloween', 'Joyeux Halloween !', "Ouvrir une citrouille pendant l'événement d'Halloween.", { s: 'citrouille' }, function (S) { return S.citrouilles >= 1; });
+  prog('noel', 'Joyeux Noël !', "Ouvrir un cadeau pendant l'événement de Noël.", { s: 'cadeau' }, function (S) { return S.cadeaux >= 1; });
+
+  /* ---------- Boutique céleste : pouvoirs permanents, payés en fragments d'étoile ---------- */
+  var POUVOIRS = [
+    { id: 'depart', nom: 'Sac de départ', prix: 1, icone: { s: 'coffre' }, desc: 'Chaque nouvelle vie commence avec 10 pioches en bois et 5 mineurs villageois.' },
+    { id: 'gant', nom: 'Gant de golem', prix: 2, icone: { s: 'golem' }, desc: 'Tes clics rapportent 2 fois plus, pour toujours.' },
+    { id: 'soie', nom: 'Toucher de soie', prix: 3, icone: { s: 'gemme' }, desc: 'Le bonus quand un bloc casse est multiplié par 3.' },
+    { id: 'absence', nom: 'Mémoire du mineur', prix: 5, icone: { s: 'horloge' }, desc: "Pendant ton absence, les machines travaillent à pleine vitesse, jusqu'à 48 h (au lieu de la moitié, 24 h)." },
+    { id: 'trefle', nom: "Chance de l'End", prix: 5, icone: { s: 'coffre' }, desc: 'Les coffres au trésor apparaissent 25 % plus souvent.' },
+    { id: 'creeper', nom: 'Ami des creepers', prix: 8, icone: { s: 'creeper' }, desc: 'Les creepers mettent 2 secondes de plus à exploser, et désamorcés ils donnent 2 fois plus.' },
+    { id: 'sablier', nom: 'Sablier ancien', prix: 10, icone: { s: 'sablier' }, desc: 'Les effets des coffres et des capacités durent 50 % plus longtemps.' },
+    { id: 'recharge', nom: 'Horloge de redstone', prix: 12, icone: { s: 'horloge' }, desc: 'Les capacités se rechargent 2 fois plus vite.' },
+    { id: 'marchand', nom: 'Marchand villageois', prix: 15, icone: { s: 'mineur' }, desc: 'Les machines coûtent 10 % moins cher.' },
+    { id: 'fantome', nom: 'Pioche fantôme', prix: 20, icone: { s: 'pioche', m: 'diamant' }, desc: 'Une pioche invisible frappe le bloc 2 fois par seconde, même quand tu ne cliques pas.' },
+    { id: 'bibliothecaire', nom: 'Bibliothécaire', prix: 25, icone: { s: 'livre' }, desc: 'Les améliorations coûtent 10 % moins cher.' },
+    { id: 'oeil', nom: "Œil de l'Ender", prix: 30, icone: { s: 'end' }, desc: 'Les blocs brillants apparaissent 2 fois plus souvent.' },
+    { id: 'guilde', nom: 'Contrat de guilde', prix: 40, icone: { s: 'parchemin' }, desc: 'Les missions rapportent 2 fois plus, et une quatrième mission s\'ajoute.' },
+    { id: 'grand-marchand', nom: 'Grand marchand', prix: 60, icone: { s: 'mineur' }, desc: 'Les machines coûtent encore 10 % moins cher.' },
+    { id: 'constellation', nom: 'Constellation', prix: 100, icone: { s: 'etoile', m: 'fragment' }, desc: 'Chaque étoile du Nether ajoute 3 % de production au lieu de 2 %.' },
+    { id: 'dragon', nom: 'Souffle du dragon', prix: 200, icone: { s: 'oeuf' }, desc: 'La frénésie multiplie la production par 10 au lieu de 7.' }
+  ];
+
+  /* ---------- Capacités : boutons à recharge sous le bloc ---------- */
+  var CAPACITES = [
+    { id: 'tnt', nom: 'Explosion de TNT', icone: { s: 'tnt' }, recharge: 180, cond: { machine: 'tnt', n: 1 }, aide: 'Avoir 1 TNT', desc: 'Le bloc explose tout de suite avec un bonus ×5, et tu gagnes une minute de production.' },
+    { id: 'hate', nom: 'Potion de hâte', icone: { s: 'potion', m: 'bleu' }, recharge: 240, duree: 15, cond: { clics: 300 }, aide: 'Cliquer 300 fois', desc: 'Pendant 15 secondes, chaque clic rapporte 10 fois plus.' },
+    { id: 'cloche', nom: 'Cloche du village', icone: { s: 'cloche' }, recharge: 420, duree: 30, cond: { machine: 'mineur', n: 10 }, aide: 'Avoir 10 mineurs villageois', desc: 'Pendant 30 secondes, toutes les machines produisent 3 fois plus.' },
+    { id: 'balise', nom: 'Balise de chance', icone: { s: 'balise' }, recharge: 600, cond: { machine: 'balise', n: 1 }, aide: 'Avoir 1 balise', desc: 'Fait apparaître tout de suite un coffre au trésor.' }
+  ];
+
+  /* ---------- Missions : trois à la fois, renouvelées dès qu'elles sont finies ---------- */
+  var MISSIONS = [
+    { id: 'clics', txt: 'Cliquer {n} fois sur le bloc', buts: [100, 200, 300, 500] },
+    { id: 'casses', txt: 'Casser {n} blocs', buts: [10, 20, 40, 60] },
+    { id: 'miner', txt: 'Miner {n} blocs', buts: null },
+    { id: 'achats', txt: 'Acheter {n} machines', buts: [5, 10, 25, 50] },
+    { id: 'amels', txt: 'Acheter {n} améliorations', buts: [1, 2, 3] },
+    { id: 'coffres', txt: 'Ouvrir {n} coffre(s) au trésor', buts: [1, 2, 3] },
+    { id: 'brillants', txt: 'Casser {n} bloc(s) brillant(s)', buts: [1, 2] },
+    { id: 'combo', txt: 'Atteindre un combo de {n}', buts: [15, 25, 35, 50] },
+    { id: 'capacites', txt: 'Utiliser {n} capacité(s)', buts: [1, 2, 3] }
+  ];
 
   /* ---------- Dessins en pixels (12 × 12) ----------
      Une lettre = une couleur de la palette ; « . » = transparent.
@@ -179,16 +252,16 @@
     k: '#1d1d1d', K: '#3a3a3a', g: '#8f8f8f', G: '#c8c8c8', W: '#ffffff', s: '#6e6e6e',
     w: '#b8874a', b: '#8b5a2b', d: '#5e3b1c', r: '#c62828', R: '#ff7a6b', m: '#d9822b', M: '#f0b45a',
     o: '#1f1430', O: '#4b2b75', p: '#8a2be2', P: '#d18cff', c: '#3fd8e0', C: '#c4fcff',
-    y: '#dcdca0', Y: '#f5d042', e: '#3fbf4a', E: '#1d7a2c', f: '#d9a074', n: '#a8704a', h: '#4a2e1a',
+    u: '#3b6fd8', U: '#8fb6ff', y: '#dcdca0', Y: '#f5d042', e: '#3fbf4a', E: '#1d7a2c', f: '#d9a074', n: '#a8704a', h: '#4a2e1a',
     t: '#0b3a3e', T: '#1f8a8f', l: 'rgba(205,240,255,.45)', x: '#9c6b30', X: '#c79a5a', q: '#c62828', Q: '#ff8a80', v: '#6b3fa0', V: '#b98ae6'
   };
   var MATIERES = {
     bois: { x: '#9c6b30', X: '#c79a5a' }, pierre: { x: '#7a7a7a', X: '#adadad' }, fer: { x: '#c9c9c9', X: '#f4f4f4' },
     or: { x: '#e8b923', X: '#fff27a' }, diamant: { x: '#2fd3c6', X: '#b0fff7' }, netherite: { x: '#3d3438', X: '#776a6f' },
     rouge: { q: '#c62828', Q: '#ff8a80' }, bleu: { q: '#4f7cff', Q: '#b3c8ff' }, violet: { q: '#8a2be2', Q: '#d6a8ff' }, rose: { q: '#e055c0', Q: '#ffb3ec' },
-    enchantee: { r: '#f5d042', R: '#fff6b0' }
+    enchantee: { r: '#f5d042', R: '#fff6b0' }, fragment: { W: '#e2b8ff', G: '#9b4de0' }
   };
-  MATIERES.or.r = '#f5c518'; MATIERES.or.R = '#fff6b0';
+  MATIERES.or.r = '#f5c518'; MATIERES.or.R = '#fff6b0'; MATIERES.or.c = '#f5c518'; MATIERES.or.C = '#fff6b0';
   var SPRITES = {
     pioche: ['..XXXXXXXX..', '.Xxxxxxxxxx.', '.x.......bxX', '.......db.xX', '......db..xX', '.....db...xX', '....db....xX', '...db.....xX', '..db......xX', '.db.......xX', 'db.......xX.', 'b...........'],
     mineur: ['..hhhhhhhh..', '..hhhhhhhh..', '..ffffffff..', '..ffffffff..', '..fEEffEEf..', '..ffffffff..', '..fffnnfff..', '..ffnnnnff..', '..fffnnfff..', '.bbbbnnbbbb.', 'bbbbbbbbbbbb', 'bbbbbbbbbbbb'],
@@ -214,6 +287,15 @@
     carotte: ['.......eYe..', '........eY..', '.......YYe..', '......YYY...', '.....YWY....', '....YYY.....', '...YYW......', '..YYY.......', '..YY........', '.YY.........', '.Y..........', '............'],
     chorus: ['............', '...vvvv.....', '..vVVvvv....', '.vVvvvvvv...', '.vvvvVvvvv..', '.vvVvvvvVv..', '.vvvvvvvvv..', '..vvvVvvv...', '...vvvvv....', '............', '............', '............'],
     creeper: ['eEeeeeeeeEee', 'eeeeEeeeeeee', 'eekkkeekkkee', 'eekkkeekkkeE', 'eekkkeekkkee', 'eeeeekkeeeee', 'eEeeekkeeeee', 'eeeekkkkeeEe', 'eeeekkkkeeee', 'eeeekeekeeee', 'eEeeeeeeeeee', 'eeeeeeeEeeee'],
+    wither: ['KKK......KKK', 'WKW.KKKK.WKW', 'KKK.KKKK.KKK', '...KWKKWK...', '...KKKKKK...', '...KkKKkK...', '....KKKK....', 'KKKKKKKKKKKK', '....KgK.....', '..KKKKKKK...', '....KgK.....', '....KKK.....'],
+    monde: ['....uuuu....', '..uueeuuuu..', '.uueeeeuuUu.', '.ueeeeuuuuu.', 'uueeeuuuueeu', 'uuueeuuueeeu', 'uuuuuuueeeeu', 'uUuuuuuueeuu', '.uuueeuuuuu.', '.uueeeeuuuu.', '..uuueuuuu..', '....uuuu....'],
+    citrouille: ['.....dd.....', '....dd......', '.mmmmmmmmmm.', 'mmMmmMMmmMmm', 'mYYMmmmmYYMm', 'mYYmmMmmYYmm', 'mmmmmYYmmmMm', 'mMYmmmmmmYmm', 'mmYYYYYYYYmm', 'mmmYYmYYYmMm', '.mmmmmmmmmm.', '............'],
+    cadeau: ['...rr..rr...', '....rrrr....', 'eeeeerreeeee', 'eEeeerreeEee', 'rrrrrrrrrrrr', 'eeeeerreeeee', 'eEeeerreeeEe', 'eeeeerreeeee', 'eeEeerreeeee', 'eeeeerreeEee', 'eeeeerreeeee', '............'],
+    cloche: ['.....dd.....', '....YYYY....', '...YWYYYY...', '...YWYYYY...', '..YWYYYYYY..', '..YWYYYYYY..', '..YYYYYYYY..', '.YYYYYYYYYY.', 'mmmmmmmmmmmm', '.....dd.....', '............', '............'],
+    sablier: ['dddddddddddd', '.GllllllllG.', '..GYYYYYYG..', '...GYYYYG...', '....GYYG....', '.....GG.....', '.....GG.....', '....GlYG....', '...GllYlG...', '..GlYYYYlG..', '.GYYYYYYYYG.', 'dddddddddddd'],
+    horloge: ['...YYYYYY...', '..YddddddY..', '.YdyyyyyydY.', 'YdyyykyyyydY', 'YdyyykyyyydY', 'YdyyykkkyydY', 'YdyyyyyyyydY', 'YdyyyyyyyydY', '.YdyyyyyydY.', '..YddddddY..', '...YYYYYY...', '............'],
+    parchemin: ['.bbbbbbbbbb.', 'bwwwwwwwwwwb', '.yyyyyyyyyy.', '.ykkkkkyyyy.', '.yyyyyyyyyy.', '.ykkkkkkkky.', '.yyyyyyyyyy.', '.ykkkkyyyyy.', '.yyyyyyyyyy.', '.yyyyyyyrry.', 'bwwwwwwwwwwb', '.bbbbbbbbbb.'],
+    steak: ['............', '...rrrrr....', '..rRrrrrrr..', '.rrrRRrrrrr.', '.rrrrrrRrrr.', 'rrWWrrrrrrr.', 'rWWrrrRrrrr.', 'rrrrrrrrrrr.', '.rrrrrrrrr..', '..rrrrrr....', '............', '............'],
     etoile: ['.....WW.....', '.....WW.....', '....WWWW....', 'WWWWWGGWWWWW', '.WWWGGGGWWW.', '..WWGGGGWW..', '...WWGGWW...', '..WWW..WWW..', '.WWW....WWW.', 'WW........WW', '............', '............']
   };
   // couleur du cadre des améliorations de machine, palier par palier
@@ -224,11 +306,13 @@
     { id: 'fortune', nom: 'Trésor !', poids: 45 },
     { id: 'frenesie', nom: 'Frénésie', poids: 35, duree: 77, desc: 'Production ×7' },
     { id: 'ruee', nom: 'Ruée vers le diamant', poids: 12, duree: 13, desc: 'Clics ×777' },
-    { id: 'eclair', nom: 'Minage éclair', poids: 8, duree: 20, desc: 'Chaque clic casse le bloc' }
+    { id: 'eclair', nom: 'Minage éclair', poids: 8, duree: 20, desc: 'Chaque clic casse le bloc' },
+    { id: 'pluie', nom: 'Pluie de blocs brillants', poids: 5, duree: 30, desc: 'Tous les blocs sont brillants' }
   ];
 
   window.MC_DONNEES = {
     BLOCS: BLOCS, DIMENSIONS: DIMENSIONS, MACHINES: MACHINES, AMELIORATIONS: AMELIORATIONS, PROGRES: PROGRES,
-    PALETTE: PALETTE, MATIERES: MATIERES, SPRITES: SPRITES, COULEURS_PALIERS: COULEURS_PALIERS, EFFETS: EFFETS, PALIERS: PALIERS
+    PALETTE: PALETTE, MATIERES: MATIERES, SPRITES: SPRITES, COULEURS_PALIERS: COULEURS_PALIERS, EFFETS: EFFETS, PALIERS: PALIERS,
+    POUVOIRS: POUVOIRS, CAPACITES: CAPACITES, MISSIONS: MISSIONS
   };
 })();

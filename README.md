@@ -6,7 +6,7 @@ Mon site, en deux espaces choisis depuis l'accueil (`index.html`) :
 - **Mes jeux** (`jeux.html`) : les jeux faits maison :
   - [Aérélia](https://lucjules.github.io/LunaPoke/), aventure rétro de capture de créatures, dans son propre dépôt (`LunaPoke`) ;
   - [Voie libre](https://lucjules.github.io/jeux/voie-libre/) 1.0, course en 3D (WebGL) à travers les quartiers d'une ville sur trois voies (course libre, Tour de la ville en 15 niveaux, Défi du jour, événements saisonniers), dans ce dépôt (`jeux/voie-libre/`) ; il s'installe aussi comme une appli à part (son propre manifeste et ses icônes dans `jeux/voie-libre/icones/`) ;
-  - [Mine Clic](https://lucjules.github.io/jeux/mine-clic/), jeu de clic dans un monde de blocs : miner, acheter 12 machines et 125 améliorations, ouvrir les coffres, désamorcer les creepers, voyager de la surface jusqu'au Nether, à l'End et à la cité antique, 69 progrès et des renaissances, dans ce dépôt (`jeux/mine-clic/`) ; installable lui aussi comme une appli à part.
+  - [Mine Clic](https://lucjules.github.io/jeux/mine-clic/), jeu de clic dans un monde de blocs : miner (combos, blocs brillants), acheter 14 machines (×1, ×10, ×100 ou Max) et 150 améliorations, capacités à recharge, missions, coffres et creepers, événements d'Halloween et de Noël, voyager de la surface jusqu'au Nether, à l'End et à la cité antique, 95 progrès, renaissances avec étoiles du Nether et boutique céleste de 16 pouvoirs, musique d'ambiance, dans ce dépôt (`jeux/mine-clic/`) ; installable lui aussi comme une appli à part.
 
 **En ligne :** https://lucjules.github.io/
 
@@ -44,8 +44,8 @@ jeux/voie-libre/       jeu Voie libre 1.0 : index.html, style.css, et dans js/ d
 jeux/voie-libre/lib/   Three.js (licence MIT), copié dans le dépôt pour fonctionner hors ligne
 jeux/mine-clic/        jeu Mine Clic : index.html, style.css, et dans js/ trois scripts classiques (sans module,
                        il s'ouvre donc aussi en double-cliquant) : donnees.js (blocs, dimensions, machines,
-                       améliorations, progrès, dessins en pixels), textures.js (textures, icônes et cube 3D
-                       dessinés par le code), jeu.js (moteur, interface, sons synthétisés, sauvegarde) ;
+                       améliorations, progrès, pouvoirs, capacités, missions, dessins en pixels), textures.js (textures, icônes et cube 3D
+                       dessinés par le code), jeu.js (moteur, interface, sons et musique synthétisés, sauvegarde) ;
                        polices/ (Pixelify Sans, licence SIL OFL 1.1) et icones/
 <matière>/index.html   accueil d'une matière, avec une carte par chapitre
 <matière>/*.html       un fichier par chapitre (application complète)
@@ -59,7 +59,7 @@ sw.js, manifest.webmanifest   application installable et hors ligne
 404.html               page « introuvable »
 outils/construire.js   régénère l'index de recherche et la liste hors ligne
 outils/tester-voie-libre.js   tests du jeu Voie libre (parcours franchissable, mécanismes, progression, rendu 3D)
-outils/tester-mine-clic.js    tests du jeu Mine Clic (clics, achats, coffres, dimensions, renaissance, sauvegarde, téléphone)
+outils/tester-mine-clic.js    tests du jeu Mine Clic (clics, achats, Max, capacités, missions, coffres, dimensions, renaissance, pouvoirs, sauvegarde, téléphone)
 .github/workflows/     lance outils/construire.js automatiquement sur GitHub
 ```
 
