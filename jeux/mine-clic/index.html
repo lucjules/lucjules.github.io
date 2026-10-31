@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Mine Clic · Mes jeux</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Mine Clic : un jeu de clic dans un monde de blocs. Mine, achète des pioches, des golems et des portails, ouvre les coffres, désamorce les creepers et voyage jusqu'au Nether et à l'End. Fonctionne hors connexion.">
+<meta name="description" content="Mine Clic : un jeu de clic dans un monde de blocs. Mine, achète des pioches, des golems et des portails, utilise tes capacités, remplis les missions, ouvre les coffres, désamorce les creepers, voyage jusqu'au Nether et à l'End et renais pour des pouvoirs célestes. Fonctionne hors connexion.">
 <meta name="theme-color" content="#5b8fd8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icones/icone-192.png" type="image/png">
@@ -24,65 +24,104 @@
 <main class="jeu">
   <section id="mine" class="mine" aria-label="La mine">
     <canvas id="eclats" aria-hidden="true"></canvas>
+    <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
     <div class="compteur">
       <p class="c-blocs"><b id="n-blocs">0</b> <span id="n-unite">bloc</span></p>
       <p class="c-cps">par seconde : <b id="n-cps">0</b></p>
     </div>
     <div id="effets" class="effets"></div>
     <button type="button" id="bloc" class="bloc" aria-label="Miner le bloc"><canvas id="cube" width="300" height="300"></canvas></button>
-    <p class="bloc-info"><span id="bloc-nom">Bloc d'herbe</span> · <span id="bloc-coups" class="coups">0 / 5</span></p>
+    <p class="bloc-info"><span id="bloc-nom">Bloc d'herbe</span> · <span id="bloc-coups" class="coups">0 / 5</span> <span id="combo" class="combo" hidden></span></p>
     <div id="xp" class="xp" title="Progrès">
       <span id="xp-niv" class="xp-niv">0</span>
       <div class="xp-barre" aria-hidden="true"><i id="xp-i"></i></div>
     </div>
-    <div id="dims" class="dims" role="group" aria-label="Dimensions"></div>
-    <button type="button" id="b-renaitre" class="btn-mc renaitre" hidden>Renaître</button>
+    <div class="rangee">
+      <div id="capas" class="capas" role="group" aria-label="Capacités" hidden></div>
+      <div id="dims" class="dims" role="group" aria-label="Dimensions"></div>
+      <button type="button" id="b-renaitre" class="btn-mc renaitre" hidden>Renaître</button>
+    </div>
   </section>
 
   <section class="panneau" aria-label="Boutique et informations">
     <div class="onglets" role="tablist" aria-label="Rubriques">
       <button type="button" class="onglet" role="tab" id="o-boutique" aria-controls="p-boutique" aria-selected="true">Boutique</button>
       <button type="button" class="onglet" role="tab" id="o-progres" aria-controls="p-progres" aria-selected="false" tabindex="-1">Progrès</button>
+      <button type="button" class="onglet" role="tab" id="o-etoiles" aria-controls="p-etoiles" aria-selected="false" tabindex="-1">Étoiles</button>
       <button type="button" class="onglet" role="tab" id="o-stats" aria-controls="p-stats" aria-selected="false" tabindex="-1">Stats</button>
       <button type="button" class="onglet" role="tab" id="o-options" aria-controls="p-options" aria-selected="false" tabindex="-1">Options</button>
     </div>
     <div id="panneau-defile" class="defile">
       <div id="p-boutique" class="page" role="tabpanel" aria-labelledby="o-boutique">
-        <h2>Améliorations</h2>
+        <div class="tete-amels"><h2>Améliorations</h2><button type="button" id="b-tout" class="btn-mc petit-btn" hidden>Tout acheter</button></div>
         <div id="amels" class="amels"></div>
         <p id="amels-vide" class="vide">Aucune amélioration pour l'instant : continue à miner !</p>
         <div id="amel-info" class="info" hidden></div>
         <div class="tete-machines">
           <h2>Machines</h2>
           <div class="qte" role="group" aria-label="Acheter par">
-            <button type="button" data-q="1" aria-pressed="true">×1</button><button type="button" data-q="10" aria-pressed="false">×10</button><button type="button" data-q="100" aria-pressed="false">×100</button>
+            <button type="button" data-q="1" aria-pressed="true">×1</button><button type="button" data-q="10" aria-pressed="false">×10</button><button type="button" data-q="100" aria-pressed="false">×100</button><button type="button" data-q="max" aria-pressed="false">Max</button>
           </div>
         </div>
         <div id="machines" class="machines"></div>
       </div>
 
       <div id="p-progres" class="page" role="tabpanel" aria-labelledby="o-progres" hidden>
+        <h2>Missions</h2>
+        <p id="missions-txt" class="sous"></p>
+        <ul id="missions" class="missions"></ul>
         <h2>Progrès</h2>
         <p id="prog-resume" class="sous"></p>
         <div id="progres" class="trophees"></div>
         <div id="prog-info" class="info" hidden></div>
       </div>
 
+      <div id="p-etoiles" class="page" role="tabpanel" aria-labelledby="o-etoiles" hidden>
+        <div class="et-tete">
+          <img class="ic-etoile et-grande" alt="">
+          <div><h2 id="et-nb">0 étoile du Nether</h2><p id="et-bonus" class="sous"></p><p class="et-frag"><img class="ic-fragment" alt=""> <span id="et-frag"></span></p></div>
+        </div>
+
+        <div class="cadre-ren">
+          <h3>Renaître</h3>
+          <p id="et-gain"></p>
+          <button type="button" id="o-renaitre" class="btn-mc vert">Renaître</button>
+          <h3>Prochaine étoile</h3>
+          <div class="et-barre" aria-hidden="true"><i id="et-barre"></i></div>
+          <p id="et-prochaine" class="sous"></p>
+          <p id="et-total" class="sous"></p>
+        </div>
+
+        <h3>Comment ça marche ?</h3>
+        <ul class="aide">
+          <li>Quand tu as assez miné, tu peux <b>renaître</b> : la partie recommence de zéro, mais tu gagnes des <b class="jaune">étoiles du Nether</b>.</li>
+          <li>Chaque étoile ajoute <b>2 % de production pour toujours</b>, dans toutes tes vies suivantes.</li>
+          <li>Le nombre d'étoiles dépend des blocs minés <b>au total, toutes vies comprises</b> : la 1<sup>re</sup> à 100 millions, la 2<sup>e</sup> à 800 millions, la 3<sup>e</sup> à 2,7 milliards… (racine cubique des blocs minés divisés par 100 millions). Tu ne gagnes que les étoiles que tu n'as pas encore.</li>
+          <li>Chaque étoile gagnée donne aussi un <b class="violet">fragment d'étoile</b>, à dépenser dans la <b>boutique céleste</b> ci-dessous pour des pouvoirs permanents.</li>
+          <li><b>Tu perds</b> tes blocs, tes machines et tes améliorations. <b>Tu gardes</b> les progrès, les dimensions, les pouvoirs, les missions et les statistiques.</li>
+          <li>Astuce : renaître tôt pour quelques étoiles, puis renaître à nouveau quand la suivante est proche, fait progresser plus vite qu'attendre longtemps.</li>
+        </ul>
+
+        <h3>Paliers</h3>
+        <table class="paliers"><thead><tr><th>Étoiles</th><th>Minés au total</th><th>Bonus</th><th></th></tr></thead><tbody id="et-paliers"></tbody></table>
+
+        <h3>Boutique céleste</h3>
+        <p id="pouvoirs-txt" class="sous"></p>
+        <div id="pouvoirs" class="pouvoirs"></div>
+      </div>
+
       <div id="p-stats" class="page" role="tabpanel" aria-labelledby="o-stats" hidden>
         <h2>Statistiques</h2>
         <dl id="stats" class="stats"></dl>
-        <div class="cadre-ren">
-          <h3><img id="ren-ic" alt="" class="ic-ren"> Renaissance</h3>
-          <p>En renaissant, tu recommences de zéro mais tu gagnes des <b class="jaune">étoiles du Nether</b> : chacune ajoute 2 % de production pour toujours. Plus tu as miné, plus tu en gagnes.</p>
-          <p id="ren-txt"></p>
-          <button type="button" id="o-renaitre" class="btn-mc">Renaître…</button>
-        </div>
+        <p><button type="button" id="b-etoiles" class="btn-mc">Renaissance et étoiles →</button></p>
       </div>
 
       <div id="p-options" class="page" role="tabpanel" aria-labelledby="o-options" hidden>
         <h2>Options</h2>
         <div class="options">
           <button type="button" id="o-son" class="btn-mc" aria-pressed="true">Son : activé</button>
+          <button type="button" id="o-musique" class="btn-mc" aria-pressed="true">Musique : activée</button>
+          <button type="button" id="o-notation" class="btn-mc">Nombres : en mots</button>
           <button type="button" id="o-parts" class="btn-mc" aria-pressed="true">Éclats : activés</button>
           <button type="button" id="o-sauver" class="btn-mc">Sauvegarder maintenant</button>
         </div>
@@ -102,7 +141,13 @@
           <li>Achète des <b>machines</b> : elles minent toutes seules, même quand tu ne cliques pas.</li>
           <li>Les <b>améliorations</b> doublent tes clics ou tes machines. Passe la souris dessus (ou touche-les une fois) pour les lire.</li>
           <li>Un <b>coffre au trésor</b> apparaît de temps en temps : clique dessus avant qu'il disparaisse. Un <b>creeper</b> ? Clique vite pour le désamorcer !</li>
+          <li>Clique vite pour monter ton <b>combo</b> (jusqu'à 50) : chaque niveau augmente la valeur du clic.</li>
+          <li>Un bloc <b>brillant</b> ✦ donne 10 fois le bonus quand il casse : ne le rate pas !</li>
+          <li>Les <b>capacités</b> (sous le bloc) se débloquent en jouant : TNT, potion de hâte, cloche du village, balise. Elles se rechargent après usage.</li>
+          <li>Remplis les <b>missions</b> (onglet Progrès) pour gagner de gros bonus.</li>
           <li>Débloque de nouvelles <b>dimensions</b> : les grottes, les profondeurs, le Nether, l'End…</li>
+          <li><b>Renais</b> pour gagner des étoiles du Nether et acheter des pouvoirs permanents (onglet Étoiles).</li>
+          <li>Pour acheter beaucoup de machines d'un coup, choisis ×10, ×100 ou <b>Max</b> (le plus possible).</li>
           <li>Quand tu reviens, tes machines ont travaillé pendant ton absence (à moitié de leur vitesse, jusqu'à 24 h).</li>
         </ul>
         <p class="sous petit">Jeu fait maison, inspiré des jeux de clic et des mondes en blocs. Toutes les images sont dessinées par le code. Police Pixelify Sans (licence SIL OFL 1.1).</p>
@@ -112,7 +157,6 @@
 </main>
 
 <div id="evenements"></div>
-<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
 <p id="annonce" class="annonce" role="status" aria-live="polite"></p>
 <dialog id="dialogue" class="dialogue" aria-labelledby="dlg-titre">
   <h2 id="dlg-titre"></h2>
