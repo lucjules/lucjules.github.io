@@ -10,7 +10,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var parId = function (liste) { var o = {}; liste.forEach(function (x) { o[x.id] = x; }); return o; };
   var MACHINE = parId(D.MACHINES), AMEL = parId(D.AMELIORATIONS), PROG = parId(D.PROGRES), DIM = parId(D.DIMENSIONS);
-  var POUVOIR = parId(D.POUVOIRS), CAPA = parId(D.CAPACITES), MISSION = parId(D.MISSIONS);
+  var POUVOIR = parId(D.POUVOIRS), CAPA = parId(D.CAPACITES), MISSION = parId(D.MISSIONS), FAMILIER = parId(D.FAMILIERS);
 
   /* ================= Nombres et durées, à la française ================= */
   var GRANDS = ['million', 'milliard', 'billion', 'billiard', 'trillion', 'trilliard', 'quadrillion', 'quadrilliard', 'quintillion', 'quintilliard', 'sextillion', 'sextilliard'];
@@ -46,13 +46,14 @@
   function rond(n) { if (n < 100) return Math.ceil(n); var p = Math.pow(10, Math.floor(Math.log10(n)) - 1); return Math.ceil(n / p) * p; }
 
   /* ================= État de la partie ================= */
-  var COMPTEURS = ['clics', 'casses', 'etoiles', 'fragments', 'renaissances', 'coffres', 'creepers', 'boums', 'coups', 'missionsFaites', 'brillants', 'capacites', 'comboMax', 'achats', 'amelsAchetees', 'maxAchat', 'citrouilles', 'cadeaux'];
+  var COMPTEURS = ['clics', 'casses', 'etoiles', 'fragments', 'renaissances', 'coffres', 'creepers', 'boums', 'coups', 'missionsFaites', 'brillants', 'capacites', 'comboMax', 'achats', 'amelsAchetees', 'maxAchat', 'citrouilles', 'cadeaux', 'bossTotal', 'creepersNuit'];
   function neuf() {
     var t = Date.now();
     return {
       v: 2, blocs: 0, total: 0, totalAll: 0, machines: {}, amels: [], progres: [], pouvoirs: [], recharges: {}, missions: [],
       clics: 0, casses: 0, etoiles: 0, fragments: 0, renaissances: 0, coffres: 0, creepers: 0, boums: 0, coups: 0,
       missionsFaites: 0, brillants: 0, capacites: 0, comboMax: 0, achats: 0, amelsAchetees: 0, maxAchat: 0, citrouilles: 0, cadeaux: 0,
+      bossTotal: 0, creepersNuit: 0, bossVaincus: [], familiers: [], familier: null, collection: {}, secrets: [], historique: [],
       dims: ['surface'], vues: ['surface'], dim: 'surface', bloc: 'herbe', brillant: false,
       debut: t, debutVie: t, derniere: t, tempsJeu: 0, son: true, musique: true, particules: true, notation: 'mots', qte: 1
     };
@@ -70,6 +71,11 @@
     if (d.machines && typeof d.machines == 'object') D.MACHINES.forEach(function (m) { if (nb(d.machines[m.id])) S.machines[m.id] = Math.min(100000, Math.floor(d.machines[m.id])); });
     var garder = function (liste, connus) { return Array.isArray(liste) ? liste.filter(function (x, i) { return connus[x] && liste.indexOf(x) == i; }) : []; };
     S.amels = garder(d.amels, AMEL); S.progres = garder(d.progres, PROG); S.pouvoirs = garder(d.pouvoirs, POUVOIR);
+    S.bossVaincus = garder(d.bossVaincus, DIM); S.familiers = garder(d.familiers, FAMILIER);
+    if (S.familiers.indexOf(d.familier) >= 0) S.familier = d.familier;
+    if (d.collection && typeof d.collection == 'object') Object.keys(D.BLOCS).forEach(function (b) { if (nb(d.collection[b])) S.collection[b] = Math.floor(d.collection[b]); });
+    S.secrets = garder(d.secrets, { titre: 1, minuit: 1 });
+    if (Array.isArray(d.historique)) S.historique = d.historique.filter(nb).slice(-60);
     S.dims = garder(d.dims, DIM); if (S.dims.indexOf('surface') < 0) S.dims.unshift('surface');
     S.vues = garder(d.vues, DIM); if (S.vues.indexOf('surface') < 0) S.vues.unshift('surface');
     if (S.dims.indexOf(d.dim) >= 0) S.dim = d.dim;
@@ -90,9 +96,11 @@
   var combo = { n: 0, dernier: 0 };
 
   function a(id) { return S.pouvoirs.indexOf(id) >= 0; }
+  function f(id) { return S.familier == id; }
+  function niveauMaitrise(n) { return D.MAITRISE.filter(function (x) { return n >= x; }).length; }
   function actif(id) { var t = Date.now(); return effets.some(function (e) { return e.id == id && e.fin > t; }); }
   function recalculer() {
-    var m = { clic: 0, pct: 0, fortune: 0, chance: 0, duree: 0, global: 0, combo: 0, brillance: 0, recharge: 0, machine: {} };
+    var m = { clic: 0, pct: 0, fortune: 0, chance: 0, duree: 0, global: 0, combo: 0, brillance: 0, recharge: 0, epee: 0, machine: {} };
     S.amels.forEach(function (id) {
       var u = AMEL[id];
       if (u.effet == 'machine') m.machine[u.machine] = (m.machine[u.machine] || 0) + 1;
@@ -103,6 +111,9 @@
     J.pctEtoile = a('constellation') ? 3 : 2;
     J.multProgres = S.progres.length; J.multEtoiles = S.etoiles * J.pctEtoile;
     J.mult = (1 + m.global / 100) * (1 + S.progres.length / 100) * (1 + J.multEtoiles / 100);
+    J.maitrise = 0; J.blocsMaitrises = 0;
+    Object.keys(D.BLOCS).forEach(function (b) { var n = niveauMaitrise(S.collection[b] || 0); J.maitrise += n; if (n) J.blocsMaitrises++; });
+    J.mult *= (1 + J.maitrise / 100) * (f('abeille') ? 1.1 : 1);
     J.remise = (a('marchand') ? 0.9 : 1) * (a('grand-marchand') ? 0.9 : 1);
     J.remiseAmel = a('bibliothecaire') ? 0.9 : 1;
     J.parMachine = {}; J.cpsBase = 0;
@@ -113,10 +124,12 @@
     J.frenesie = actif('frenesie'); J.ruee = actif('ruee'); J.eclair = actif('eclair'); J.hate = actif('hate'); J.cloche = actif('cloche'); J.pluie = actif('pluie');
     J.multFrenesie = a('dragon') ? 10 : 7;
     J.cps = J.cpsBase * (J.frenesie ? J.multFrenesie : 1) * (J.cloche ? 3 : 1);
-    J.clicBase = (Math.pow(2, m.clic) * (a('gant') ? 2 : 1) * J.mult + J.cps * m.pct / 100) * (J.ruee ? 777 : 1) * (J.hate ? 10 : 1);
+    J.clicBase = (Math.pow(2, m.clic) * (a('gant') ? 2 : 1) * (f('loup') ? 1.5 : 1) * J.mult + J.cps * m.pct / 100) * (J.ruee ? 777 : 1) * (J.hate ? 10 : 1);
     J.pctCombo = 2 + m.combo;
     J.clic = J.clicBase * multCombo();
-    J.fortune = Math.pow(2, m.fortune) * (a('soie') ? 3 : 1);
+    J.fortune = Math.pow(2, m.fortune) * (a('soie') ? 3 : 1) * (f('axolotl') ? 2 : 1);
+    J.degats = Math.pow(2, m.epee) * (f('dragonnet') ? 2 : 1);
+    J.fenetreCombo = f('perroquet') ? 1000 : 650; J.comboMaxi = f('perroquet') ? 75 : 50;
     J.multBrillant = 10 * Math.pow(2, m.brillance);
     J.multRecharge = (a('recharge') ? 0.5 : 1) * Math.pow(0.75, m.recharge);
     J.multDuree = a('sablier') ? 1.5 : 1;
@@ -200,6 +213,9 @@
       },
       boum: function () { bruit(1.2, 'lowpass', 360, 0.7, 1.4); note(80, 0.7, 'sine', 0.7, 0, 30); },
       couper: function (r) { try { if (r) r.s.stop(); } catch (e) {} },
+      boss: function () { note(110, 0.9, 'sawtooth', 0.12, 0, 55); note(82, 1.1, 'square', 0.08, 0.2, 41); bruit(0.8, 'lowpass', 300, 1, 0.5); },
+      coupBoss: function () { bruit(0.1, 'lowpass', 500, 1, 0.8); note(90 + Math.random() * 30, 0.08, 'square', 0.12); },
+      victoire: function () { [523, 659, 784, 1047, 784, 1047].forEach(function (fr, i) { note(fr, 0.22, 'square', 0.1, i * 0.11); }); },
       // musique : notes douces et lentes, gamme selon la dimension
       douce: function (f, vol) { note(f, 3.2, 'sine', vol, 0, null, 0.12); note(f * 2, 2.2, 'triangle', vol * 0.18, 0.02, null, 0.15); }
     };
@@ -244,7 +260,7 @@
   }
   function frapper(x, y) {
     var t = Date.now();
-    combo.n = t - combo.dernier < 650 ? Math.min(50, combo.n + 1) : 1;
+    combo.n = t - combo.dernier < J.fenetreCombo ? Math.min(J.comboMaxi, combo.n + 1) : 1;
     combo.dernier = t;
     if (combo.n > S.comboMax) S.comboMax = combo.n;
     S.missions.forEach(function (m) { if (m.id == 'combo' && combo.n > m.max) m.max = combo.n; });
@@ -252,6 +268,7 @@
     var v = J.clicBase * multCombo(), b = D.BLOCS[S.bloc];
     J.clic = v;
     gagner(v);
+    if (boss) { anim.tape = 1; flottant(x, y, '+' + nombre(v, true), ''); blesserBoss(J.degats, x, y); majCombo(); marquer(); return; }
     S.coups += J.eclair ? b.durete : 1;
     sons.coup(b.son);
     anim.tape = 1;
@@ -265,6 +282,7 @@
   // la pioche fantôme (pouvoir) frappe toute seule, sans combo
   function frapperFantome() {
     var b = D.BLOCS[S.bloc], r = cube.getBoundingClientRect();
+    if (boss) { gagner(J.clicBase); blesserBoss(J.degats, r.left + r.width / 2, r.top + r.height / 2); return; }
     gagner(J.clicBase);
     S.coups++;
     anim.tape = Math.max(anim.tape, 0.5);
@@ -275,6 +293,10 @@
     var b = D.BLOCS[S.bloc], brille = S.brillant, bonus = b.durete * J.clicBase * J.fortune * (mult || 1) * (brille ? J.multBrillant : 1), r = cube.getBoundingClientRect();
     gagner(bonus);
     S.casses++;
+    var avantN = niveauMaitrise(S.collection[S.bloc] || 0);
+    S.collection[S.bloc] = (S.collection[S.bloc] || 0) + 1;
+    var apresN = niveauMaitrise(S.collection[S.bloc]);
+    if (apresN > avantN) { recalculer(); toast({ plat: S.bloc }, 'Maîtrise ' + apresN + ' : ' + b.nom, '+1 % de production'); }
     sons.casse(b.son);
     eclats(r.left + r.width / 2, r.top + r.height / 2, brille ? 60 : 34, brille ? T.texture(S.bloc).couleurs.concat(['#fff6b0', '#ffe066', '#ffffff']) : T.texture(S.bloc).couleurs, 2.2);
     flottant(x, y - 30, (brille ? 'Brillant ! ' : '') + b.nom + ' : +' + nombre(bonus), 'gros');
@@ -308,6 +330,7 @@
     }
     cxCube.fillStyle = 'rgba(0,0,0,.35)';
     cxCube.beginPath(); cxCube.ellipse(w / 2, h * 0.5 + w * 0.36, w * 0.24 * echelle, w * 0.06 * echelle, 0, 0, Math.PI * 2); cxCube.fill();
+    if (boss) { dessinerBoss(w, cy, t, dt); return; }
     var fiss = Math.floor(10 * S.coups / D.BLOCS[S.bloc].durete);
     T.cube(cxCube, T.texture(S.bloc), w / 2, cy, t, fiss, anim.pop * 0.6 + anim.tape * 0.12 + (S.brillant ? 0.08 + 0.08 * Math.sin(anim.t * 6) : 0));
     if (S.brillant) { // étincelles
@@ -321,9 +344,171 @@
       cxCube.globalAlpha = 1;
     }
   }
+  var imgs = {};
+  function image_(icone) { var k = icone.s + (icone.m || ''); if (!imgs[k]) { imgs[k] = new Image(); imgs[k].src = T.sprite(icone); } return imgs[k]; }
+  function dessinerBoss(w, cy, t, dt) {
+    boss.coup = Math.max(0, boss.coup - dt * 6);
+    var img = image_(boss.def.icone), taille = t * 1.9 * (1 + 0.05 * Math.sin(anim.t * 3)), dx = (Math.random() - 0.5) * boss.coup * w * 0.04;
+    if (!img.complete) return;
+    cxCube.imageSmoothingEnabled = false;
+    if (boss.coup > 0.3) cxCube.filter = 'brightness(2.2)';
+    cxCube.drawImage(img, w / 2 - taille / 2 + dx, cy - taille / 2, taille, taille);
+    cxCube.filter = 'none';
+  }
   function tailleCube() {
     var r = cube.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1), n = Math.max(64, Math.round(r.width * dpr));
     if (cube.width != n) { cube.width = n; cube.height = n; }
+  }
+
+  /* ================= Boss ================= */
+  var boss = null, prochainBoss = 0;
+  function bossDispo() { return S.totalAll >= 1e5; }
+  function planifierBoss(premier) { prochainBoss = Date.now() + (premier ? 150 + Math.random() * 150 : 420 + Math.random() * 360) * 1000; }
+  function lancerBoss() {
+    var def = D.BOSS[S.dim]; if (!def || boss) return null;
+    var d = 30 * J.multDuree;
+    boss = { dim: S.dim, def: def, pv: def.pv, pvMax: def.pv, fin: Date.now() + d * 1000, duree: d, coup: 0 };
+    sons.boss();
+    annonce('Un boss apparaît : ' + def.nom + ' ! Clique dessus pour le vaincre en ' + Math.round(d) + ' secondes.');
+    $('boss').hidden = false; $('bloc-info').hidden = true;
+    $('bloc').setAttribute('aria-label', 'Frapper le boss : ' + def.nom);
+    anim.pop = 1; majBoss();
+    return boss;
+  }
+  function blesserBoss(d, x, y) {
+    boss.pv -= d; boss.coup = 1;
+    sons.coupBoss();
+    eclats(x, y, 4, boss.def.couleurs, 1);
+    if (boss.pv <= 0) vaincreBoss(); else majBoss();
+  }
+  function vaincreBoss() {
+    var b = boss, idx = D.DIMENSIONS.map(function (x) { return x.id; }).indexOf(b.dim), premier = S.bossVaincus.indexOf(b.dim) < 0, r = cube.getBoundingClientRect();
+    var g = (Math.max(J.clicBase * 400, J.cpsBase * 1200) + 1000) * (1 + 0.5 * idx);
+    gagner(g); S.bossTotal++;
+    if (premier) { S.bossVaincus.push(b.dim); S.fragments++; }
+    boss = null; finBoss();
+    sons.victoire();
+    eclats(r.left + r.width / 2, r.top + r.height / 2, 70, b.def.couleurs.concat(['#ffe066', '#ffffff']), 2.8);
+    annonce(b.def.nom + ' vaincu ! +' + blocs(g) + (premier ? ' et 1 fragment d\'étoile pour ta première victoire' : ''));
+    planifierBoss(false); verifierProgres(); verifierMissions(); verifierFamiliers(); marquer();
+  }
+  function fuiteBoss() { var b = boss; boss = null; finBoss(); annonce(b.def.nom + ' s\'est enfui… Il reviendra !'); planifierBoss(false); }
+  function finBoss() { $('boss').hidden = true; $('bloc-info').hidden = false; majNomBloc(); anim.pop = 1; }
+  function majBoss() {
+    if (!boss) return;
+    var reste = Math.max(0, (boss.fin - Date.now()) / 1000);
+    $('boss-nom').textContent = boss.def.nom;
+    $('boss-pv').style.width = (100 * Math.max(0, boss.pv) / boss.pvMax) + '%';
+    $('boss-t').textContent = Math.ceil(Math.max(0, boss.pv)) + ' PV · ' + Math.ceil(reste) + ' s';
+  }
+
+  /* ================= Familiers ================= */
+  function verifierFamiliers() {
+    D.FAMILIERS.forEach(function (fm) {
+      if (S.familiers.indexOf(fm.id) >= 0 || !fm.test(S, J)) return;
+      S.familiers.push(fm.id);
+      toast(fm.icone, 'Nouveau familier !', fm.nom);
+      if (!S.familier) choisirFamilier(fm.id);
+      verifierProgres(); afficherFamiliers(); marquer();
+    });
+  }
+  function choisirFamilier(id) {
+    if (S.familiers.indexOf(id) < 0) return false;
+    S.familier = id;
+    recalculer(); majFamilier(); afficherFamiliers(); majBoutique(); marquer();
+    return true;
+  }
+  function majFamilier() {
+    var e = $('familier');
+    e.hidden = !S.familier;
+    if (S.familier) { e.src = T.sprite({ s: S.familier }); e.title = FAMILIER[S.familier].nom + ' : ' + FAMILIER[S.familier].desc; }
+  }
+  function afficherFamiliers() {
+    var box = $('familiers'), cle = S.familiers.join() + '|' + S.familier;
+    if (box._cle == cle) return;
+    box._cle = cle; box.innerHTML = '';
+    D.FAMILIERS.forEach(function (fm) {
+      var eu = S.familiers.indexOf(fm.id) >= 0, avec = S.familier == fm.id, el = document.createElement('div');
+      el.className = 'pouvoir' + (avec ? ' eu' : eu ? ' ok' : '');
+      el.innerHTML = '<img alt="" src="' + T.sprite(fm.icone) + '"' + (eu ? '' : ' class="cache"') + '><span class="po-txt"><b>' + (eu ? echappe(fm.nom) : '???') + '</b><small>' + echappe(eu ? fm.desc : 'À débloquer : ' + fm.aide.charAt(0).toLowerCase() + fm.aide.slice(1) + '.') + '</small></span>';
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn-mc po-btn';
+      b.textContent = avec ? 'Avec toi' : eu ? 'Choisir' : '🔒';
+      b.disabled = !eu || avec;
+      b.setAttribute('aria-label', avec ? fm.nom + ' t\'accompagne' : eu ? 'Choisir ' + fm.nom : 'Familier verrouillé');
+      b.onclick = function () { choisirFamilier(fm.id); };
+      el.appendChild(b);
+      box.appendChild(el);
+    });
+    $('familiers-txt').textContent = S.familiers.length + ' / ' + D.FAMILIERS.length + ' familiers · un seul à la fois t\'accompagne' + (S.familier ? ' (' + FAMILIER[S.familier].nom + ')' : '');
+  }
+
+  /* ================= Collection des blocs ================= */
+  function afficherCollection() {
+    var html = Object.keys(D.BLOCS).map(function (b) {
+      var n = S.collection[b] || 0, niv = niveauMaitrise(n), suiv = D.MAITRISE[niv];
+      return '<div class="carte-bloc niv' + niv + '" title="' + echappe(D.BLOCS[b].nom + ' : ' + nombre(n) + ' cassé' + (n > 1 ? 's' : '') + (suiv ? ', maîtrise ' + (niv + 1) + ' à ' + nombre(suiv) : ', maîtrise maximale')) + '">' +
+        '<img alt="" src="' + T.plat(b) + '"' + (n ? '' : ' class="cache"') + '><b>' + (n ? echappe(D.BLOCS[b].nom) : '???') + '</b><small>' + nombre(n) + (suiv ? ' / ' + nombre(suiv) : '') + '</small><span class="etoiles-m">' + '★★★'.slice(0, niv) + '<i>' + '★★★'.slice(niv) + '</i></span></div>';
+    }).join('');
+    if ($('collection')._html != html) { $('collection')._html = html; $('collection').innerHTML = html; }
+    $('collection-txt').textContent = 'Maîtrise totale : ' + J.maitrise + ' / ' + Object.keys(D.BLOCS).length * 3 + ' (+' + J.maitrise + ' % de production). Niveaux à ' + D.MAITRISE.map(nombre).join(', ') + ' blocs cassés.';
+  }
+
+  /* ================= Jour, nuit et ambiance ================= */
+  var CIELS = [[0, ['#5b8fd8', '#9cc4f0']], [0.58, ['#5b8fd8', '#9cc4f0']], [0.66, ['#c8644e', '#f0b49c']], [0.72, ['#0b1030', '#1c2650']], [0.93, ['#0b1030', '#1c2650']], [0.98, ['#c8644e', '#f0b49c']], [1, ['#5b8fd8', '#9cc4f0']]];
+  function phaseJour() { return window.MC_PHASE != null ? window.MC_PHASE : (Date.now() / 1200000) % 1; }
+  function estNuit() { var p = phaseJour(); return S.dim == 'surface' && p >= 0.7 && p < 0.95; }
+  function melange(c1, c2, k) {
+    var x = function (c, i) { return parseInt(c.slice(1 + 2 * i, 3 + 2 * i), 16); };
+    return '#' + [0, 1, 2].map(function (i) { return Math.round(x(c1, i) + (x(c2, i) - x(c1, i)) * k).toString(16).padStart(2, '0'); }).join('');
+  }
+  function ciel() {
+    var p = phaseJour();
+    for (var i = 1; i < CIELS.length; i++) if (p <= CIELS[i][0]) {
+      var k = (p - CIELS[i - 1][0]) / (CIELS[i][0] - CIELS[i - 1][0]);
+      return [melange(CIELS[i - 1][1][0], CIELS[i][1][0], k), melange(CIELS[i - 1][1][1], CIELS[i][1][1], k)];
+    }
+    return CIELS[0][1];
+  }
+  var tuileEtoiles = (function () {
+    var c = document.createElement('canvas'); c.width = c.height = 96;
+    var x = c.getContext('2d');
+    for (var i = 0; i < 14; i++) { x.fillStyle = i % 4 ? 'rgba(255,255,255,.8)' : '#fff6b0'; x.fillRect(Math.floor(Math.random() * 48) * 2, Math.floor(Math.random() * 30) * 2, 2, 2); }
+    return c.toDataURL();
+  })();
+  var nuitAvant = null;
+  function majJourNuit() {
+    if (S.dim != 'surface') { nuitAvant = null; return; }
+    var n = estNuit();
+    if (nuitAvant !== null && n != nuitAvant) annonce(n ? 'La nuit tombe… Les creepers sortent, sois prudent !' : 'Le soleil se lève sur la surface.');
+    nuitAvant = n;
+    appliquerFond();
+  }
+  var AMBIANCES = {
+    surface: null,
+    grottes: { c: ['#9a9a9a', '#cfcfcf'], vy: 10, n: 3 },
+    profondeurs: { c: ['#7a7a8a', '#b0b0c0', '#ff2020'], vy: 10, n: 4 },
+    coeur: { c: ['#7ff4fa', '#d18cff', '#5cf796'], vy: -8, n: 5 },
+    nether: { c: ['#ff9a3c', '#f5d042', '#ff5a2a'], vy: -40, n: 12 },
+    end: { c: ['#d18cff', '#8a2be2', '#ffffff'], vy: -14, n: 7 },
+    cite: { c: ['#2de0d9', '#c4fcff'], vy: -10, n: 6 }
+  };
+  var ambiance = [], ambAccu = 0;
+  function dessinerAmbiance(dt) {
+    var amb = AMBIANCES[S.dim] || (estNuit() ? { c: ['#fff36b', '#d4ff6b'], vy: -6, n: 4 } : null);
+    var w = toileEclats.width / (toileEclats._dpr || 1), h = toileEclats.height / (toileEclats._dpr || 1);
+    if (amb && S.particules && !document.hidden) {
+      ambAccu += dt * amb.n;
+      while (ambAccu >= 1 && ambiance.length < 60) { ambAccu--; ambiance.push({ x: Math.random() * w, y: amb.vy < 0 ? h * (0.4 + Math.random() * 0.6) : Math.random() * h * 0.6, vy: amb.vy * (0.6 + Math.random() * 0.8), ph: Math.random() * 6, vie: 3 + Math.random() * 3, vieMax: 6, c: amb.c[Math.floor(Math.random() * amb.c.length)], t: 2 + Math.floor(Math.random() * 2) }); }
+    }
+    for (var i = ambiance.length - 1; i >= 0; i--) {
+      var p = ambiance[i];
+      p.vie -= dt; if (p.vie <= 0) { ambiance.splice(i, 1); continue; }
+      p.y += p.vy * dt; p.ph += dt * 2; p.x += Math.sin(p.ph) * 8 * dt;
+      cxE.globalAlpha = 0.7 * Math.min(1, p.vie, (6 - p.vie) * 2);
+      cxE.fillStyle = p.c; cxE.fillRect(Math.round(p.x), Math.round(p.y), p.t, p.t);
+    }
+    cxE.globalAlpha = 1;
   }
 
   /* ================= Éclats et nombres qui s'envolent ================= */
@@ -353,6 +538,7 @@
       cxE.fillStyle = p.c; cxE.fillRect(Math.round(p.x), Math.round(p.y), p.t, p.t);
     }
     cxE.globalAlpha = 1;
+    dessinerAmbiance(dt);
   }
   var nbFlottants = 0;
   function flottant(x, y, txt, cls) {
@@ -383,10 +569,12 @@
     var d = DIM[S.dim], b = document.body;
     b.dataset.dim = d.id;
     var sol = 'url(' + T.fond(d.fond) + ') 0 0 / 64px 64px';
+    var cs = d.id == 'surface' ? ciel() : d.ciel, nuit = d.id == 'surface' && estNuit();
+    b.classList.toggle('nuit', nuit);
     b.style.background = d.id == 'surface'
-      ? 'linear-gradient(180deg,' + d.ciel[0] + ' 0,' + d.ciel[1] + ' 30vh,#5d9b37 30vh,#4f8a2e calc(30vh + 12px),rgba(0,0,0,0) calc(30vh + 12px)),' + sol + ',#5d4029'
+      ? (nuit ? 'url(' + tuileEtoiles + ') 0 0 / 96px 96px repeat-x,' : '') + 'linear-gradient(180deg,' + cs[0] + ' 0,' + cs[1] + ' 30vh,#5d9b37 30vh,#4f8a2e calc(30vh + 12px),rgba(0,0,0,0) calc(30vh + 12px)),' + sol + ',#5d4029'
       : 'linear-gradient(180deg,' + d.ciel[0] + 'f0 0,' + d.ciel[1] + 'a0 40%,' + d.ciel[0] + '60 100%),' + sol + ',' + d.ciel[0];
-    document.querySelector('meta[name="theme-color"]').content = d.ciel[0];
+    document.querySelector('meta[name="theme-color"]').content = cs[0];
   }
   function afficherDims() {
     var el = $('dims'); el.innerHTML = '';
@@ -416,7 +604,12 @@
     var r = cube.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 3;
     S.capacites++;
     S.recharges[id] = Date.now() + c.recharge * J.multRecharge * 1000;
-    if (id == 'tnt') {
+    if (id == 'tnt' && boss) {
+      sons.boum();
+      eclats(x, y, 40, ['#c62828', '#ff7a6b', '#ffffff', '#ff9a3c'], 2.6);
+      annonce('BOUM ! La TNT blesse ' + boss.def.nom + ' (−' + 15 * J.degats + ' PV)');
+      blesserBoss(15 * J.degats, x, y);
+    } else if (id == 'tnt') {
       var prod = J.cps * 60;
       gagner(prod);
       sons.boum();
@@ -472,6 +665,7 @@
     if (c.comboMax != null && S.comboMax < c.comboMax) return false;
     if (c.brillants != null && S.brillants < c.brillants) return false;
     if (c.capacites != null && S.capacites < c.capacites) return false;
+    if (c.boss != null && S.bossTotal < c.boss) return false;
     if (c.machine && (S.machines[c.machine] || 0) < c.n) return false;
     return true;
   }
@@ -594,7 +788,7 @@
     while (box.children.length >= 3) box.firstChild.remove();
     var e = document.createElement('div');
     e.className = 'toast';
-    e.innerHTML = '<img alt="" src="' + T.sprite(icone) + '"><span><b>' + echappe(titre) + '</b><span>' + echappe(nom) + '</span></span>';
+    e.innerHTML = '<img alt="" src="' + (icone.plat ? T.plat(icone.plat) : T.sprite(icone)) + '"><span><b>' + echappe(titre) + '</b><span>' + echappe(nom) + '</span></span>';
     box.appendChild(e);
     setTimeout(function () { e.classList.add('part'); }, 4200);
     setTimeout(function () { e.remove(); }, 4700);
@@ -605,8 +799,9 @@
       var ok = S.progres.indexOf(p.id) >= 0, b = document.createElement('button');
       b.type = 'button'; b.className = 'trophee' + (ok ? ' ok' : '');
       b.innerHTML = '<img alt="" src="' + T.sprite(p.icone) + '">';
-      b.setAttribute('aria-label', (ok ? 'Obtenu : ' : 'À obtenir : ') + p.nom + '. ' + texte(p.desc));
-      var montre = function () { var i = $('prog-info'); i.hidden = false; i.innerHTML = '<b class="i-nom">' + echappe(p.nom) + '</b><span class="i-prix' + (ok ? ' ok' : '') + '">' + (ok ? 'Obtenu' : 'À obtenir') + '</span><span class="i-desc">' + echappe(texte(p.desc)) + '</span>'; };
+      var nom = p.secret && !ok ? '???' : p.nom, desc = p.secret ? (ok ? p.vraieDesc : 'Progrès secret : à toi de le trouver !') : texte(p.desc);
+      b.setAttribute('aria-label', (ok ? 'Obtenu : ' : 'À obtenir : ') + nom + '. ' + desc);
+      var montre = function () { var i = $('prog-info'); i.hidden = false; i.innerHTML = '<b class="i-nom">' + echappe(nom) + '</b><span class="i-prix' + (ok ? ' ok' : '') + '">' + (ok ? 'Obtenu' : 'À obtenir') + '</span><span class="i-desc">' + echappe(desc) + '</span>'; };
       b.addEventListener('pointerenter', montre); b.addEventListener('focus', montre); b.addEventListener('click', montre);
       g.appendChild(b);
     });
@@ -619,7 +814,7 @@
 
   /* ================= Missions ================= */
   function compteur(id) {
-    return { clics: S.clics, casses: S.casses, miner: S.totalAll, achats: S.achats, amels: S.amelsAchetees, coffres: S.coffres, brillants: S.brillants, capacites: S.capacites }[id] || 0;
+    return { clics: S.clics, casses: S.casses, miner: S.totalAll, achats: S.achats, amels: S.amelsAchetees, coffres: S.coffres, brillants: S.brillants, capacites: S.capacites, boss: S.bossTotal }[id] || 0;
   }
   function avancement(m) { return m.id == 'combo' ? m.max : compteur(m.id) - m.depart; }
   function missionTxt(m) { return texte(MISSION[m.id].txt.replace('{n}', '{' + m.but + '}')).replace(/\(s\)/g, m.but > 1 ? 's' : ''); }
@@ -629,6 +824,7 @@
     var choix = D.MISSIONS.filter(function (m) {
       if (pris.indexOf(m.id) >= 0) return false;
       if (m.id == 'capacites') return D.CAPACITES.some(capaDebloquee);
+      if (m.id == 'boss') return bossDispo();
       if (m.id == 'amels') return D.AMELIORATIONS.some(amelVisible) || S.total > 1000;
       if (m.id == 'coffres' || m.id == 'brillants') return S.totalAll > 200;
       return true;
@@ -637,7 +833,7 @@
     var but = t.buts ? t.buts[Math.floor(Math.random() * t.buts.length)] : rond(Math.max(300, J.cpsBase * 300 + J.clicBase * 150));
     S.missions.push({ id: t.id, but: but, depart: compteur(t.id), max: 0 });
   }
-  function recompense() { return (Math.max(J.clicBase * 150, J.cpsBase * 600) + 50) * (a('guilde') ? 2 : 1); }
+  function recompense() { return (Math.max(J.clicBase * 150, J.cpsBase * 600) + 50) * (a('guilde') ? 2 : 1) * (f('renard') ? 1.5 : 1); }
   function verifierMissions() {
     var fini = false;
     for (var i = S.missions.length - 1; i >= 0; i--) {
@@ -673,7 +869,7 @@
   }
   function apparaitre(type) {
     if (evenement) finir(false);
-    type = type || (S.total > 500 && Math.random() < 0.15 ? 'creeper' : 'coffre');
+    type = type || (S.total > 500 && !f('chat') && Math.random() < (estNuit() ? 0.3 : 0.15) ? 'creeper' : 'coffre');
     var sa = type == 'coffre' && SAISONS[saison()];
     var e = document.createElement('button'), vie = type == 'creeper' ? (a('creeper') ? 6 : 4) : 13 * (J.mods.duree ? 1.5 : 1);
     e.type = 'button'; e.className = 'evenement ' + type;
@@ -685,12 +881,13 @@
     e.addEventListener('click', function (ev) { if (ev.detail === 0) { var r = e.getBoundingClientRect(); finir(true, r.left + r.width / 2, r.top + r.height / 2); } });
     $('evenements').appendChild(e);
     evenement = { type: type, saison: sa ? saison() : null, el: e, minuteur: setTimeout(function () { finir(false); }, vie * 1000), son: type == 'creeper' ? sons.siffle(vie) : (sons.apparait(), null) };
+    if (type == 'coffre' && f('allay')) { var ce = evenement; ce.auto = setTimeout(function () { if (evenement === ce) { annonce('Ton allay ramasse le coffre !'); finir(true); } }, 3000); }
     return e;
   }
   function finir(clique, x, y) {
     var ev = evenement; if (!ev) return;
     evenement = null;
-    clearTimeout(ev.minuteur); sons.couper(ev.son);
+    clearTimeout(ev.minuteur); clearTimeout(ev.auto); sons.couper(ev.son);
     var r = ev.el.getBoundingClientRect();
     if (x == null) { x = r.left + r.width / 2; y = r.top + r.height / 2; }
     ev.el.remove();
@@ -698,7 +895,7 @@
     if (ev.type == 'coffre' && clique) ouvrirCoffre(x, y, ev.saison);
     else if (ev.type == 'creeper' && clique) {
       var g = (Math.max(J.clicBase * 60, Math.min(S.blocs * 0.3, J.cpsBase * 1800)) + 13) * (a('creeper') ? 2 : 1);
-      gagner(g); S.creepers++;
+      gagner(g); S.creepers++; if (estNuit()) S.creepersNuit++;
       sons.coffre();
       eclats(x, y, 24, ['#3fbf4a', '#1d7a2c', '#555', '#888'], 1.5);
       annonce('Creeper désamorcé ! Tu récupères sa poudre : +' + blocs(g));
@@ -740,7 +937,8 @@
     }
   }
   function afficherEffets() {
-    var t = Date.now(), el = $('effets'), sa = SAISONS[saison()], html = (sa ? '<span class="effet effet-saison"><b>' + echappe(sa.chip) + '<span class="long">' + echappe(sa.long) + '</span></b></span>' : '') + effets.map(function (e) {
+    var t = Date.now(), el = $('effets'), sa = SAISONS[saison()], html = (sa ? '<span class="effet effet-saison"><b>' + echappe(sa.chip) + '<span class="long">' + echappe(sa.long) + '</span></b></span>' : '') +
+      (estNuit() ? '<span class="effet effet-nuit"><b>Nuit<span class="long"> : plus de creepers</span></b></span>' : '') + effets.map(function (e) {
       var reste = Math.max(0, (e.fin - t) / 1000);
       return '<span class="effet effet-' + e.id + '"><b>' + echappe(e.desc) + '</b> ' + Math.ceil(reste) + ' s<i style="width:' + (100 * reste / e.duree) + '%"></i></span>';
     }).join('');
@@ -847,6 +1045,9 @@
       ['Creepers désamorcés', nombre(S.creepers) + (S.boums ? ' (et ' + pluriel(S.boums, 'explosion') + ')' : '')],
       ['Capacités utilisées', nombre(S.capacites)],
       ['Missions terminées', nombre(S.missionsFaites)],
+      ['Boss vaincus', nombre(S.bossTotal) + ' (' + S.bossVaincus.length + ' / ' + D.DIMENSIONS.length + ' différents)'],
+      ['Collection', 'maîtrise ' + J.maitrise + ' / ' + Object.keys(D.BLOCS).length * 3 + ' (+' + J.maitrise + ' %)'],
+      ['Familier', S.familier ? FAMILIER[S.familier].nom + ' (' + S.familiers.length + ' / ' + D.FAMILIERS.length + ' adoptés)' : 'aucun pour l\'instant'],
       ['Multiplicateur de production', '×' + J.mult.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' (améliorations +' + J.mods.global + ' %, progrès +' + J.multProgres + ' %, étoiles +' + J.multEtoiles + ' %)'],
       ['Renaissances', nombre(S.renaissances) + ' · ' + pluriel(S.etoiles, 'étoile') + ' · ' + S.pouvoirs.length + ' pouvoir' + (S.pouvoirs.length > 1 ? 's' : '')],
       ['Temps de jeu', duree(S.tempsJeu) + ' (cette vie : ' + duree((Date.now() - S.debutVie) / 1000) + ')'],
@@ -854,6 +1055,26 @@
     ];
     var html = lignes.map(function (l) { return '<dt>' + l[0] + '</dt><dd>' + echappe(l[1]) + '</dd>'; }).join('');
     if ($('stats')._html != html) { $('stats')._html = html; $('stats').innerHTML = html; }
+    dessinerGraphe();
+  }
+  function dessinerGraphe() {
+    var c = $('graphe'), r = c.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1), w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+    if (!w || !h) return;
+    if (c.width != w || c.height != h) { c.width = w; c.height = h; }
+    var x = c.getContext('2d'), pts = S.historique.concat([J.cpsBase]);
+    x.clearRect(0, 0, w, h);
+    x.fillStyle = '#111'; x.fillRect(0, 0, w, h);
+    if (pts.length < 3) { $('graphe-txt').textContent = 'Le graphique se remplit au fil du temps : un point par minute, sur la dernière heure.'; return; }
+    var max = Math.max.apply(null, pts) || 1, pas = w / (pts.length - 1), y = function (v) { return h - 6 * dpr - (h - 14 * dpr) * v / max; };
+    x.strokeStyle = 'rgba(255,255,255,.08)'; x.lineWidth = dpr;
+    for (var i = 1; i < 4; i++) { x.beginPath(); x.moveTo(0, h * i / 4); x.lineTo(w, h * i / 4); x.stroke(); }
+    x.beginPath(); x.moveTo(0, h);
+    pts.forEach(function (v, i) { x.lineTo(i * pas, y(v)); });
+    x.lineTo(w, h); x.closePath(); x.fillStyle = 'rgba(128,255,32,.18)'; x.fill();
+    x.beginPath();
+    pts.forEach(function (v, i) { if (i) x.lineTo(i * pas, y(v)); else x.moveTo(0, y(v)); });
+    x.strokeStyle = '#80ff20'; x.lineWidth = 2 * dpr; x.stroke();
+    $('graphe-txt').textContent = 'Production par seconde sur ' + (pts.length - 1) + ' min · maximum ' + nombre(max, true) + ' · maintenant ' + nombre(J.cpsBase, true);
   }
   var NOTATIONS = { mots: 'en mots (1,2 million)', court: 'courte (1,2 M)', sci: 'scientifique (1,2e6)' };
   function majOptions() {
@@ -921,18 +1142,24 @@
     gagner(dt <= 60 ? J.cps * dt : J.cps * 60 + J.cpsBase * (dt - 60) * (a('absence') ? 1 : 0.5));
     S.tempsJeu += Math.min(dt, 60);
     if (a('fantome')) { fantome += Math.min(dt, 5); while (fantome >= 0.5) { fantome -= 0.5; frapperFantome(); } }
-    if (combo.n && t - combo.dernier > 1000) { combo.n = 0; recalculer(); majCombo(); }
+    if (combo.n && t - combo.dernier > J.fenetreCombo + 350) { combo.n = 0; recalculer(); majCombo(); }
+    if (boss) { if (t >= boss.fin) fuiteBoss(); else if (tic % 2 == 0) majBoss(); }
+    else if (bossDispo() && t >= prochainBoss && !document.hidden && !evenement) lancerBoss();
     if (!evenement && t >= prochain && !document.hidden) apparaitre();
     jouerMusique(t);
     tic++;
     if (tic % 2 == 0) { majBoutique(); majCapacites(); }
     if (tic % 10 == 0) {
-      verifierProgres(); verifierMissions(); majDimensions();
+      verifierProgres(); verifierMissions(); majDimensions(); verifierFamiliers();
+      if (new Date().getHours() < 5 && S.secrets.indexOf('minuit') < 0) S.secrets.push('minuit');
+      if (!$('p-progres').hidden) afficherCollection();
       var g = gainEtoiles(), br = $('b-renaitre');
       br.hidden = g < 1; if (g >= 1) br.textContent = 'Renaître · +' + g + ' ★';
       if (!$('p-stats').hidden) afficherStats();
       if (!$('p-etoiles').hidden) afficherEtoiles();
     }
+    if (tic % 50 == 0) majJourNuit();
+    if (tic % 600 == 0) { S.historique.push(J.cpsBase); if (S.historique.length > 60) S.historique.shift(); }
     if (tic % 50 == 0 || (aSauver && tic % 10 == 0)) { sauver(); aSauver = false; }
   }
   var avant = performance.now(), dernierTxt = '';
@@ -971,7 +1198,7 @@
   function ouvrirOnglet(o) {
     document.querySelectorAll('.onglet').forEach(function (x) { var oui = x == o; x.setAttribute('aria-selected', oui); x.tabIndex = oui ? 0 : -1; $(x.getAttribute('aria-controls')).hidden = !oui; });
     if (o.id == 'o-stats') afficherStats();
-    if (o.id == 'o-progres') { afficherProgres(); afficherMissions(); }
+    if (o.id == 'o-progres') { afficherProgres(); afficherMissions(); afficherFamiliers(); afficherCollection(); }
     if (o.id == 'o-etoiles') afficherEtoiles();
     $('panneau-defile').scrollTop = 0;
   }
@@ -987,6 +1214,29 @@
   });
   function majQte() { document.querySelectorAll('.qte button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.q == String(S.qte)); }); }
   $('b-tout').onclick = acheterTout;
+
+  // raccourcis : 1 à 4 pour les capacités, Espace ou Entrée pour miner (hors champs et boutons)
+  document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey || $('dialogue').open) return;
+    var cible = e.target, tag = cible && cible.tagName;
+    if (/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(tag)) return;
+    if (/^[1-4]$/.test(e.key)) { var b = $('capas').children[+e.key - 1]; if (b) { e.preventDefault(); utiliserCapacite(b.dataset.id); } return; }
+    if ((e.key == ' ' || e.key == 'Enter') && !e.repeat) { e.preventDefault(); var r = cube.getBoundingClientRect(); frapper(r.left + r.width / 2, r.top + r.height / 3); }
+  });
+  function phrase() {
+    var l = D.PHRASES.slice(), sa = saison();
+    if (sa == 'halloween') l.push('Joyeux Halloween !', 'Bouh !', 'Des citrouilles partout !');
+    if (sa == 'noel') l.push('Joyeux Noël !', 'Ho ho ho !');
+    var p, e = $('splash');
+    do { p = l[Math.floor(Math.random() * l.length)]; } while (l.length > 1 && p == e.textContent);
+    e.textContent = p;
+  }
+  $('splash').onclick = phrase;
+  var clicsTitre = 0;
+  document.querySelector('.titre').addEventListener('click', function (e) {
+    if (e.target.id == 'splash') return;
+    if (++clicsTitre >= 10 && S.secrets.indexOf('titre') < 0) { S.secrets.push('titre'); verifierProgres(); marquer(); }
+  });
 
   function basculerSon() { S.son = !S.son; majOptions(); marquer(); if (S.son) sons.achat(); }
   $('b-son').onclick = basculerSon; $('o-son').onclick = basculerSon;
@@ -1025,7 +1275,7 @@
     document.documentElement.style.setProperty('--ic-bloc', 'url(' + T.plat('herbe') + ')');
     document.querySelectorAll('.ic-etoile').forEach(function (i) { i.src = T.sprite({ s: 'etoile' }); });
     document.querySelectorAll('.ic-fragment').forEach(function (i) { i.src = T.sprite({ s: 'etoile', m: 'fragment' }); });
-    cleAmels = null; majBoutique(); afficherProgres(); afficherMissions(); majOptions(); majQte(); afficherStats(); afficherEtoiles(); majCapacites('construire'); majCombo();
+    cleAmels = null; majBoutique(); afficherProgres(); afficherMissions(); majOptions(); majQte(); afficherStats(); afficherEtoiles(); majCapacites('construire'); majCombo(); $('familiers')._cle = null; afficherFamiliers(); afficherCollection(); majFamilier(); phrase();
     $('b-renaitre').hidden = gainEtoiles() < 1;
   }
 
@@ -1038,7 +1288,9 @@
   demarrerAffichage();
   resize();
   planifier(true);
+  planifierBoss(true);
   majDimensions();
+  verifierFamiliers();
   verifierProgres();
   if (retour.gain > 0) {
     dialogue('Bon retour !', '<p>Pendant ton absence (' + duree(retour.absent) + (retour.absent > (retour.plein ? 172800 : 86400) ? ', compté jusqu\'à ' + (retour.plein ? 48 : 24) + ' h' : '') + '), tes machines ont continué à creuser ' + (retour.plein ? 'à pleine vitesse' : 'à moitié de leur vitesse') + '.</p><p class="gros-gain">+' + echappe(blocs(retour.gain)) + '</p>', [{ t: 'Super !', cls: 'vert' }]);
@@ -1056,7 +1308,8 @@
     apparaitre: apparaitre, finir: finir, renaitre: renaitre, gainEtoiles: gainEtoiles, seuil: seuil, sauver: sauver, choisirDim: choisirDim,
     acheterPouvoir: acheterPouvoir, utiliserCapacite: utiliserCapacite, verifierMissions: verifierMissions, maxAchetable: function (id) { return maxAchetable(MACHINE[id]); },
     recalculer: function () { recalculer(); majBoutique(); afficherProgres(); majCapacites(); }, nombre: nombre, blocs: blocs, prixMachine: prixMachine, lireCode: lireCode, codeSauvegarde: codeSauvegarde,
-    nouveauBloc: nouveauBloc, combo: combo,
+    nouveauBloc: nouveauBloc, combo: combo, lancerBoss: lancerBoss, boss: function () { return boss; }, blesserBoss: blesserBoss,
+    choisirFamilier: choisirFamilier, verifierFamiliers: verifierFamiliers, estNuit: estNuit, majJourNuit: majJourNuit,
     charger: function (d) { var r = charger(d); demarrerAffichage(); return r; }
   };
 })();

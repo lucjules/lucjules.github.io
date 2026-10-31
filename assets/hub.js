@@ -36,7 +36,7 @@ var JEUX={
   return['Voie libre : record '+Math.max(0,Math.floor(+d.record)||0).toLocaleString('fr-FR')+' · ★ '+e+' / 45 · '+n+' course'+(n>1?'s':''),null]},
  'mine-clic':function(){var d=lire('mine-clic'),t=d&&+d.totalAll>0?+d.totalAll:0;
   if(!t)return['Mine Clic : pas encore commencé',0];
-  var n=Array.isArray(d.progres)?d.progres.length:0,tot=Math.max(n,Math.floor(+d.nbProgres)||95),e=Math.floor(+d.etoiles)||0;
+  var n=Array.isArray(d.progres)?d.progres.length:0,tot=Math.max(n,Math.floor(+d.nbProgres)||108),e=Math.floor(+d.etoiles)||0;
   return['Mine Clic : '+nb(t)+(t>=1e6?' de':'')+' blocs minés · '+nb(d.cps)+' par seconde · '+n+' / '+tot+' progrès'+(e>0?' · '+e+' ★':''),n/tot]}};
 function jeux(){document.querySelectorAll('[data-jeu]').forEach(function(p){var f=JEUX[p.dataset.jeu];if(!f)return;var r=f(),m=p.previousElementSibling,bar=m&&m.classList.contains('hmeter')?m.querySelector('i'):null;
  p.textContent=r[0];if(bar&&r[1]!=null)bar.style.width=Math.round(100*r[1])+'%'})}

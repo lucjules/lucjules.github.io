@@ -85,9 +85,17 @@ h3 { font-size: 17px; margin-top: 18px; }
   border-bottom: 3px solid #000;
   flex: none;
   position: relative; z-index: 5;
+  overflow: hidden;
 }
 .titre { flex: 1; margin: 0; font-size: 28px; letter-spacing: .02em; text-align: center; text-shadow: 3px 3px 0 #3f3f3f; }
+.titre { position: relative; }
 .titre span { color: #8fe36a; margin-left: .25em; }
+.splash {
+  position: absolute; left: calc(50% + 58px); top: 58%; padding: 0; border: 0; background: none; cursor: pointer;
+  font: 700 13px 'Pixelify Sans', sans-serif; color: #ffff3f; text-shadow: 2px 2px 0 #3f3f00; white-space: nowrap;
+  rotate: -9deg; transform-origin: left center; animation: splash .6s ease-in-out infinite alternate;
+}
+@keyframes splash { to { scale: 1.12; } }
 
 /* ---------- Disposition ---------- */
 .jeu { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, 450px); }
@@ -140,6 +148,15 @@ h3 { font-size: 17px; margin-top: 18px; }
   padding: 0; border: 0; background: none; cursor: pointer;
   touch-action: manipulation; position: relative; z-index: 2;
 }
+.familier { position: absolute; left: -2%; bottom: 6%; width: 26%; height: auto; pointer-events: none; animation: flotte-f 1.8s ease-in-out infinite; filter: drop-shadow(2px 3px 0 rgba(0, 0, 0, .4)); }
+@keyframes flotte-f { 50% { translate: 0 -6px; } }
+.boss { width: min(320px, 86%); text-align: center; text-shadow: var(--ombre-txt); }
+.boss b { color: #ff6b6b; font-size: 17px; }
+.boss-barre { height: 12px; margin: 2px 0; background: #2a0000; border: 2px solid #000; }
+.boss-barre i { display: block; height: 100%; background: linear-gradient(#ff6b6b, #c62828); transition: width .15s; }
+.boss span { font-size: 13px; color: #ddd; }
+.effet-nuit { background: rgba(10, 16, 48, .85); padding-bottom: 2px; }
+.effet-nuit b { color: #b3c8ff; }
 .bloc:focus-visible { outline: 3px dashed rgba(255, 255, 255, .8); outline-offset: -6px; }
 #cube { width: 100%; height: 100%; display: block; }
 .bloc-info { margin: 0; font-size: 15px; text-shadow: var(--ombre-txt); text-align: center; }
@@ -224,6 +241,17 @@ h3 { font-size: 17px; margin-top: 18px; }
 .tete-amels { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .petit-btn { min-height: 32px; padding: 2px 10px; font-size: 14px; }
 .violet { color: #6a2bb0; }
+h2.espace { margin-top: 18px; }
+.pouvoir img.cache, .carte-bloc img.cache { filter: brightness(0); opacity: .35; }
+.collection { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 4px; }
+.carte-bloc { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px; text-align: center; background: var(--gris-fonce); box-shadow: inset 2px 2px 0 #373737, inset -2px -2px 0 #fff; color: #fff; text-shadow: 1px 1px 0 #3f3f3f; }
+.carte-bloc img { width: 32px; height: 32px; border: 1px solid #000; }
+.carte-bloc b { font-size: 12px; line-height: 1.1; min-height: 2.2em; display: flex; align-items: center; }
+.carte-bloc small { font-size: 11px; color: #eee; }
+.etoiles-m { color: #ffe066; font-size: 13px; letter-spacing: 1px; }
+.etoiles-m i { color: rgba(0, 0, 0, .35); font-style: normal; text-shadow: none; }
+.carte-bloc.niv3 { background: #9bb37a; }
+.graphe { display: block; width: 100%; height: 130px; border: 2px solid #000; margin-bottom: 4px; }
 .missions { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .mission { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: #b3b3b3; border: 2px solid #000; box-shadow: inset 2px 2px 0 #ddd, inset -2px -2px 0 #777; }
 .mission img { width: 32px; height: 32px; flex: none; }
@@ -361,6 +389,8 @@ body.secousse .jeu { animation: secousse .5s; }
   .effet .long { display: none; }
   .renaitre { min-height: 34px; padding: 2px 8px; font-size: 14px; }
   .xp-barre { height: 8px; }
+  .splash { font-size: 10px; left: calc(50% + 40px); top: 52%; max-width: 30vw; white-space: normal; line-height: 1; text-align: left; }
+  .boss b { font-size: 15px; }
   .compteur { padding: 4px 14px 6px; }
   .c-blocs { font-size: 16px; }
   .c-cps { font-size: 14px; }

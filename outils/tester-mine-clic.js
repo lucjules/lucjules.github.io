@@ -117,8 +117,8 @@ function serveur() {
   egal('le sac de départ redonne 10 pioches et 5 mineurs', depart, [3, 10, 5]);
 
   console.log('Max, tout acheter, capacités, combo, blocs brillants, missions');
-  const max = await ev(() => { const S = MC.etat(); S.qte = 'max'; S.blocs = 1e5; const q = MC.maxAchetable('mineur'); const n0 = S.machines.mineur; MC.acheterMachine('mineur'); return { q, achete: S.machines.mineur - n0, reste: S.blocs, suivant: MC.prixMachine(MC_DONNEES.MACHINES[1], S.machines.mineur, 1) }; });
-  verifier('Max achète le plus possible', max.q > 10 && max.achete == max.q && max.reste < max.suivant, max);
+  const max = await ev(() => { const S = MC.etat(); S.qte = 'max'; S.blocs = 1e5; const m = MC_DONNEES.MACHINES[1], n0 = S.machines.mineur, q = MC.maxAchetable('mineur'); MC.acheterMachine('mineur'); return { q, achete: S.machines.mineur - n0, juste: MC.prixMachine(m, n0, q) <= 1e5 && MC.prixMachine(m, n0, q + 1) > 1e5 }; });
+  verifier('Max achète le plus possible', max.q > 10 && max.achete == max.q && max.juste, max);
   await page.click('#o-boutique');
   await page.click('.qte button[data-q="max"]');
   egal('bouton Max sélectionné', await ev(() => [MC.etat().qte, document.querySelector('.qte button[data-q="max"]').getAttribute('aria-pressed')]), ['max', 'true']);
@@ -136,7 +136,7 @@ function serveur() {
   const br = await ev(() => { const S = MC.etat(); S.brillant = true; const b0 = S.blocs, n0 = S.brillants; S.coups = MC_DONNEES.BLOCS[S.bloc].durete - 1; MC.frapper(400, 300); return { n: S.brillants - n0, gain: S.blocs - b0 }; });
   verifier('un bloc brillant compte et rapporte gros', br.n == 1 && br.gain > 0, br);
   const mi = await ev(() => { const S = MC.etat(); const m = S.missions.find(x => x.id != 'combo') || S.missions[0]; const n0 = S.missionsFaites, b0 = S.blocs; if (m.id == 'combo') m.max = m.but; else m.depart -= m.but; MC.verifierMissions(); return { nb: S.missions.length, faites: S.missionsFaites - n0, gain: S.blocs > b0 }; });
-  egal('3 missions ; en finir une rapporte et la remplace', [mi.nb, mi.faites, mi.gain], [3, 1, true]);
+  verifier('3 missions ; en finir une rapporte et la remplace', mi.nb == 3 && mi.faites >= 1 && mi.gain, mi); // une autre peut finir en même temps
   await page.click('#o-progres');
   egal('missions affichées dans l\'onglet Progrès', await ev(() => document.querySelectorAll('#missions .mission').length), 3);
   const saison = await ev(() => { window.MC_SAISON = 'halloween'; MC.apparaitre('coffre'); const img = document.querySelector('.evenement img').src; MC.finir(true); window.MC_SAISON = null; return { citrouilles: MC.etat().citrouilles, progres: MC.etat().progres.includes('halloween'), img: img.length > 100 }; });
@@ -146,6 +146,35 @@ function serveur() {
   egal('notation courte', await ev(() => MC.nombre(1234567)), '1,23 M');
   await page.click('#o-notation'); await page.click('#o-notation');
   egal('retour à la notation en mots', await ev(() => MC.nombre(1234567)), '1,234 million');
+
+  console.log('Boss, familiers, collection, nuit, secrets');
+  const boss = await ev(() => { const S = MC.etat(); S.totalAll = Math.max(S.totalAll, 1e6); MC.choisirDim('surface'); const b = MC.lancerBoss(); const vu = !document.getElementById('boss').hidden; const f0 = S.fragments, b0 = S.blocs; while (MC.boss()) MC.blesserBoss(5, 400, 300); return { nom: b.def.nom, vu, total: S.bossTotal, vaincus: S.bossVaincus.slice(), fragment: S.fragments - f0, gain: S.blocs > b0, cache: document.getElementById('boss').hidden }; });
+  egal('un boss apparaît, se bat et rapporte (1 fragment la première fois)', [boss.nom, boss.vu, boss.total, boss.vaincus, boss.fragment, boss.gain, boss.cache], ['Zombie géant', true, 1, ['surface'], 1, true, true]);
+  const coups = await ev(() => { MC.lancerBoss(); const pv0 = MC.boss().pv; return pv0; });
+  for (let i = 0; i < 5; i++) await page.click('#bloc');
+  egal('cliquer sur le boss lui retire des PV', await ev(() => MC.boss().pvMax - MC.boss().pv), 5);
+  await ev(() => { MC.boss().fin = Date.now() - 1; });
+  await page.waitForTimeout(250);
+  egal('le boss s\'enfuit à la fin du temps', await ev(() => [MC.boss(), MC.etat().bossTotal, document.getElementById('bloc-info').hidden]), [null, 1, false]);
+  const fam = await ev(() => { const S = MC.etat(); S.clics = Math.max(S.clics, 1000); MC.verifierFamiliers(); const c0 = MC.calc().clicBase; const auto = S.familier; MC.choisirFamilier('loup'); return { eus: S.familiers.slice(), auto, vu: !document.getElementById('familier').hidden }; });
+  verifier('le loup s\'adopte à 1 000 clics et accompagne le mineur', fam.eus.includes('loup') && fam.auto && fam.vu, fam);
+  const loup = await ev(() => { MC.choisirFamilier('loup'); const avec = MC.calc().clicBase; MC.etat().familier = null; MC.recalculer(); const sans = MC.calc().clicBase; MC.choisirFamilier('loup'); return avec / sans; });
+  proche('le loup donne +50 % aux clics', loup, 1.5, 1e-9);
+  const chat = await ev(() => { const S = MC.etat(); S.creepers = Math.max(S.creepers, 5); MC.verifierFamiliers(); MC.choisirFamilier('chat'); S.total = Math.max(S.total, 1e4); let creepers = 0; for (let i = 0; i < 40; i++) { MC.apparaitre(); if (document.querySelector('.evenement.creeper')) creepers++; MC.finir(true); } MC.choisirFamilier('loup'); return creepers; });
+  egal('avec le chat, aucun creeper', chat, 0);
+  const col = await ev(() => { const S = MC.etat(); MC.choisirDim('surface'); S.bloc = 'terre'; S.coups = 0; S.collection.terre = 24; const m0 = MC.calc().maitrise; for (let i = 0; i < 4; i++) MC.frapper(400, 300); return { n: S.collection.terre, m: MC.calc().maitrise - m0 }; });
+  verifier('collection : 25 terres cassées = maîtrise 1', col.n >= 25 && col.m == 1, col); // « minage éclair » d'un coffre peut casser à chaque coup
+  await page.click('#o-progres');
+  egal('onglet Progrès : familiers et collection', await ev(() => [document.querySelectorAll('#familiers .pouvoir').length, document.querySelectorAll('#collection .carte-bloc').length]), [8, 17]);
+  const nuit = await ev(() => { window.MC_PHASE = 0.8; MC.choisirDim('surface'); MC.majJourNuit(); const r = [MC.estNuit(), document.body.classList.contains('nuit')]; window.MC_PHASE = 0.2; MC.majJourNuit(); r.push(document.body.classList.contains('nuit')); window.MC_PHASE = null; return r; });
+  egal('cycle jour et nuit à la surface', nuit, [true, true, false]);
+  for (let i = 0; i < 10; i++) await page.click('.titre', { position: { x: 5, y: 5 } });
+  verifier('progrès secret : cliquer 10 fois sur le titre', await ev(() => MC.etat().progres.includes('curieux')));
+  const c0 = await ev(() => MC.etat().clics);
+  await page.click('.compteur'); await page.keyboard.press('Space');
+  egal('raccourci Espace : un coup de pioche', await ev(() => MC.etat().clics), c0 + 1);
+  await page.click('#o-stats');
+  verifier('graphique de production dessiné', await ev(() => { const c = document.getElementById('graphe'); return c.width > 0 && c.height > 0; }));
 
   console.log('Sauvegarde');
   await ev(() => { const S = MC.etat(); S.blocs = 5e5; S.total = 5e5; MC.acheterMachine('golem'); MC.acheterMachine('golem'); MC.sauver(); });
