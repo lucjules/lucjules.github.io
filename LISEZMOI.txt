@@ -8,7 +8,8 @@ Les cours mènent aux 5 matières, et chaque matière a sa propre page d'accueil
 index.html                      accueil général : cours ou jeux
 cours.html                      accueil des cours (recherche, sauvegarde de la progression)
 jeux.html                       accueil des jeux
-jeux/voie-libre/index.html      jeu Voie libre (course dans la ville), fonctionne aussi en ouvrant ce fichier
+jeux/voie-libre/index.html      jeu Voie libre 1.0 (course en 3D dans la ville) : à ouvrir depuis le site en ligne
+                                (ou un petit serveur local, voir les notes), pas en double-cliquant le fichier
 algo/index.html                 Algorithmique : cycle1.html, cycle2.html
 systeme/index.html              Système : intro-systeme.html
 sql/index.html                  Bases de données : sql-requetes-simples.html
@@ -24,6 +25,9 @@ outils/                         régénère l'index de la recherche (lancé auto
 Notes
 - Garde le dossier complet ensemble : les pages utilisent le dossier "assets".
 - Aucune connexion Internet n'est nécessaire : tout, polices comprises, est dans le dossier.
+- Voie libre est fait de modules JavaScript que le navigateur ne charge pas depuis un simple fichier :
+  en local, lance "python3 -m http.server" dans le dossier du site et ouvre http://localhost:8000/.
+  Une fois ouvert depuis le site en ligne, il fonctionne aussi hors connexion.
 - La progression est enregistrée dans le navigateur (par appareil).
 - Pour la passer d'un appareil à l'autre : panneau « Sauvegarder ou transférer ma progression » en bas de l'accueil des cours.
 - Pour ajouter un chapitre plus tard : dépose son fichier .html dans le dossier de la matière

@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <title>Voie libre · Mes jeux</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Voie libre : course à travers les quartiers d'une ville, sur trois voies. Saute, glisse, monte sur les wagons, écrase les caisses, sors ta planche et ramasse les pièces.">
-<meta name="theme-color" content="#5b6cff">
+<meta name="description" content="Voie libre : course en 3D à travers les quartiers d'une ville, sur trois voies. Saute, glisse, monte sur les wagons, écrase les caisses, sors ta planche et ramasse les pièces. Fonctionne hors connexion.">
+<meta name="theme-color" content="#3b2a8f">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icones/icone-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icones/icone-apple-180.png">
@@ -16,239 +16,260 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<canvas id="scene" role="img" aria-label="Voie libre : le coureur sur trois voies de chemin de fer, dans la ville"></canvas>
+<canvas id="scene" role="img" aria-label="Voie libre : le coureur sur les voies de la ville, en 3D"></canvas>
+<div id="flottants" aria-hidden="true"></div>
 
+<!-- Chargement, ou navigateur sans WebGL -->
+<div id="chargement" class="chargement"><p class="logo">VOIE<span>LIBRE</span></p><p id="charge-txt">Chargement de la ville…</p></div>
+<script>
+  // le jeu est fait de modules JavaScript : le navigateur refuse de les charger depuis un simple fichier
+  (function () {
+    var t = document.getElementById('charge-txt'),
+      retour = '<br><a href="../../jeux.html">Retour aux jeux</a>';
+    if (location.protocol == 'file:') t.innerHTML = 'Voie libre doit être ouvert depuis le site (en ligne, il fonctionne ensuite hors connexion).<br>Sur ton ordinateur : lance <code>python3 -m http.server</code> dans le dossier du site, puis ouvre <code>localhost:8000/jeux/voie-libre/</code>.' + retour;
+    else setTimeout(function () {
+      if (!window.VL && !document.getElementById('chargement').hidden) t.innerHTML = 'Le jeu n\'a pas pu démarrer : ton navigateur est peut-être trop ancien. Essaie avec une version récente de Chrome, Firefox, Edge ou Safari.' + retour;
+    }, 15000);
+  })();
+</script>
+
+<!-- Pendant la course -->
 <div id="hud" hidden>
   <div class="hud-haut">
-    <button type="button" id="b-pause" class="rond" aria-label="Pause"><span aria-hidden="true">❚❚</span></button>
-    <div class="puce"><span class="piece-ic" aria-hidden="true"></span><b id="h-pieces">0</b><span class="sr-only">pièces</span></div>
-    <div class="score"><b id="h-score">0</b><span id="h-mult" class="mult" title="Multiplicateur de score">×1</span></div>
+    <button type="button" id="b-pause" class="rond" aria-label="Pause"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5"/><rect x="14" y="5" width="4" height="14" rx="1.5"/></svg></button>
+    <div class="puce"><i class="piece-ic" aria-hidden="true"></i><b id="h-pieces">0</b><span class="sr-only">pièces</span></div>
+    <div class="score"><b id="h-score">0</b><span id="h-mult" class="mult">×1</span></div>
   </div>
   <div id="h-prog" class="h-prog" hidden><i id="h-prog-barre"></i><span aria-hidden="true">🏁</span></div>
   <p id="h-temps" class="h-temps" hidden>60 s</p>
-  <div id="h-bonus"></div>
-  <button type="button" id="b-elan" class="b-elan" hidden aria-label="Élan de départ (touche E)"><span aria-hidden="true">»</span> Élan <b id="h-elans">0</b></button>
-  <button type="button" id="b-planche" class="b-planche" aria-label="Sortir une planche (touche B, ou deux tapes sur l'écran)"><span class="mini-planche" aria-hidden="true"></span><b id="h-planches">0</b></button>
-  <p id="h-msg" aria-live="polite"></p>
+  <div id="h-bonus" class="h-bonus"></div>
+  <div class="hud-actions">
+    <button type="button" id="b-elan" class="action elan" hidden aria-label="Élan de départ (touche E)"><b>»</b><small>Élan <span id="h-elans">0</span></small></button>
+    <button type="button" id="b-planche" class="action" aria-label="Sortir une planche (touche B, ou deux tapes sur l'écran)"><i class="mini-planche" aria-hidden="true"></i><small><span id="h-planches">0</span></small></button>
+  </div>
 </div>
+<!-- Messages et annonces (pendant la course comme dans les menus) -->
+<p id="h-msg" aria-live="polite"></p>
 
-<section id="menu" class="ecran" aria-labelledby="t-menu">
-  <div class="carte">
-    <p class="sur">Mes jeux</p>
-    <h1 id="t-menu">Voie libre</h1>
-    <p class="intro">Fonce à travers les quartiers de la ville : saute, glisse, monte sur les wagons et ramasse les pièces.</p>
-    <div class="stats">
-      <div><span>Record</span><b id="m-record">0</b></div>
-      <div><span>Pièces</span><b id="m-pieces">0</b></div>
-      <div><span>Clés</span><b id="m-cles">0</b></div>
-      <div><span>Multi.</span><b id="m-multi">×1</b></div>
+<!-- Menu -->
+<section id="menu" class="ecran-menu" aria-labelledby="t-menu" hidden>
+  <div class="barre">
+    <a class="rond retour" href="../../jeux.html" aria-label="Retour à Mes jeux"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    <div class="puce"><i class="piece-ic" aria-hidden="true"></i><b id="m-pieces">0</b><span class="sr-only">pièces</span></div>
+    <div class="puce"><i class="cle-ic" aria-hidden="true"></i><b id="m-cles">0</b><span class="sr-only">clés</span></div>
+    <div class="puce multi"><b id="m-multi">×1</b><span class="sr-only">multiplicateur</span></div>
+  </div>
+  <h1 id="t-menu" class="logo">VOIE<span>LIBRE</span></h1>
+  <p class="record">Record <b id="m-record">0</b></p>
+  <button type="button" class="bandeau-ev" id="b-evenement" hidden></button>
+  <div class="bas-menu">
+    <button type="button" class="jouer" id="b-jouer">JOUER</button>
+    <div class="modes">
+      <button type="button" class="mode vert" id="b-niveaux"><b>Tour de la ville</b><small id="m-etoiles">★ 0 / 45</small></button>
+      <button type="button" class="mode orange" id="b-defi"><b>Défi du jour</b><small id="m-defi">60 secondes</small></button>
     </div>
-    <button type="button" class="btn evenement" id="b-evenement" hidden></button>
-    <button type="button" class="btn" id="b-jouer">Jouer <small>course libre</small></button>
-    <div class="ligne">
-      <button type="button" class="btn vert" id="b-niveaux">Tour de la ville <small>★</small></button>
-      <button type="button" class="btn orange" id="b-defi">Défi du jour <small>60 secondes</small></button>
-    </div>
-    <div class="ligne trois">
-      <button type="button" class="btn second" id="b-missions">Missions <small>0 / 3</small></button>
-      <button type="button" class="btn second" id="b-trophees">Trophées <small>0 / 20</small></button>
-      <button type="button" class="btn second" id="b-boutique">Boutique <small>persos, planches</small></button>
-    </div>
-    <div class="bas">
-      <a href="../../jeux.html">← Mes jeux</a>
-      <button type="button" id="b-aide" class="lien">Aide</button>
-      <button type="button" id="b-reglages" class="lien">Réglages</button>
-    </div>
+    <nav class="nav" aria-label="Menu du jeu">
+      <button type="button" id="b-missions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Missions<i class="pastille" id="p-missions" hidden></i></button>
+      <button type="button" id="b-trophees"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v4a5 5 0 0 1-10 0V4Zm0 2H4a3 3 0 0 0 3 4m10-4h3a3 3 0 0 1-3 4M12 13v4m-4 3h8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Trophées</button>
+      <button type="button" id="b-boutique"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8Zm4 0a3 3 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Boutique<i class="pastille" id="p-boutique" hidden></i></button>
+      <button type="button" id="b-reglages"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Réglages</button>
+      <button type="button" id="b-aide"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Aide</button>
+    </nav>
   </div>
 </section>
 
-<section id="aide" class="ecran" aria-labelledby="t-aide" hidden>
-  <div class="carte">
-    <h2 id="t-aide">Comment jouer</h2>
+<!-- Panneaux (montent du bas) -->
+<section id="aide" class="panneau" aria-labelledby="t-aide" hidden>
+  <div class="feuille">
+    <header><h2 id="t-aide">Comment jouer</h2><button type="button" class="fermer" data-fermer aria-label="Fermer">×</button></header>
+    <div class="defile">
     <div class="commandes">
       <div><b>Changer de voie</b><span><kbd>←</kbd> <kbd>→</kbd> ou <kbd>Q</kbd> <kbd>D</kbd></span><small>Tactile : glisser à gauche ou à droite</small></div>
       <div><b>Sauter</b><span><kbd>↑</kbd> ou <kbd>Espace</kbd></span><small>Tactile : glisser vers le haut</small></div>
-      <div><b>Glisser · écraser</b><span><kbd>↓</kbd> ou <kbd>S</kbd></span><small>Tactile : glisser vers le bas. En plein saut, tu retombes d'un coup et tu écrases ce qu'il y a dessous.</small></div>
-      <div><b>Planche</b><span><kbd>B</kbd></span><small>Tactile : deux tapes rapides, ou le bouton en bas à droite. Elle encaisse un choc pendant 30 s, et chaque planche de la boutique a son pouvoir.</small></div>
-      <div><b>Élan de départ</b><span><kbd>E</kbd></span><small>Au début d'une course libre, si tu en as : bouton « Élan » en bas à droite. 6 s de vol à toute vitesse.</small></div>
-      <div><b>Pause</b><span><kbd>Échap</kbd> ou <kbd>P</kbd></span><small>Tactile : bouton ❚❚ en haut à gauche</small></div>
+      <div><b>Rouler · écraser</b><span><kbd>↓</kbd> ou <kbd>S</kbd></span><small>Tactile : glisser vers le bas. En plein saut, tu retombes d'un coup et tu écrases ce qu'il y a dessous.</small></div>
+      <div><b>Planche</b><span><kbd>B</kbd></span><small>Tactile : deux tapes rapides, ou le bouton en bas à droite. Elle encaisse un choc pendant 30 s.</small></div>
+      <div><b>Élan de départ</b><span><kbd>E</kbd></span><small>Au début d'une course libre, si tu en as : 6 s de vol à toute vitesse.</small></div>
+      <div><b>Pause</b><span><kbd>Échap</kbd> ou <kbd>P</kbd></span></div>
     </div>
     <ul class="regles">
-      <li><b>Barrière basse</b> : saute. <b>Portique</b> et <b>drone</b> : glisse dessous.</li>
-      <li><b>Wagons</b> : change de voie, ou monte dessus par la rampe et cours sur les toits.</li>
-      <li><b>Caisses « ? »</b> : écrase-les (glisser en plein saut) pour gagner pièces, bonus ou clés.</li>
-      <li><b>Accélérateurs</b> au sol : turbo de vitesse qui brise tout sur ton passage.</li>
-      <li><b>Tunnels</b> : il y fait sombre et le plafond est bas, même en jetpack.</li>
-      <li><b>Wagons plats</b> (bas, à rayures jaunes) : saute dessus et cours sur le plateau.</li>
-      <li>Sur la <b>planche</b>, chaque saut est une <b>figure</b> : enchaîne-les pour un combo.</li>
-      <li>Changer de voie <b>au dernier moment</b> devant un obstacle : esquive de justesse, des points en plus.</li>
-      <li>Pendant les <b>événements</b> (Halloween, fêtes d'hiver, été), ramasse leurs jetons pour gagner des récompenses exclusives.</li>
-      <li>Les <b>coffres mystère</b> (missions, caisses, cadeaux, boutique) cachent pièces, objets… ou un personnage.</li>
-      <li>Heurter un wagon <b>de côté</b> te fait trébucher et l'agent te rattrape : deux fois de suite et c'est perdu.</li>
-      <li>Après un choc, tu peux <b>continuer avec des clés</b>.</li>
+      <li><b>Barrière basse</b> : saute. <b>Portique</b> et <b>drone</b> : roule dessous.</li>
+      <li><b>Wagons</b> : change de voie, ou monte dessus par la rampe et cours sur les toits. Les <b>wagons plats</b> se sautent.</li>
+      <li><b>Caisses « ? »</b> : écrase-les (glisser en plein saut) pour des pièces, un bonus, une clé ou un coffre.</li>
+      <li><b>Accélérateurs</b> au sol : turbo qui brise tout. Dans les <b>tunnels</b>, le plafond est bas.</li>
+      <li>Heurter un wagon <b>de côté</b> te fait trébucher et l'agent te rattrape : deux fois de suite et c'est perdu. Avec des <b>clés</b>, tu peux continuer.</li>
+      <li>Changer de voie <b>au dernier moment</b> devant un obstacle : esquive de justesse, points en plus.</li>
     </ul>
     <div class="bonus-liste">
-      <p><span class="bic" style="--c:#ef476f">U</span><span><b>Aimant</b> attire les pièces des trois voies.</span></p>
-      <p><span class="bic" style="--c:#06d6a0">⇈</span><span><b>Super baskets</b> : assez haut pour monter sur les wagons.</span></p>
-      <p><span class="bic" style="--c:#ffb703">×2</span><span><b>Score ×2</b> en plus du multiplicateur.</span></p>
-      <p><span class="bic" style="--c:#8338ec">▲</span><span><b>Jetpack</b> : vole au-dessus de tout et ramasse les pièces du ciel.</span></p>
-      <p><span class="bic" style="--c:#ff70a6">◯</span><span><b>Bulle</b> : encaisse un choc et fait sauter plus haut.</span></p>
+      <p><i class="bic" style="--c:#ef476f">U</i><span><b>Aimant</b> : attire les pièces des trois voies.</span></p>
+      <p><i class="bic" style="--c:#06d6a0">⇈</i><span><b>Super baskets</b> : assez haut pour monter sur les wagons.</span></p>
+      <p><i class="bic" style="--c:#ffb703">×2</i><span><b>Score ×2</b>, en plus du multiplicateur.</span></p>
+      <p><i class="bic" style="--c:#8338ec">▲</i><span><b>Jetpack</b> : vole au-dessus de tout et ramasse les pièces du ciel.</span></p>
+      <p><i class="bic" style="--c:#ff70a6">◯</i><span><b>Bulle</b> : encaisse un choc et fait sauter plus haut.</span></p>
     </div>
-    <p class="note">Les <b>missions</b> font monter ton multiplicateur de score, les <b>trophées</b> rapportent des pièces, et un <b>cadeau</b> t'attend chaque jour. Le <b>Tour de la ville</b> propose 15 niveaux à étoiles dans 5 quartiers, et le <b>Défi du jour</b> le même parcours de 60 s pour tout le monde.</p>
-    <button type="button" class="btn" data-retour>Retour</button>
+    <p class="note">Les <b>missions</b> font monter ton multiplicateur, les <b>trophées</b> rapportent des pièces, un <b>cadeau</b> t'attend chaque jour, et pendant les <b>événements</b> (Halloween, fêtes d'hiver, été) des récompenses exclusives sont à gagner.</p>
+    </div>
   </div>
 </section>
 
-<section id="missions" class="ecran" aria-labelledby="t-missions" hidden>
-  <div class="carte">
-    <h2 id="t-missions">Missions</h2>
-    <p class="intro">Réussis les trois pour augmenter ton multiplicateur de score : <b id="mi-multi" class="gros-multi">×1</b></p>
-    <ul id="mi-liste" class="missions"></ul>
-    <h3 class="sous-titre">Chasse aux lettres du jour</h3>
+<section id="missions" class="panneau" aria-labelledby="t-missions" hidden>
+  <div class="feuille">
+    <header><h2 id="t-missions">Missions</h2><button type="button" class="fermer" data-fermer aria-label="Fermer">×</button></header>
+    <div class="defile">
+    <p class="intro">Réussis les trois pour passer au multiplicateur <b id="mi-suivant">×2</b> et gagner un coffre mystère.</p>
+    <ul id="mi-liste" class="liste-prog"></ul>
+    <h3>Chasse aux lettres du jour</h3>
     <div id="mi-mot" class="mot"></div>
     <p id="mi-mot-txt" class="note"></p>
-    <button type="button" class="btn" data-retour>Retour</button>
+    </div>
   </div>
 </section>
 
-<section id="niveaux" class="ecran" aria-labelledby="t-niveaux" hidden>
-  <div class="carte">
-    <h2 id="t-niveaux">Tour de la ville</h2>
-    <p class="intro">Rallie l'arrivée de chaque niveau. ★ arrivée, ★ assez de pièces, ★ sans trébucher. Total : <b id="niv-total">0</b></p>
+<section id="trophees" class="panneau" aria-labelledby="t-trophees" hidden>
+  <div class="feuille">
+    <header><h2 id="t-trophees">Trophées et records</h2><button type="button" class="fermer" data-fermer aria-label="Fermer">×</button></header>
+    <div class="defile">
+    <h3>Tes 5 meilleurs scores</h3>
+    <ol id="tr-scores" class="scores"></ol>
+    <div id="tr-stats" class="stats"></div>
+    <h3>Trophées · <span id="tr-total">0</span></h3>
+    <ul id="tr-liste" class="liste-prog"></ul>
+    </div>
+  </div>
+</section>
+
+<section id="niveaux" class="panneau" aria-labelledby="t-niveaux" hidden>
+  <div class="feuille">
+    <header><h2 id="t-niveaux">Tour de la ville</h2><button type="button" class="fermer" data-fermer aria-label="Fermer">×</button></header>
+    <div class="defile">
+    <p class="intro">★ arrivée · ★ assez de pièces · ★ sans trébucher. Total : <b id="niv-total">0</b></p>
     <div id="niv-liste"></div>
-    <button type="button" class="btn" data-retour>Retour</button>
+    </div>
   </div>
 </section>
 
-<section id="defi" class="ecran" aria-labelledby="t-defi" hidden>
-  <div class="carte">
-    <h2 id="t-defi">Défi du jour</h2>
+<section id="defi" class="panneau" aria-labelledby="t-defi" hidden>
+  <div class="feuille">
+    <header><h2 id="t-defi">Défi du jour</h2><button type="button" class="fermer" data-fermer aria-label="Fermer">×</button></header>
+    <div class="defile">
     <p class="intro">60 secondes sur le même parcours pour tout le monde aujourd'hui, déjà rapide. Fais le meilleur score possible, sans continuer avec des clés.</p>
     <div class="stats"><div><span>Ton meilleur aujourd'hui</span><b id="d-meilleur">0</b></div></div>
     <p id="d-cle" class="note"></p>
-    <button type="button" class="btn orange" id="b-lancer-defi">C'est parti</button>
-    <button type="button" class="btn second" data-retour>Retour</button>
+    <button type="button" class="gros orange" id="b-lancer-defi">C'est parti !</button>
+    </div>
   </div>
 </section>
 
-<section id="trophees" class="ecran" aria-labelledby="t-trophees" hidden>
-  <div class="carte">
-    <h2 id="t-trophees">Trophées et records</h2>
-    <h3 class="sous-titre">Tes 5 meilleurs scores</h3>
-    <ol id="tr-scores" class="scores"></ol>
-    <div id="tr-stats" class="stats grille"></div>
-    <h3 class="sous-titre">Trophées · <span id="tr-total">0</span></h3>
-    <ul id="tr-liste" class="missions trophees"></ul>
-    <button type="button" class="btn" data-retour>Retour</button>
+<section id="evenement" class="panneau" aria-labelledby="t-evenement" hidden>
+  <div class="feuille">
+    <header><h2 id="t-evenement">Événement</h2><button type="button" class="fermer" data-fermer aria-label="Fermer">×</button></header>
+    <div class="defile">
+    <p id="ev-dates" class="intro"></p>
+    <div class="jauge"><i id="ev-barre"></i></div>
+    <p class="note"><b id="ev-n"></b></p>
+    <ul id="ev-paliers" class="paliers"></ul>
+    </div>
   </div>
 </section>
 
-<section id="reglages" class="ecran" aria-labelledby="t-reglages" hidden>
-  <div class="carte">
-    <h2 id="t-reglages">Réglages</h2>
-    <div class="reglages">
-      <button type="button" id="b-son" class="btn second" aria-pressed="true">Sons : oui</button>
-      <button type="button" id="b-musique" class="btn second" aria-pressed="true">Musique : oui</button>
-      <button type="button" id="b-vib" class="btn second" aria-pressed="true">Vibrations : oui</button>
+<section id="boutique" class="panneau haut" aria-labelledby="t-boutique" hidden>
+  <div class="feuille">
+    <header><h2 id="t-boutique">Boutique</h2><span class="solde"><i class="piece-ic" aria-hidden="true"></i><b id="s-pieces">0</b></span><button type="button" class="fermer" data-fermer aria-label="Fermer">×</button></header>
+    <div class="onglets" role="tablist">
+      <button type="button" role="tab" data-o="persos">Persos</button>
+      <button type="button" role="tab" data-o="planches">Planches</button>
+      <button type="button" role="tab" data-o="bonus">Bonus</button>
+      <button type="button" role="tab" data-o="objets">Objets</button>
     </div>
-    <h3 class="sous-titre">Sensibilité des glissements</h3>
-    <div class="seg" role="group" aria-label="Sensibilité des glissements">
-      <button type="button" data-sens="0.7">Faible</button><button type="button" data-sens="1">Normale</button><button type="button" data-sens="1.4">Forte</button>
+    <div class="defile">
+    <div id="amelio" role="tabpanel"></div>
     </div>
-    <h3 class="sous-titre">Qualité graphique</h3>
-    <div class="seg" role="group" aria-label="Qualité graphique">
-      <button type="button" data-qualite="auto">Auto</button><button type="button" data-qualite="basse">Économie</button><button type="button" data-qualite="haute">Maximale</button>
+  </div>
+</section>
+
+<section id="coffre" class="panneau" aria-labelledby="t-coffre" hidden>
+  <div class="feuille centre">
+    <header><h2 id="t-coffre">Coffre mystère</h2><button type="button" class="fermer" data-fermer aria-label="Fermer">×</button></header>
+    <div class="defile">
+    <div id="co-boite" class="coffre" aria-hidden="true"><span class="co-lueur"></span><span class="co-caisse"></span><span class="co-couvercle"></span></div>
+    <p id="co-res" class="co-res" aria-live="polite"></p>
+    <p class="note">Coffres restants : <b id="co-n">0</b></p>
+    <button type="button" class="gros orange" id="b-ouvrir">Ouvrir</button>
     </div>
-    <p class="note">« Auto » baisse les détails si ton appareil a du mal à suivre.</p>
-    <button type="button" class="btn" data-retour>Retour</button>
+  </div>
+</section>
+
+<section id="reglages" class="panneau" aria-labelledby="t-reglages" hidden>
+  <div class="feuille">
+    <header><h2 id="t-reglages">Réglages</h2><button type="button" class="fermer" data-fermer aria-label="Fermer">×</button></header>
+    <div class="defile">
+    <div class="interrupteurs">
+      <button type="button" id="b-son" class="inter" aria-pressed="true">Sons</button>
+      <button type="button" id="b-musique" class="inter" aria-pressed="true">Musique</button>
+      <button type="button" id="b-vib" class="inter" aria-pressed="true">Vibrations</button>
+    </div>
+    <h3>Sensibilité des glissements</h3>
+    <div class="seg" role="group" aria-label="Sensibilité des glissements"><button type="button" data-sens="0.7">Faible</button><button type="button" data-sens="1">Normale</button><button type="button" data-sens="1.4">Forte</button></div>
+    <h3>Qualité graphique</h3>
+    <div class="seg" role="group" aria-label="Qualité graphique"><button type="button" data-qualite="auto">Auto</button><button type="button" data-qualite="basse">Économie</button><button type="button" data-qualite="haute">Maximale</button></div>
+    <p class="note">« Auto » baisse les détails si ton appareil a du mal à suivre. « Économie » coupe les ombres et la pluie.</p>
     <button type="button" class="lien danger" id="b-effacer">Effacer ma progression</button>
+    </div>
   </div>
 </section>
 
-<section id="cadeau" class="ecran" aria-labelledby="t-cadeau" hidden>
-  <div class="carte">
+<section id="cadeau" class="panneau" aria-labelledby="t-cadeau" hidden>
+  <div class="feuille centre">
+    <div class="defile">
     <p class="sur">Cadeau du jour</p>
     <h2 id="t-cadeau">Bon retour en ville !</h2>
     <p id="ca-serie" class="intro"></p>
     <ol id="ca-jours" class="jours"></ol>
-    <button type="button" class="btn orange" id="b-cadeau">Récupérer</button>
-  </div>
-</section>
-
-<section id="evenement" class="ecran" aria-labelledby="t-evenement" hidden>
-  <div class="carte">
-    <p class="sur">Événement</p>
-    <h2 id="t-evenement"></h2>
-    <p id="ev-dates" class="intro"></p>
-    <div class="compte"><i id="ev-barre"></i></div>
-    <p class="note"><b id="ev-n"></b> ramassé(e)s</p>
-    <ul id="ev-paliers" class="paliers"></ul>
-    <button type="button" class="btn" data-retour>Retour</button>
-  </div>
-</section>
-
-<section id="coffre" class="ecran" aria-labelledby="t-coffre" hidden>
-  <div class="carte">
-    <h2 id="t-coffre">Coffre mystère</h2>
-    <div id="co-boite" class="coffre" aria-hidden="true"><span class="co-lueur"></span><span class="co-caisse"></span><span class="co-couvercle"></span></div>
-    <p id="co-res" class="co-res" aria-live="polite"></p>
-    <p class="note">Coffres restants : <b id="co-n">0</b></p>
-    <button type="button" class="btn orange" id="b-ouvrir">Ouvrir</button>
-    <button type="button" class="btn second" id="b-coffre-retour">Retour à la boutique</button>
-  </div>
-</section>
-
-<section id="boutique" class="ecran" aria-labelledby="t-boutique" hidden>
-  <div class="carte">
-    <h2 id="t-boutique">Boutique</h2>
-    <p class="solde"><span class="piece-ic" aria-hidden="true"></span><b id="s-pieces">0</b> pièces</p>
-    <div class="onglets" role="tablist">
-      <button type="button" role="tab" data-o="bonus">Bonus</button>
-      <button type="button" role="tab" data-o="persos">Persos</button>
-      <button type="button" role="tab" data-o="planches">Planches</button>
-      <button type="button" role="tab" data-o="objets">Objets</button>
+    <button type="button" class="gros orange" id="b-cadeau">Récupérer</button>
     </div>
-    <div id="amelio" role="tabpanel"></div>
-    <button type="button" class="btn" data-retour>Retour</button>
   </div>
 </section>
 
-<section id="pause" class="ecran" aria-labelledby="t-pause" hidden>
-  <div class="carte">
+<!-- Pendant la course : pause, continuer, fin -->
+<section id="pause" class="panneau" aria-labelledby="t-pause" hidden>
+  <div class="feuille centre">
+    <div class="defile">
     <h2 id="t-pause">Pause</h2>
-    <button type="button" class="btn" id="b-reprendre">Reprendre</button>
-    <button type="button" class="btn second" id="b-recommencer">Recommencer</button>
-    <button type="button" class="btn second" data-menu>Menu</button>
-    <ul id="p-missions" class="missions petit"></ul>
+    <button type="button" class="gros" id="b-reprendre">Reprendre</button>
+    <div class="ligne"><button type="button" class="gros second" id="b-recommencer">Recommencer</button><button type="button" class="gros second" data-menu>Menu</button></div>
+    <ul id="pause-missions" class="liste-prog petit"></ul>
+    </div>
   </div>
 </section>
 
-<section id="continuer" class="ecran" aria-labelledby="t-continuer" hidden>
-  <div class="carte">
+<section id="continuer" class="panneau" aria-labelledby="t-continuer" hidden>
+  <div class="feuille centre">
+    <div class="defile">
     <h2 id="t-continuer">Continuer ?</h2>
     <p class="intro">Il faut <b id="c-cout">1</b> clé · tu en as <b id="c-cles">0</b></p>
-    <div class="compte"><i id="c-barre"></i></div>
-    <button type="button" class="btn orange" id="b-continuer">Utiliser 1 clé</button>
-    <button type="button" class="btn second" id="b-non">Non merci</button>
+    <div class="jauge"><i id="c-barre"></i></div>
+    <button type="button" class="gros orange" id="b-continuer">Utiliser 1 clé</button>
+    <button type="button" class="gros second" id="b-non">Non merci</button>
+    </div>
   </div>
 </section>
 
-<section id="fin" class="ecran" aria-labelledby="t-fin" hidden>
-  <div class="carte">
+<section id="fin" class="panneau" aria-labelledby="t-fin" hidden>
+  <div class="feuille centre">
+    <div class="defile">
     <p class="sur" id="f-record" hidden>Nouveau record !</p>
     <h2 id="t-fin">Fin de la course</h2>
     <p id="f-etoiles" class="etoiles" hidden></p>
-    <p class="gros" id="f-score">0</p>
+    <p class="gros-score" id="f-score">0</p>
     <div class="stats"><div><span>Distance</span><b id="f-dist">0 m</b></div><div><span>Pièces</span><b id="f-pieces">0</b></div></div>
     <p id="f-recompense" class="recompense" hidden></p>
     <ul id="f-missions" class="faites" hidden></ul>
-    <button type="button" class="btn vert" id="b-suivant" hidden>Niveau suivant</button>
-    <button type="button" class="btn" id="b-rejouer">Rejouer</button>
-    <div class="ligne"><button type="button" class="btn second" id="b-partager">Partager mon score</button><button type="button" class="btn second" data-menu>Menu</button></div>
+    <button type="button" class="gros vert" id="b-suivant" hidden>Niveau suivant</button>
+    <button type="button" class="gros" id="b-rejouer">Rejouer</button>
+    <div class="ligne"><button type="button" class="gros second" id="b-partager">Partager</button><button type="button" class="gros second" data-menu>Menu</button></div>
+    </div>
   </div>
 </section>
 
-<script src="donnees.js"></script>
-<script src="jeu.js"></script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>
