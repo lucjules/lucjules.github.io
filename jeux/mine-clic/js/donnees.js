@@ -87,6 +87,8 @@
   amel({ id: 'brillance-1', nom: 'Loupe de mineur', prix: 2e6, effet: 'brillance', icone: { s: 'gemme', m: 'or' }, desc: 'Les blocs brillants donnent 20 fois le bonus au lieu de 10.', cond: { brillants: 3 } });
   amel({ id: 'brillance-2', nom: 'Toucher doré', prix: 2e10, effet: 'brillance', icone: { s: 'gemme', m: 'or' }, desc: 'Les blocs brillants donnent 40 fois le bonus.', cond: { brillants: 15 } });
   amel({ id: 'recharge-1', nom: 'Redstone accélérée', prix: 1e7, effet: 'recharge', icone: { s: 'foreuse' }, desc: 'Les capacités se rechargent 25 % plus vite.', cond: { capacites: 5 } });
+  amel({ id: 'epee-1', nom: 'Épée en diamant', prix: 5e7, effet: 'epee', icone: { s: 'epee', m: 'diamant' }, desc: 'Tes coups font 2 fois plus de dégâts aux boss.', cond: { boss: 2 } });
+  amel({ id: 'epee-2', nom: 'Épée en netherite', prix: 5e11, effet: 'epee', icone: { s: 'epee', m: 'netherite' }, desc: 'Tes coups font encore 2 fois plus de dégâts aux boss.', cond: { boss: 8 } });
   amel({ id: 'chance-1', nom: 'Chance de la mer I', prix: 7777, effet: 'chance', icone: { s: 'coffre' }, desc: 'Les coffres et les creepers apparaissent plus souvent.', cond: { coffres: 3 } });
   amel({ id: 'chance-2', nom: 'Chance de la mer II', prix: 7.77e6, effet: 'chance', icone: { s: 'coffre' }, desc: 'Les coffres et les creepers apparaissent encore plus souvent.', cond: { coffres: 10 } });
   amel({ id: 'duree-1', nom: 'Potion de longue durée', prix: 7.77e8, effet: 'duree', icone: { s: 'potion', m: 'violet' }, desc: 'Les effets des coffres durent 2 fois plus longtemps, et les coffres restent plus longtemps.', cond: { coffres: 25 } });
@@ -132,7 +134,7 @@
 
   /* ---------- Progrès (succès) : chacun ajoute 1 % de production ---------- */
   var PROGRES = [];
-  function prog(id, nom, desc, icone, test) { PROGRES.push({ id: id, nom: nom, desc: desc, icone: icone, test: test }); }
+  function prog(id, nom, desc, icone, test, secret) { PROGRES.push({ id: id, nom: nom, desc: desc, icone: icone, test: test, secret: !!secret }); }
   [
     [1, 'Premier coup de pioche'], [1000, 'Un bel établi'], [1e5, "L'âge de pierre"], [1e6, 'Ça brille, là-dedans !'],
     [1e8, 'Toujours plus profond'], [1e10, 'Fièvre du diamant'], [1e12, 'Le cœur du monde'], [1e14, 'Au-delà de la roche-mère'],
@@ -203,6 +205,54 @@
   prog('etoiles-100', 'Une galaxie entière', 'Posséder 100 étoiles du Nether.', { s: 'etoile' }, function (S) { return S.etoiles >= 100; });
   prog('halloween', 'Joyeux Halloween !', "Ouvrir une citrouille pendant l'événement d'Halloween.", { s: 'citrouille' }, function (S) { return S.citrouilles >= 1; });
   prog('noel', 'Joyeux Noël !', "Ouvrir un cadeau pendant l'événement de Noël.", { s: 'cadeau' }, function (S) { return S.cadeaux >= 1; });
+  prog('boss-1', 'Chasseur de monstres', 'Vaincre un boss.', { s: 'zombie' }, function (S) { return S.bossTotal >= 1; });
+  prog('boss-10', 'Tueur de géants', 'Vaincre 10 boss.', { s: 'araignee' }, function (S) { return S.bossTotal >= 10; });
+  prog('boss-dragon', 'Libérer la fin', "Vaincre le dragon de l'End.", { s: 'dragon' }, function (S) { return S.bossVaincus.indexOf('end') >= 0; });
+  prog('boss-warden', 'Silence absolu', 'Vaincre le Warden de la cité antique.', { s: 'warden' }, function (S) { return S.bossVaincus.indexOf('cite') >= 0; });
+  prog('boss-tous', 'Bestiaire complet', 'Vaincre le boss de chaque dimension.', { s: 'blaze' }, function (S) { return S.bossVaincus.length >= DIMENSIONS.length; });
+  prog('familier-1', 'Meilleur ami', 'Adopter un familier.', { s: 'loup' }, function (S) { return S.familiers.length >= 1; });
+  prog('familiers-tous', 'Ménagerie', 'Adopter tous les familiers.', { s: 'chat' }, function (S) { return S.familiers.length >= FAMILIERS.length; });
+  prog('collection-1', 'Apprenti géologue', 'Atteindre la maîtrise 1 sur un bloc de la collection.', { s: 'pierre-ic' }, function (S, J) { return J.maitrise >= 1; });
+  prog('collection-tous', 'Géologue', 'Atteindre la maîtrise 1 sur tous les blocs de la collection.', { s: 'pierre-ic' }, function (S, J) { return J.blocsMaitrises >= Object.keys(BLOCS).length; });
+  prog('collection-max', 'Maître géologue', 'Atteindre la maîtrise 3 sur tous les blocs de la collection.', { s: 'gemme' }, function (S, J) { return J.maitrise >= Object.keys(BLOCS).length * 3; });
+  prog('curieux', 'Curieux', 'Progrès secret.', { s: 'livre' }, function (S) { return S.secrets.indexOf('titre') >= 0; }, true);
+  prog('minuit', 'Mineur de minuit', 'Progrès secret.', { s: 'horloge' }, function (S) { return S.secrets.indexOf('minuit') >= 0; }, true);
+  prog('nuit', 'Gardien de la nuit', 'Progrès secret.', { s: 'creeper' }, function (S) { return S.creepersNuit >= 1; }, true);
+
+  var SECRETS = { curieux: 'Cliquer 10 fois sur le titre du jeu.', minuit: 'Jouer entre minuit et 5 heures du matin.', nuit: 'Désamorcer un creeper pendant la nuit, à la surface.' };
+  PROGRES.forEach(function (p) { if (p.secret) p.vraieDesc = SECRETS[p.id]; });
+
+  /* ---------- Boss : un par dimension ; clique dessus avant la fin du temps ---------- */
+  var BOSS = {
+    surface: { nom: 'Zombie géant', icone: { s: 'zombie' }, pv: 40, couleurs: ['#3fbf4a', '#1d7a2c', '#1f8a8f'] },
+    grottes: { nom: 'Araignée des cavernes', icone: { s: 'araignee' }, pv: 55, couleurs: ['#1d1d1d', '#3a3a3a', '#c62828'] },
+    profondeurs: { nom: 'Gardien des profondeurs', icone: { s: 'gardien' }, pv: 70, couleurs: ['#1f8a8f', '#0b3a3e', '#d9822b'] },
+    coeur: { nom: 'Golem de diamant', icone: { s: 'golem', m: 'golem-diamant' }, pv: 85, couleurs: ['#2fd3c6', '#b0fff7', '#1a9a95'] },
+    nether: { nom: 'Blaze ardent', icone: { s: 'blaze' }, pv: 100, couleurs: ['#f5d042', '#d9822b', '#f0b45a'] },
+    end: { nom: "Dragon de l'End", icone: { s: 'dragon' }, pv: 130, couleurs: ['#1d1d1d', '#3a3a3a', '#d18cff'] },
+    cite: { nom: 'Le Warden', icone: { s: 'warden' }, pv: 160, couleurs: ['#0b3a3e', '#1f8a8f', '#c4fcff'] }
+  };
+
+  /* ---------- Familiers : un seul accompagne le mineur, chacun donne un bonus ---------- */
+  var FAMILIERS = [
+    { id: 'loup', nom: 'Loup', desc: 'Tes clics rapportent 50 % de plus.', aide: 'Cliquer 1 000 fois sur le bloc', test: function (S) { return S.clics >= 1000; } },
+    { id: 'abeille', nom: 'Abeille', desc: 'Toute la production augmente de 10 %.', aide: 'Acheter 100 machines', test: function (S) { return S.achats >= 100; } },
+    { id: 'chat', nom: 'Chat', desc: "Les creepers ont peur des chats : il n'y a plus que des coffres.", aide: 'Désamorcer 5 creepers', test: function (S) { return S.creepers >= 5; } },
+    { id: 'axolotl', nom: 'Axolotl', desc: 'Le bonus quand un bloc casse est doublé.', aide: 'Casser 500 blocs', test: function (S) { return S.casses >= 500; } },
+    { id: 'perroquet', nom: 'Perroquet', desc: "Le combo te laisse plus de temps entre deux clics et monte jusqu'à 75.", aide: 'Atteindre un combo de 40', test: function (S) { return S.comboMax >= 40; } },
+    { id: 'renard', nom: 'Renard', desc: 'Les missions rapportent 50 % de plus.', aide: 'Terminer 10 missions', test: function (S) { return S.missionsFaites >= 10; } },
+    { id: 'allay', nom: 'Allay', desc: "Ramasse les coffres pour toi : ils s'ouvrent tout seuls au bout de 3 secondes.", aide: 'Ouvrir 25 coffres', test: function (S) { return S.coffres >= 25; } },
+    { id: 'dragonnet', nom: 'Bébé dragon', desc: 'Tes coups font 2 fois plus de dégâts aux boss.', aide: "Vaincre le dragon de l'End", test: function (S) { return S.bossVaincus.indexOf('end') >= 0; } }
+  ];
+  FAMILIERS.forEach(function (f) { f.icone = { s: f.id }; });
+
+  /* ---------- Collection : chaque bloc cassé compte ; maîtrise 1, 2, 3 = +1 % de production chacune ---------- */
+  var MAITRISE = [25, 250, 2500];
+
+  /* ---------- Phrases d'accueil, à côté du titre ---------- */
+  var PHRASES = ['Aussi en pixels !', '100 % fait maison !', 'Ne creuse jamais tout droit vers le bas !', 'Attention aux creepers !', 'Cubique !', 'Toujours plus de blocs !',
+    'Hmm !', 'Ssssss…', 'Clic clic clic !', "Pas de dragon sans œuf !", 'Maintenant avec des boss !', 'Fait avec de la redstone !', 'Le pain, ça se mange !',
+    'Garanti sans lave !', 'Ton chat te protège !', 'Une pioche par jour !', 'Écoute le silence de la cité…', 'Brille, petit bloc !', 'Combo !', 'Il fait nuit ? Prudence !'];
 
   /* ---------- Boutique céleste : pouvoirs permanents, payés en fragments d'étoile ---------- */
   var POUVOIRS = [
@@ -242,7 +292,8 @@
     { id: 'coffres', txt: 'Ouvrir {n} coffre(s) au trésor', buts: [1, 2, 3] },
     { id: 'brillants', txt: 'Casser {n} bloc(s) brillant(s)', buts: [1, 2] },
     { id: 'combo', txt: 'Atteindre un combo de {n}', buts: [15, 25, 35, 50] },
-    { id: 'capacites', txt: 'Utiliser {n} capacité(s)', buts: [1, 2, 3] }
+    { id: 'capacites', txt: 'Utiliser {n} capacité(s)', buts: [1, 2, 3] },
+    { id: 'boss', txt: 'Vaincre {n} boss', buts: [1] }
   ];
 
   /* ---------- Dessins en pixels (12 × 12) ----------
@@ -252,14 +303,14 @@
     k: '#1d1d1d', K: '#3a3a3a', g: '#8f8f8f', G: '#c8c8c8', W: '#ffffff', s: '#6e6e6e',
     w: '#b8874a', b: '#8b5a2b', d: '#5e3b1c', r: '#c62828', R: '#ff7a6b', m: '#d9822b', M: '#f0b45a',
     o: '#1f1430', O: '#4b2b75', p: '#8a2be2', P: '#d18cff', c: '#3fd8e0', C: '#c4fcff',
-    u: '#3b6fd8', U: '#8fb6ff', y: '#dcdca0', Y: '#f5d042', e: '#3fbf4a', E: '#1d7a2c', f: '#d9a074', n: '#a8704a', h: '#4a2e1a',
+    u: '#3b6fd8', U: '#8fb6ff', z: '#ff9fd0', Z: '#d65aa0', y: '#dcdca0', Y: '#f5d042', e: '#3fbf4a', E: '#1d7a2c', f: '#d9a074', n: '#a8704a', h: '#4a2e1a',
     t: '#0b3a3e', T: '#1f8a8f', l: 'rgba(205,240,255,.45)', x: '#9c6b30', X: '#c79a5a', q: '#c62828', Q: '#ff8a80', v: '#6b3fa0', V: '#b98ae6'
   };
   var MATIERES = {
     bois: { x: '#9c6b30', X: '#c79a5a' }, pierre: { x: '#7a7a7a', X: '#adadad' }, fer: { x: '#c9c9c9', X: '#f4f4f4' },
     or: { x: '#e8b923', X: '#fff27a' }, diamant: { x: '#2fd3c6', X: '#b0fff7' }, netherite: { x: '#3d3438', X: '#776a6f' },
     rouge: { q: '#c62828', Q: '#ff8a80' }, bleu: { q: '#4f7cff', Q: '#b3c8ff' }, violet: { q: '#8a2be2', Q: '#d6a8ff' }, rose: { q: '#e055c0', Q: '#ffb3ec' },
-    enchantee: { r: '#f5d042', R: '#fff6b0' }, fragment: { W: '#e2b8ff', G: '#9b4de0' }
+    enchantee: { r: '#f5d042', R: '#fff6b0' }, fragment: { W: '#e2b8ff', G: '#9b4de0' }, 'golem-diamant': { g: '#2fd3c6', G: '#b0fff7', s: '#1a9a95' }
   };
   MATIERES.or.r = '#f5c518'; MATIERES.or.R = '#fff6b0'; MATIERES.or.c = '#f5c518'; MATIERES.or.C = '#fff6b0';
   var SPRITES = {
@@ -296,6 +347,22 @@
     horloge: ['...YYYYYY...', '..YddddddY..', '.YdyyyyyydY.', 'YdyyykyyyydY', 'YdyyykyyyydY', 'YdyyykkkyydY', 'YdyyyyyyyydY', 'YdyyyyyyyydY', '.YdyyyyyydY.', '..YddddddY..', '...YYYYYY...', '............'],
     parchemin: ['.bbbbbbbbbb.', 'bwwwwwwwwwwb', '.yyyyyyyyyy.', '.ykkkkkyyyy.', '.yyyyyyyyyy.', '.ykkkkkkkky.', '.yyyyyyyyyy.', '.ykkkkyyyyy.', '.yyyyyyyyyy.', '.yyyyyyyrry.', 'bwwwwwwwwwwb', '.bbbbbbbbbb.'],
     steak: ['............', '...rrrrr....', '..rRrrrrrr..', '.rrrRRrrrrr.', '.rrrrrrRrrr.', 'rrWWrrrrrrr.', 'rWWrrrRrrrr.', 'rrrrrrrrrrr.', '.rrrrrrrrr..', '..rrrrrr....', '............', '............'],
+    zombie: ['..EEEEEEEE..', '..EeeeeeeE..', '..eeeeeeee..', '..ekkeekke..', '..eeeeeeee..', '..eeeEEeee..', '..eeEeeEee..', '..eeeeeeee..', '.TTTTTTTTTT.', 'TTTtTTTTtTTT', 'TTTTTTTTTTTT', 'TTTTTTTTTTTT'],
+    araignee: ['k..........k', '.k........k.', '..k.kkkk.k..', '...kKKKKk...', 'kkkKrKKrKkkk', '...KrKKrK...', 'kkkKKKKKKkkk', '...kKKKKk...', '..k.kkkk.k..', '.k........k.', 'k..........k', '............'],
+    gardien: ['..m..mm..m..', '.TTTTTTTTTT.', 'mTtTTTTTTtTm', '.TTTWWWWTTT.', '.TTWWkkWWTT.', 'mTTWWkkWWTTm', '.TTTWWWWTTT.', '.TtTTTTTTtT.', 'mTTTTTTTTTTm', '.TTTTTTTTTT.', '..m..mm..m..', '............'],
+    blaze: ['Y..........Y', '.m...YY...m.', '...YYYYYY...', 'Y.YMMMMMMY.Y', '..YkkMMkkY..', '..YMMMMMMY..', 'm.YMkkkkMY.m', '..YYYYYYYY..', '.m...mm...m.', 'Y...m..m...Y', '..Y......Y..', '............'],
+    dragon: ['.kk......kk.', '.kKk....kKk.', '..kKkkkkKk..', '.kKKKKKKKKk.', 'kKpPKKKKpPKk', 'kKKKKKKKKKKk', 'kKKKKKKKKKKk', '.kKKKKKKKKk.', '..kKKKKKKk..', '..kKkKKkKk..', '...kkkkkk...', '............'],
+    warden: ['T..........T', 'Tt..tttt..tT', '.tttttttttt.', '.ttkkttkktt.', '.tttttttttt.', '..tttttttt..', '.tTttCCttTt.', 'tttCCCCCCttt', 'tttTCCCCTttt', 'tt.tttttt.tt', 'tt.tt..tt.tt', '............'],
+    loup: ['.GG......GG.', '.GgG....GgG.', '.GGGGGGGGGG.', 'GGGGGGGGGGGG', 'GGkGGGGGGkGG', 'GGGGGGGGGGGG', 'GGGGWWWWGGGG', '.GGWWkkWWGG.', '..GWWWWWWG..', '...GWrrWG...', '....GGGG....', '............'],
+    chat: ['.m........m.', '.mm......mm.', '.mmmmmmmmmm.', 'mmMmMmmMmMmm', 'mmeemmmmeemm', 'mmekmmmmekmm', 'mmmmmMMmmmmm', 'mmmmMffMmmmm', 'WmmmmmmmmmmW', '.mmmmmmmmmm.', '..mmmmmmmm..', '............'],
+    perroquet: ['....rrrr....', '...rRRRRr...', '..rRRRRRRr..', '..rRkWRRRr..', '..rRRRRRYYk.', '..rRRRRRYk..', '...rRRRRr...', '...ruuRRr...', '...ruuuRr...', '....ruuur...', '.....YY.....', '............'],
+    axolotl: ['Z..........Z', 'ZZ.zzzzzz.ZZ', '.ZzzzzzzzzZ.', 'Z.zkzzzzkz.Z', '..zzzzzzzz..', '..zzzZZzzz..', '..zzzzzzzz..', '...zzzzzz...', '..zz....zz..', '............', '............', '............'],
+    abeille: ['..WW....WW..', '..WlW..WlW..', '...WW..WW...', '.YYkkYYkkYY.', 'YYYkkYYkkYYY', 'YkYkkYYkkYYY', 'YkYkkYYkkYYk', 'YYYkkYYkkYYY', '.YYkkYYkkYY.', '............', '............', '............'],
+    renard: ['.m........m.', '.mk......km.', '.mmmmmmmmmm.', 'mmmmmmmmmmmm', 'mmkkmmmmkkmm', 'WWmmmmmmmmWW', 'WWWWmmmmWWWW', '.WWWWkkWWWW.', '..WWWWWWWW..', '............', '............', '............'],
+    allay: ['............', '....CCCC....', '...CccccC...', '...CckckC...', '...CccccC...', '.CC.CccC.CC.', 'CCCCccccCCCC', '.C..cccc..C.', '....cccc....', '.....cc.....', '............', '............'],
+    dragonnet: ['............', '.p........p.', '.pk......kp.', '..kkkkkkkk..', '.kKKKKKKKKk.', '.kKpKKKKpKk.', '.kKKKKKKKKk.', '..kKKKKKKk..', '..kKkKKkKk..', '...kkkkkk...', '............', '............'],
+    epee: ['..........XX', '.........XxX', '........XxX.', '.......XxX..', '......XxX...', '.....XxX....', '.d..XxX.....', '..dXxX......', '..ddX.......', '.bdd........', 'bb..d.......', 'b...........'],
+    'pierre-ic': ['gggggggggggg', 'gGggsggggGgg', 'ggggggGggggg', 'gsgggggggsgg', 'ggggGggggggg', 'ggsgggggGggg', 'gggggggsgggg', 'gGgggggggggs', 'gggggsgGgggg', 'gggGgggggggg', 'gsgggggggGgg', 'gggggggggggg'],
     etoile: ['.....WW.....', '.....WW.....', '....WWWW....', 'WWWWWGGWWWWW', '.WWWGGGGWWW.', '..WWGGGGWW..', '...WWGGWW...', '..WWW..WWW..', '.WWW....WWW.', 'WW........WW', '............', '............']
   };
   // couleur du cadre des améliorations de machine, palier par palier
@@ -313,6 +380,6 @@
   window.MC_DONNEES = {
     BLOCS: BLOCS, DIMENSIONS: DIMENSIONS, MACHINES: MACHINES, AMELIORATIONS: AMELIORATIONS, PROGRES: PROGRES,
     PALETTE: PALETTE, MATIERES: MATIERES, SPRITES: SPRITES, COULEURS_PALIERS: COULEURS_PALIERS, EFFETS: EFFETS, PALIERS: PALIERS,
-    POUVOIRS: POUVOIRS, CAPACITES: CAPACITES, MISSIONS: MISSIONS
+    POUVOIRS: POUVOIRS, CAPACITES: CAPACITES, MISSIONS: MISSIONS, BOSS: BOSS, FAMILIERS: FAMILIERS, MAITRISE: MAITRISE, PHRASES: PHRASES
   };
 })();
