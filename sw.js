@@ -3,7 +3,7 @@
    essayé d'abord (pour avoir la dernière version) et le cache sert de secours.
    VERSION et FICHIERS sont générés par outils/construire.js : ne pas les modifier à la main. */
 // <généré>
-const VERSION = '566bab371b';
+const VERSION = 'ef85fac46e';
 const FICHIERS = [
   './',
   '404.html',
@@ -45,13 +45,26 @@ const FICHIERS = [
   'assets/systeme.css',
   'cours.html',
   'index.html',
-  'jeux/voie-libre/donnees.js',
   'jeux/voie-libre/icones/icone-192.png',
   'jeux/voie-libre/icones/icone-512.png',
   'jeux/voie-libre/icones/icone-apple-180.png',
   'jeux/voie-libre/icones/icone-masquable-512.png',
   'jeux/voie-libre/index.html',
-  'jeux/voie-libre/jeu.js',
+  'jeux/voie-libre/js/audio.js',
+  'jeux/voie-libre/js/controles.js',
+  'jeux/voie-libre/js/course.js',
+  'jeux/voie-libre/js/donnees.js',
+  'jeux/voie-libre/js/hasard.js',
+  'jeux/voie-libre/js/interface.js',
+  'jeux/voie-libre/js/main.js',
+  'jeux/voie-libre/js/parcours.js',
+  'jeux/voie-libre/js/progression.js',
+  'jeux/voie-libre/js/rendu/decor.js',
+  'jeux/voie-libre/js/rendu/modeles.js',
+  'jeux/voie-libre/js/rendu/personnage.js',
+  'jeux/voie-libre/js/rendu/scene.js',
+  'jeux/voie-libre/js/rendu/textures.js',
+  'jeux/voie-libre/lib/three.module.min.js',
   'jeux/voie-libre/manifest.webmanifest',
   'jeux/voie-libre/style.css',
   'jeux.html',
