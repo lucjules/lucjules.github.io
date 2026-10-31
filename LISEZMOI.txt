@@ -10,6 +10,7 @@ cours.html                      accueil des cours (recherche, sauvegarde de la p
 jeux.html                       accueil des jeux
 jeux/voie-libre/index.html      jeu Voie libre 1.0 (course en 3D dans la ville) : à ouvrir depuis le site en ligne
                                 (ou un petit serveur local, voir les notes), pas en double-cliquant le fichier
+jeux/mine-clic/index.html       jeu Mine Clic (jeu de clic dans un monde de blocs) : s'ouvre aussi en double-cliquant
 algo/index.html                 Algorithmique : cycle1.html, cycle2.html
 systeme/index.html              Système : intro-systeme.html
 sql/index.html                  Bases de données : sql-requetes-simples.html
