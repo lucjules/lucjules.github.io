@@ -14,7 +14,7 @@ Mon site, en deux espaces choisis depuis l'accueil (`index.html`) :
 
 | Matière | Chapitres |
 | --- | --- |
-| [Algorithmique](algo/index.html) (ExAlgo · Java) | Cycle 1, Cycle 2 |
+| [Algorithmique](algo/index.html) (ExAlgo · Java) | Cycle 1 (les bases), Cycle 2 (les boucles), Cycle 3 (les tableaux) |
 | [Système](systeme/index.html) (Linux) | Le terminal et les permissions |
 | [Bases de données](sql/index.html) (R1.05 · SQL) | Modèle relationnel et requêtes simples |
 | [Management](management/index.html) (R1.08) | Introduction à la gestion, Stratégie |
