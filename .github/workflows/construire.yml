@@ -1,6 +1,6 @@
 # Régénère l'index de la recherche et la liste des fichiers hors ligne (outils/construire.js)
 # à chaque modification de main, puis enregistre le résultat : plus besoin de Node.js en local.
-# Lance aussi les tests des jeux Voie libre et Mine Clic (outils/tester-*.js).
+# Lance aussi les tests des jeux Voie libre et Mine Clic et la vérification des exercices SQL (outils/tester-*.js).
 # Sur une demande de fusion, l'action vérifie seulement que la génération et les tests fonctionnent.
 name: Recherche et hors ligne
 
@@ -43,6 +43,9 @@ jobs:
 
       - name: Tester le jeu Mine Clic
         run: node outils/tester-mine-clic.js
+
+      - name: Vérifier les exercices SQL (chapitre 1 bis)
+        run: node outils/tester-exercices-sql.js
 
       - name: Comparer avec la version enregistrée
         id: diff

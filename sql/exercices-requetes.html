@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Exercices SQL R1.05</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="SQL R1.05, chapitre 1 bis : exercices de requêtes simples (SELECT, ORDER BY, DISTINCT, WHERE, LIKE) exécutés sur une vraie base, avec son modèle et une correction automatique.">
+<meta name="color-scheme" content="light dark">
+<link rel="manifest" href="../manifest.webmanifest">
+<meta name="theme-color" content="#1f4fd8">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="../assets/fonts/fonts.css">
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/sql.css">
+<script src="../assets/common.js"></script>
+<script src="../assets/sql-moteur.js"></script>
+<!-- Les bases et les exercices : c'est le seul fichier à modifier pour en ajouter -->
+<script src="exercices-requetes.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* Chapitre 1 bis : la page lit BASES et EXERCICES (exercices-requetes.js) et n'a rien de propre
+   à un exercice. Ajouter un exercice dans le fichier de données suffit à l'ajouter partout :
+   sommaire, accueil, progression, recherche et mode hors ligne. */
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => [...(r || document).querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const note = (kind, title, html) => `<aside class="note ${kind}"><div class="note-h">${title}</div><div class="note-b">${html}</div></aside>`;
+const Store = {
+  key: 'sql-1bis-v1',
+  data: { done: {}, code: {}, atelier: '', atBase: '' },
+  load() { try { const s = localStorage.getItem(this.key); if (s) Object.assign(this.data, JSON.parse(s)); } catch (e) { /* indisponible */ } },
+  save() { try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) { /* indisponible */ } }
+};
+Store.load();
+
+const BASE_IDS = Object.keys(BASES);
+const exById = id => EXERCICES.find(x => x.id === id);
+const NIVEAUX = { facile: 'Facile', moyen: 'Moyen', difficile: 'Difficile' };
+
+/* ---------- Coloration et exécution SQL ---------- */
+function hlSql(code) {
+  const re = /(--[^\n]*)|('(?:[^']|'')*')|(\b\d+(?:\.\d+)?\b)|(\b(?:SELECT|DISTINCT|TOP|FROM|WHERE|ORDER|BY|ASC|DESC|INNER|JOIN|ON|AND|OR|NOT|LIKE|IS|NULL|BETWEEN|IN|AS)\b)/gi;
+  let out = '', last = 0, m;
+  while ((m = re.exec(code))) {
+    out += esc(code.slice(last, m.index));
+    out += `<span class="${m[1] ? 'c-com' : m[2] ? 'c-str' : m[3] ? 'c-num' : 'c-kw'}">${esc(m[0])}</span>`;
+    last = m.index + m[0].length;
+  }
+  return out + esc(code.slice(last));
+}
+function resHTML(r) {
+  const shown = r.rows.slice(0, 200);
+  const body = shown.map(row => `<tr>${row.map(v => v === null ? '<td class="null">NULL</td>' : `<td${typeof v === 'number' ? ' class="num"' : ''}>${esc(SQLE.fmt(v))}</td>`).join('')}</tr>`).join('');
+  return `<div class="tbl-wrap res-wrap"><table class="res"><thead><tr>${r.cols.map(c => `<th scope="col">${esc(c)}</th>`).join('')}</tr></thead><tbody>${body || `<tr><td colspan="${r.cols.length}" class="empty">(aucune ligne)</td></tr>`}</tbody></table></div><p class="res-count">${r.rows.length} ligne${r.rows.length > 1 ? 's' : ''}</p>`;
+}
+function execSql(baseId, src) {
+  try { const r = SQLE.run(BASES[baseId], src); return { ok: true, res: r, html: resHTML(r) }; }
+  catch (e) {
+    const msg = e instanceof SQLE.SqlError ? e.message : "La requête n'a pas pu être exécutée.";
+    return { ok: false, html: `<p class="sql-err" role="alert"><strong>Erreur.</strong> ${esc(msg)}</p>` };
+  }
+}
+
+/* ---------- Modèle d'une base : schéma graphique, notation et contraintes ---------- */
+function modeleHTML(baseId) {
+  const b = BASES[baseId];
+  const fig = `<div class="schema" role="group" aria-label="Schéma de la base ${esc(b.nom)}">${b.tables.map(t => `<div class="stbl"><div class="stbl-h">${esc(t.name)}</div><ul>${t.cols.map(col => `<li>${t.key.includes(col) ? '<span class="key" title="clé primaire" aria-label="clé primaire">🔑</span><u>' + esc(col) + '</u>' : '<span class="key"></span>' + esc(col)}${t.fk[col] ? `<span class="fk" title="clé étrangère vers ${esc(t.fk[col])}">→ ${esc(t.fk[col])}</span>` : ''}</li>`).join('')}</ul></div>`).join('')}</div>`;
+  const notation = `<p class="schema-line">${b.tables.map(t => `<code>${esc(t.name)} (${t.cols.map(col => t.key.includes(col) ? `<u>${esc(col)}</u>` : esc(col)).join(', ')})</code>`).join('<br>')}</p>`;
+  return `${fig}${notation}<p><strong>Contraintes :</strong></p><ul class="refs">${b.contraintes.map(r => `<li><code>${esc(r)}</code></li>`).join('')}</ul>
+  <p class="note-line">Voir le contenu d'une table : ${b.tables.map(t => `<button type="button" class="chip" data-act="voir-table" data-base="${baseId}" data-t="${esc(t.name)}">${esc(t.name)} <small>${t.rows.length}</small></button>`).join(' ')}</p>
+  <div class="sql-res table-apercu" aria-live="polite"></div>`;
+}
+const modeleBloc = (baseId, open) => `<details class="tables-d modele"${open ? ' open' : ''}><summary>Modèle de la base ${esc(BASES[baseId].nom)}</summary>${modeleHTML(baseId)}</details>`;
+
+/* ---------- Navigation ---------- */
+const NAV = [
+  { group: 'Exercices', items: EXERCICES.map((x, i) => ({ id: x.id, label: x.titre, n: i + 1 })) },
+  { group: 'Outils', items: [{ id: 'atelier', label: 'Atelier SQL', n: '›' }, { id: 'bases', label: 'Les bases', n: '≡' }] }
+];
+const ALL_IDS = ['accueil', ...NAV.flatMap(g => g.items.map(i => i.id))];
+const navHTML = () => NAV.map(g => `<div class="nav-g"><div class="nav-h">${g.group}</div>${g.items.map(i => `<a href="#${i.id}" data-id="${i.id}"><span class="nav-n">${i.n}</span><span class="nav-t">${esc(i.label)}</span></a>`).join('')}</div>`).join('');
+const tags = x => `<span class="ex-niv niv-${esc(x.niveau)}">${esc(NIVEAUX[x.niveau] || x.niveau)}</span>${(x.notions || []).map(n => `<span class="ex-tag">${esc(n)}</span>`).join('')}`;
+
+/* ---------- Pages ---------- */
+function progress() { return { done: EXERCICES.filter(x => Store.data.done[x.id]).length, total: EXERCICES.length }; }
+function homeSummary() {
+  const p = progress(), nx = EXERCICES.find(x => !Store.data.done[x.id]);
+  return `<p class="sum-line"><strong>${p.done}</strong> exercice${p.done > 1 ? 's' : ''} réussi${p.done > 1 ? 's' : ''} sur ${p.total}</p>` +
+    (nx ? `<a class="btn" href="#${nx.id}">${p.done ? 'Continuer' : 'Commencer'} : ${esc(nx.titre)}</a>` : '<p class="sum-line">Tout est réussi. L\'atelier reste ouvert pour t\'entraîner librement.</p>');
+}
+function pageAccueil() {
+  return `<div class="home">
+  <section class="hero"><p class="kicker">R1.05 · Chapitre 1 bis</p>
+  <h1>S'entraîner aux requêtes simples, sur une vraie base.</h1>
+  <p class="lead">Des exercices pour pratiquer le chapitre 1 : <code>SELECT</code>, <code>FROM</code>, <code>ORDER BY</code>, <code>DISTINCT</code>, <code>WHERE</code>, <code>LIKE</code>. Chaque requête s'exécute vraiment, le modèle de la base est affiché avec chaque exercice, et ta réponse est comparée au résultat attendu.</p>
+  <div id="home-sum" class="home-sum">${homeSummary()}</div></section>
+  <h2>Les exercices</h2>
+  <ol class="ex-liste">${EXERCICES.map((x, i) => `<li class="${Store.data.done[x.id] ? 'is-done' : ''}" data-ex-l="${x.id}"><a href="#${x.id}"><span class="sk-n">${i + 1}</span><span class="exl-t">${esc(x.titre)}</span><span class="exl-tags">${tags(x)} <span class="ex-tag base">base ${esc(BASES[x.base].nom)}</span></span></a></li>`).join('')}</ol>
+  ${note('convention', 'Comment ça marche', "<ul><li>Lis l'énoncé et regarde le <strong>modèle de la base</strong> : tables, clés primaires (🔑), clés étrangères (→) et contraintes.</li><li>Écris ta requête, puis <strong>Exécuter</strong> pour voir son résultat, ou <strong>Vérifier</strong> pour la comparer au résultat attendu (Ctrl + Entrée).</li><li>Le nom des colonnes peut différer, l'ordre des lignes ne compte que si l'énoncé demande un tri.</li></ul>")}
+  <p><a class="btn ghost" href="sql-requetes-simples.html">Revoir le chapitre 1</a> <a class="btn ghost" href="#bases">Voir les bases</a></p></div>`;
+}
+function pageExercice(x, idx) {
+  const done = !!Store.data.done[x.id], prev = EXERCICES[idx - 1], next = EXERCICES[idx + 1];
+  return `<article class="page"><p class="kicker">Exercice ${idx + 1} sur ${EXERCICES.length} · base ${esc(BASES[x.base].nom)}</p><h1>${esc(x.titre)}</h1>
+  <p class="ex-tags-l">${tags(x)}</p>
+  <section class="ex ex-sql${done ? ' is-done' : ''}" data-ex="${x.id}"><header class="ex-h"><span class="ex-kind">À toi d'écrire</span><span class="ex-badge" ${done ? '' : 'hidden'}>✓ Réussi</span></header>
+  <p class="ex-q enonce">${esc(x.enonce)}</p>
+  ${modeleBloc(x.base, matchMedia('(min-width: 861px)').matches)}
+  <label class="sr-only" for="ta-${x.id}">Ta requête SQL</label>
+  <textarea class="sql-ta" id="ta-${x.id}" rows="5" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="SELECT …">${esc(Store.data.code[x.id] || '')}</textarea>
+  <div class="ex-actions"><button type="button" class="btn" data-act="verifier">Vérifier</button><button type="button" class="btn ghost" data-act="executer">Exécuter</button>${x.indice ? '<button type="button" class="btn ghost" data-act="indice">Indice</button>' : ''}<button type="button" class="btn ghost" data-act="attendu">Résultat attendu</button><button type="button" class="btn ghost" data-act="solution">Solution</button></div>
+  <p class="hint" hidden>${esc(x.indice || '')}</p>
+  <div class="attendu" hidden><p><strong>Résultat attendu :</strong></p><div class="sql-res"></div></div>
+  <div class="sol" hidden><p>Une solution possible :</p><figure class="cb sql"><pre class="cb-code"><code>${hlSql(x.solution)}</code></pre></figure>${x.explication ? `<p>${esc(x.explication)}</p>` : ''}</div>
+  <div class="sql-res mon-res" aria-live="polite"></div><p class="ex-fb" role="status"></p></section>
+  <nav class="pager" aria-label="Navigation">${prev ? `<a href="#${prev.id}"><span>Précédent</span>${esc(prev.titre)}</a>` : '<a href="#accueil"><span>Retour</span>Accueil</a>'}${next ? `<a class="next" href="#${next.id}"><span>Suivant</span>${esc(next.titre)}</a>` : '<a class="next" href="#atelier"><span>Pour finir</span>Atelier SQL</a>'}</nav></article>`;
+}
+function pageBases() {
+  return `<article class="page wide"><p class="kicker">Outil</p><h1>Les bases</h1><p class="lead">Le modèle de chaque base utilisée dans les exercices, avec ses contraintes et le contenu de ses tables.</p>
+  ${BASE_IDS.map(id => `<h2>${esc(BASES[id].nom)}</h2><p>${esc(BASES[id].description || '')}</p>${modeleHTML(id)}`).join('')}</article>`;
+}
+function pageAtelier() {
+  const base = BASES[Store.data.atBase] ? Store.data.atBase : BASE_IDS[0];
+  return `<article class="page wide"><p class="kicker">Outil</p><h1>Atelier SQL</h1>
+  <p class="lead">Écris n'importe quelle requête SELECT sur une des bases et exécute-la (Ctrl + Entrée).</p>
+  <div class="at-bar"><label>Base <select id="at-base">${BASE_IDS.map(id => `<option value="${id}"${id === base ? ' selected' : ''}>${esc(BASES[id].nom)}</option>`).join('')}</select></label></div>
+  <div id="at-modele">${modeleBloc(base, false)}</div>
+  <label class="sr-only" for="at-ta">Requête SQL</label>
+  <textarea id="at-ta" class="sql-ta big" rows="6" spellcheck="false" autocapitalize="off" autocomplete="off">${esc(Store.data.atelier || 'SELECT *\nFROM ' + BASES[base].tables[0].name)}</textarea>
+  <div class="ex-actions"><button type="button" class="btn" data-act="at-run">▶ Exécuter</button></div>
+  <div id="at-res" class="sql-res" aria-live="polite"></div></article>`;
+}
+
+window.updateProgress = function () {
+  const p = progress(), pct = Math.round(100 * p.done / p.total);
+  const bar = $('#prog-bar'), txt = $('#prog-txt');
+  if (bar) { bar.style.width = pct + '%'; bar.parentElement.setAttribute('aria-valuenow', String(pct)); }
+  if (txt) txt.textContent = `${p.done}/${p.total} exercices`;
+  $$('.nav a').forEach(a => a.classList.toggle('is-done', !!Store.data.done[a.dataset.id]));
+  const sum = $('#home-sum'); if (sum) sum.innerHTML = homeSummary();
+  try { localStorage.setItem('hub:sql/exercices-requetes', JSON.stringify({ done: p.done, total: p.total, lessons: 0, nl: 0 })); } catch (e) { /* indisponible */ }
+};
+
+function route() {
+  let id = (location.hash || '').replace('#', '');
+  if (!ALL_IDS.includes(id)) id = 'accueil';
+  const idx = EXERCICES.findIndex(x => x.id === id);
+  const m = $('#main');
+  m.innerHTML = id === 'accueil' ? pageAccueil() : idx >= 0 ? pageExercice(EXERCICES[idx], idx) : id === 'bases' ? pageBases() : pageAtelier();
+  $$('.nav a').forEach(a => a.setAttribute('aria-current', a.dataset.id === id ? 'page' : 'false'));
+  document.title = id === 'accueil' ? 'Exercices SQL R1.05' : (idx >= 0 ? EXERCICES[idx].titre : id === 'bases' ? 'Les bases' : 'Atelier SQL') + ' · Exercices SQL R1.05';
+  $$('.sql-ta', m).forEach(ta => ta.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); const b = $('[data-act="verifier"], [data-act="at-run"]', ta.closest('.ex, .page')); if (b) b.click(); }
+  }));
+  const ta = $('.ex .sql-ta', m);
+  if (ta) ta.addEventListener('input', () => { Store.data.code[ta.closest('.ex').dataset.ex] = ta.value; Store.save(); });
+  const at = $('#at-ta', m);
+  if (at) at.addEventListener('input', () => { Store.data.atelier = at.value; Store.save(); });
+  const ab = $('#at-base', m);
+  if (ab) ab.addEventListener('change', () => { Store.data.atBase = ab.value; Store.save(); $('#at-modele').innerHTML = modeleBloc(ab.value, true); $('#at-res').innerHTML = ''; });
+  window.updateProgress(); closeDrawer(); window.scrollTo(0, 0); m.focus({ preventScroll: true });
+}
+
+function setFb(sec, text, cls) { const fb = $('.ex-fb', sec); fb.textContent = text; fb.className = 'ex-fb ' + (cls || ''); }
+function markDone(id) {
+  if (!Store.data.done[id]) { Store.data.done[id] = 1; Store.save(); }
+  const sec = $(`[data-ex="${id}"]`);
+  if (sec) { sec.classList.add('is-done'); $('.ex-badge', sec).hidden = false; }
+  window.updateProgress();
+}
+function act(b) {
+  const k = b.dataset.act, sec = b.closest('.ex');
+  if (k === 'voir-table') {
+    const box = $('.table-apercu', b.closest('.tables-d, .page'));
+    box.innerHTML = execSql(b.dataset.base, 'SELECT * FROM ' + b.dataset.t).html;
+    return;
+  }
+  if (k === 'at-run') { $('#at-res').innerHTML = execSql($('#at-base').value, $('#at-ta').value).html; return; }
+  if (!sec) return;
+  const x = exById(sec.dataset.ex);
+  if (k === 'executer' || k === 'verifier') {
+    const src = $('.sql-ta', sec).value;
+    if (!src.trim()) { setFb(sec, 'Écris ta requête dans la zone ci-dessus.', 'ko'); return; }
+    const r = execSql(x.base, src);
+    $('.mon-res', sec).innerHTML = r.html;
+    if (!r.ok) { setFb(sec, 'Ta requête contient une erreur : lis le message ci-dessus.', 'ko'); return; }
+    if (k === 'executer') { setFb(sec, '', ''); return; }
+    const exp = SQLE.run(BASES[x.base], x.solution);
+    const [ok, msg] = SQLE.compare(r.res, exp, exp.ordered);
+    setFb(sec, ok ? 'Réussi. ' + msg : msg, ok ? 'ok' : 'ko');
+    if (ok) markDone(x.id);
+  } else if (k === 'indice') $('.hint', sec).hidden = false;
+  else if (k === 'attendu') {
+    const box = $('.attendu', sec); box.hidden = !box.hidden;
+    if (!box.hidden) $('.sql-res', box).innerHTML = resHTML(SQLE.run(BASES[x.base], x.solution));
+  } else if (k === 'solution') $('.sol', sec).hidden = false;
+}
+
+function closeDrawer() { document.body.classList.remove('drawer-open'); const b = $('#menu-btn'); if (b) b.setAttribute('aria-expanded', 'false'); }
+function setTheme(t) { try { localStorage.setItem('cours-theme', t || ''); } catch (e) { /* indisponible */ } if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
+function init() {
+  document.getElementById('app').innerHTML = `
+<a class="skip" href="#main">Aller au contenu</a>
+<header class="top">
+  <button type="button" id="menu-btn" class="icon-btn" aria-label="Menu" aria-expanded="false" aria-controls="side">☰</button>
+  <a class="back" href="index.html" title="Retour à la matière" aria-label="Retour à la matière">⌂</a><a class="brand" href="#accueil"><span class="brand-mark">SQL</span>1 bis</a>
+  <div class="meter" role="progressbar" aria-label="Progression" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="prog-bar"></i></div>
+  <span id="prog-txt" class="prog-txt"></span>
+  <div class="tools"><button type="button" id="theme-btn" class="icon-btn" aria-label="Changer le thème" title="Thème clair / sombre">◐</button></div>
+</header>
+<div class="shell"><nav id="side" class="side nav" aria-label="Sommaire">${navHTML()}</nav><div class="scrim" data-app="scrim"></div><main id="main" tabindex="-1"></main></div>`;
+  document.addEventListener('click', e => {
+    const a = e.target.closest('[data-act]'); if (a) act(a);
+    if (e.target.closest('[data-app="scrim"]')) closeDrawer();
+  });
+  $('#menu-btn').addEventListener('click', () => { const o = document.body.classList.toggle('drawer-open'); $('#menu-btn').setAttribute('aria-expanded', String(o)); });
+  $('#theme-btn').addEventListener('click', () => {
+    const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    setTheme(dark ? 'light' : 'dark');
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+  window.addEventListener('hashchange', route);
+  route();
+}
+init();
+</script>
+</body>
+</html>
