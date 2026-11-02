@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Exercices SQL R1.05</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="SQL R1.05, chapitre 1 bis : exercices de requêtes simples (SELECT, ORDER BY, DISTINCT, WHERE, LIKE) exécutés sur une vraie base, avec son modèle et une correction automatique.">
+<meta name="description" content="SQL R1.05, chapitre 1 bis : 30 exercices de requêtes en trois niveaux (SELECT, ORDER BY, DISTINCT, WHERE, NULL, LIKE, jointures) exécutés sur deux vraies bases, avec leur modèle et une correction automatique.">
 <meta name="color-scheme" content="light dark">
 <link rel="manifest" href="../manifest.webmanifest">
 <meta name="theme-color" content="#1f4fd8">
@@ -39,6 +39,14 @@ Store.load();
 const BASE_IDS = Object.keys(BASES);
 const exById = id => EXERCICES.find(x => x.id === id);
 const NIVEAUX = { facile: 'Facile', moyen: 'Moyen', difficile: 'Difficile' };
+const GROUPES = { facile: 'Faciles', moyen: 'Moyens', difficile: 'Difficiles' };
+const RANG = { facile: 0, moyen: 1, difficile: 2 };
+// Les exercices rangés par difficulté (dans l'ordre du fichier pour un même niveau) :
+// un exercice ajouté à la fin du fichier rejoint donc automatiquement son niveau.
+const ORDRE = EXERCICES.map((x, i) => [x, i]).sort((a, b) => ((RANG[a[0].niveau] ?? 3) - (RANG[b[0].niveau] ?? 3)) || a[1] - b[1]).map(a => a[0]);
+const NIVEAUX_PRESENTS = [...new Set(ORDRE.map(x => x.niveau))];
+const duNiveau = n => ORDRE.filter(x => x.niveau === n);
+const numDansNiveau = x => duNiveau(x.niveau).indexOf(x) + 1;
 
 /* ---------- Coloration et exécution SQL ---------- */
 function hlSql(code) {
@@ -77,7 +85,7 @@ const modeleBloc = (baseId, open) => `<details class="tables-d modele"${open ? '
 
 /* ---------- Navigation ---------- */
 const NAV = [
-  { group: 'Exercices', items: EXERCICES.map((x, i) => ({ id: x.id, label: x.titre, n: i + 1 })) },
+  ...NIVEAUX_PRESENTS.map(n => ({ group: GROUPES[n] || n, items: duNiveau(n).map((x, i) => ({ id: x.id, label: x.titre, n: i + 1 })) })),
   { group: 'Outils', items: [{ id: 'atelier', label: 'Atelier SQL', n: '›' }, { id: 'bases', label: 'Les bases', n: '≡' }] }
 ];
 const ALL_IDS = ['accueil', ...NAV.flatMap(g => g.items.map(i => i.id))];
@@ -87,7 +95,7 @@ const tags = x => `<span class="ex-niv niv-${esc(x.niveau)}">${esc(NIVEAUX[x.niv
 /* ---------- Pages ---------- */
 function progress() { return { done: EXERCICES.filter(x => Store.data.done[x.id]).length, total: EXERCICES.length }; }
 function homeSummary() {
-  const p = progress(), nx = EXERCICES.find(x => !Store.data.done[x.id]);
+  const p = progress(), nx = ORDRE.find(x => !Store.data.done[x.id]);
   return `<p class="sum-line"><strong>${p.done}</strong> exercice${p.done > 1 ? 's' : ''} réussi${p.done > 1 ? 's' : ''} sur ${p.total}</p>` +
     (nx ? `<a class="btn" href="#${nx.id}">${p.done ? 'Continuer' : 'Commencer'} : ${esc(nx.titre)}</a>` : '<p class="sum-line">Tout est réussi. L\'atelier reste ouvert pour t\'entraîner librement.</p>');
 }
@@ -95,16 +103,17 @@ function pageAccueil() {
   return `<div class="home">
   <section class="hero"><p class="kicker">R1.05 · Chapitre 1 bis</p>
   <h1>S'entraîner aux requêtes simples, sur une vraie base.</h1>
-  <p class="lead">Des exercices pour pratiquer le chapitre 1 : <code>SELECT</code>, <code>FROM</code>, <code>ORDER BY</code>, <code>DISTINCT</code>, <code>WHERE</code>, <code>LIKE</code>. Chaque requête s'exécute vraiment, le modèle de la base est affiché avec chaque exercice, et ta réponse est comparée au résultat attendu.</p>
+  <p class="lead">Des exercices pour pratiquer le chapitre 1, du plus facile au plus difficile : <code>SELECT</code>, <code>ORDER BY</code>, <code>DISTINCT</code>, <code>WHERE</code>, <code>AND</code> / <code>OR</code>, <code>NULL</code>, <code>LIKE</code>, puis les jointures. Chaque requête s'exécute vraiment, le modèle de la base est affiché avec chaque exercice, et ta réponse est comparée au résultat attendu.</p>
   <div id="home-sum" class="home-sum">${homeSummary()}</div></section>
   <h2>Les exercices</h2>
-  <ol class="ex-liste">${EXERCICES.map((x, i) => `<li class="${Store.data.done[x.id] ? 'is-done' : ''}" data-ex-l="${x.id}"><a href="#${x.id}"><span class="sk-n">${i + 1}</span><span class="exl-t">${esc(x.titre)}</span><span class="exl-tags">${tags(x)} <span class="ex-tag base">base ${esc(BASES[x.base].nom)}</span></span></a></li>`).join('')}</ol>
+  ${NIVEAUX_PRESENTS.map(n => { const xs = duNiveau(n), ok = xs.filter(x => Store.data.done[x.id]).length; return `<h3 class="niv-titre"><span class="ex-niv niv-${esc(n)}">${esc(NIVEAUX[n] || n)}</span> ${xs.length} exercice${xs.length > 1 ? 's' : ''}<span class="niv-prog">${ok} réussi${ok > 1 ? 's' : ''}</span></h3>
+  <ol class="ex-liste">${xs.map((x, i) => `<li class="${Store.data.done[x.id] ? 'is-done' : ''}" data-ex-l="${x.id}"><a href="#${x.id}"><span class="sk-n">${i + 1}</span><span class="exl-t">${esc(x.titre)}</span><span class="exl-tags">${tags(x)} <span class="ex-tag base">base ${esc(BASES[x.base].nom)}</span></span></a></li>`).join('')}</ol>`; }).join('')}
   ${note('convention', 'Comment ça marche', "<ul><li>Lis l'énoncé et regarde le <strong>modèle de la base</strong> : tables, clés primaires (🔑), clés étrangères (→) et contraintes.</li><li>Écris ta requête, puis <strong>Exécuter</strong> pour voir son résultat, ou <strong>Vérifier</strong> pour la comparer au résultat attendu (Ctrl + Entrée).</li><li>Le nom des colonnes peut différer, l'ordre des lignes ne compte que si l'énoncé demande un tri.</li></ul>")}
   <p><a class="btn ghost" href="sql-requetes-simples.html">Revoir le chapitre 1</a> <a class="btn ghost" href="#bases">Voir les bases</a></p></div>`;
 }
 function pageExercice(x, idx) {
-  const done = !!Store.data.done[x.id], prev = EXERCICES[idx - 1], next = EXERCICES[idx + 1];
-  return `<article class="page"><p class="kicker">Exercice ${idx + 1} sur ${EXERCICES.length} · base ${esc(BASES[x.base].nom)}</p><h1>${esc(x.titre)}</h1>
+  const done = !!Store.data.done[x.id], prev = ORDRE[idx - 1], next = ORDRE[idx + 1];
+  return `<article class="page"><p class="kicker">${esc(NIVEAUX[x.niveau] || x.niveau)} · exercice ${numDansNiveau(x)} sur ${duNiveau(x.niveau).length} · base ${esc(BASES[x.base].nom)}</p><h1>${esc(x.titre)}</h1>
   <p class="ex-tags-l">${tags(x)}</p>
   <section class="ex ex-sql${done ? ' is-done' : ''}" data-ex="${x.id}"><header class="ex-h"><span class="ex-kind">À toi d'écrire</span><span class="ex-badge" ${done ? '' : 'hidden'}>✓ Réussi</span></header>
   <p class="ex-q enonce">${esc(x.enonce)}</p>
@@ -147,11 +156,11 @@ window.updateProgress = function () {
 function route() {
   let id = (location.hash || '').replace('#', '');
   if (!ALL_IDS.includes(id)) id = 'accueil';
-  const idx = EXERCICES.findIndex(x => x.id === id);
+  const idx = ORDRE.findIndex(x => x.id === id);
   const m = $('#main');
-  m.innerHTML = id === 'accueil' ? pageAccueil() : idx >= 0 ? pageExercice(EXERCICES[idx], idx) : id === 'bases' ? pageBases() : pageAtelier();
+  m.innerHTML = id === 'accueil' ? pageAccueil() : idx >= 0 ? pageExercice(ORDRE[idx], idx) : id === 'bases' ? pageBases() : pageAtelier();
   $$('.nav a').forEach(a => a.setAttribute('aria-current', a.dataset.id === id ? 'page' : 'false'));
-  document.title = id === 'accueil' ? 'Exercices SQL R1.05' : (idx >= 0 ? EXERCICES[idx].titre : id === 'bases' ? 'Les bases' : 'Atelier SQL') + ' · Exercices SQL R1.05';
+  document.title = id === 'accueil' ? 'Exercices SQL R1.05' : (idx >= 0 ? ORDRE[idx].titre : id === 'bases' ? 'Les bases' : 'Atelier SQL') + ' · Exercices SQL R1.05';
   $$('.sql-ta', m).forEach(ta => ta.addEventListener('keydown', e => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); const b = $('[data-act="verifier"], [data-act="at-run"]', ta.closest('.ex, .page')); if (b) b.click(); }
   }));
