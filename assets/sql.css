@@ -48,3 +48,57 @@ table.res{border-collapse:collapse;width:100%;font-size:.88rem;background:var(--
 .note-line{color:var(--ink2);font-size:.92rem}
 @media (max-width:700px){.sql-ta,.drill-in{font-size:16px}}
 .choice{min-width:0}.choice .ct{min-width:0;overflow-wrap:anywhere}.choice code{white-space:normal;overflow-wrap:anywhere}
+/* ===== ACSI : schémas entités-associations (MCD), occurrences, atelier de cardinalités ===== */
+.mcd{margin:1.2em 0;overflow-x:auto;max-width:100%}
+.mcd-row{display:flex;align-items:center;width:max-content;min-width:0}
+.ent,.asso{flex:0 0 auto;background:var(--paper);color:var(--ink);font-size:.9rem}
+.ent{border:2px solid var(--ink);min-width:7.5em}
+.ent-h{padding:.35em .8em;border-bottom:1.5px solid var(--ink);text-align:center;font:700 .92rem var(--f-body)}
+.ent ul,.asso ul{list-style:none;margin:0;padding:.35em .65em;font-family:var(--f-mono);font-size:.82rem;line-height:1.5}
+.asso{border:2px solid var(--ko);border-radius:14px;background:var(--paper2);min-width:7em;text-align:center}
+.asso-h{padding:.45em .8em;font:600 .9rem var(--f-body)}
+.asso ul{border-top:1.5px solid var(--line)}
+.lnk{flex:0 0 auto;width:3.6em;height:2px;background:var(--ink);position:relative}
+.card{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);color:var(--ko);font:700 .9rem var(--f-mono);white-space:nowrap}
+.card.edit{bottom:6px;display:flex;align-items:center;gap:1px;color:var(--ink)}
+.card.edit select{font:700 .85rem var(--f-mono);padding:.1em .15em;border:2px solid var(--ink);border-radius:6px;background:var(--paper);color:var(--ink)}
+.card.edit.ok select{border-color:var(--ok);background:var(--ok-soft)}.card.edit.ko select{border-color:var(--ko);background:var(--ko-soft)}
+.ex-card .lnk{width:6.4em}
+.mcd-pair{display:flex;flex-wrap:wrap;gap:0 24px}
+.mcd-legend{margin:-.4em 0 1.4em}
+.corr-b .mcd{margin:.4em 0 .8em}
+@media (max-width:620px){
+  .mcd-row{flex-direction:column;width:auto;align-items:center}
+  .lnk{width:2px;height:2.6em}
+  .ex-card .lnk{width:2px;height:3.4em}
+  .card{bottom:auto;top:50%;left:10px;transform:translateY(-50%)}
+}
+/* une longue chaîne (3 entités) passe à la verticale plus tôt */
+@media (max-width:1180px){
+  .mcd.long .mcd-row{flex-direction:column;width:auto;align-items:center}
+  .mcd.long .lnk{width:2px;height:2.6em}
+  .mcd.long .card{bottom:auto;top:50%;left:10px;transform:translateY(-50%)}
+}
+.occ{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:start;margin:1.2em 0;font-size:.88rem}
+.occ-set{border:2px solid #d9822b;border-radius:16px;padding:8px;display:grid;gap:6px;background:var(--paper)}
+.occ-t{font:700 .78rem var(--f-body);letter-spacing:.04em;color:var(--ko);text-transform:uppercase}
+.occ-i{border:1.5px solid var(--ink);padding:.25em .5em;font-family:var(--f-mono);font-size:.8rem;background:var(--paper)}
+.occ-more,.occ-cap{color:var(--ink2);font-size:.8rem}
+.occ-links{display:grid;gap:4px;align-content:start;padding:8px 4px;text-align:center}
+.occ-l{font-family:var(--f-mono);font-size:.78rem;color:var(--ko);white-space:nowrap}
+.occ-attr{color:var(--ink);background:var(--accent-soft);padding:0 .3em;border-radius:4px}
+@media (max-width:620px){.occ{grid-template-columns:1fr}.occ-l{white-space:normal}}
+.cardlab{margin:1.4em 0;padding:16px 18px;background:var(--paper);border:2px solid var(--ink);border-radius:var(--r);box-shadow:5px 5px 0 var(--ink)}
+.cl-scen{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px}
+.cl-scen select,.cl-sel{font:inherit;padding:.3em .4em;border:2px solid var(--ink);border-radius:8px;background:var(--paper);color:var(--ink);max-width:100%}
+.cl-sel{font-family:var(--f-mono);font-weight:700}
+.cl-line{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.cl-read{margin:.4em 0;color:var(--ink2);font-size:.92rem}
+.cl-grid{border-collapse:collapse;font-size:.85rem;background:var(--paper)}
+.cl-grid th,.cl-grid td{border:1px solid var(--line);padding:.35em .55em;text-align:center}
+.cl-grid thead th{background:var(--accent-soft);font-weight:700;vertical-align:bottom}
+.cl-grid tbody th{text-align:left;font-family:var(--f-mono);font-weight:600;white-space:nowrap}
+.cl-n{display:block;font:600 .72rem var(--f-body);color:var(--ink2)}.cl-n.bad{color:var(--ko)}
+.cl-cb{width:1.2em;height:1.2em;accent-color:var(--accent);cursor:pointer}
+.cl-res{margin:.8em 0 .2em}.cl-res.ok{color:var(--ok)}.cl-res.ko{color:var(--ko)}
+.cl-errs{margin:.2em 0;color:var(--ko);font-size:.92rem}

@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>ACSI R1.05</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="ACSI R1.05 : le modèle conceptuel des données (MCD), entités, associations, cardinalités et contraintes d'intégrité, avec exercices corrigés et un atelier de cardinalités.">
+<meta name="color-scheme" content="light dark">
+<link rel="manifest" href="../manifest.webmanifest">
+<meta name="theme-color" content="#1f4fd8">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="../assets/fonts/fonts.css">
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/sql.css">
+<script src="../assets/common.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* util.js */
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => [...(r || document).querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const Store = {
+  key: 'acsi-r105-v1',
+  data: { done: {}, lessons: {}, notes: {}, atelier: 'ne' },
+  load() { try { const s = localStorage.getItem(this.key); if (s) Object.assign(this.data, JSON.parse(s)); } catch (e) { /* indisponible */ } },
+  save() { try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) { /* indisponible */ } }
+};
+const note = (kind, title, html) => `<aside class="note ${kind}"><div class="note-h">${title}</div><div class="note-b">${html}</div></aside>`;
+const c = s => `<code>${esc(s)}</code>`;
+const tbl = (head, rows, cls) => `<div class="tbl-wrap"><table class="tbl ${cls || ''}"><thead><tr>${head.map(h => `<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+
+/* mcd.js */
+/* Dessin d'un schéma entités-associations (MCD) : une chaîne entité — association — entité…
+   Chaque élément : { e: 'Entité', id: [identifiant], a: [attributs] }, { r: 'Association', a: [attributs] }
+   ou une cardinalité (texte '1,1', ou { edit: true } pour un exercice). La cardinalité se place
+   toujours du côté de l'entité qu'elle concerne. */
+function entHTML(x) {
+  return `<div class="ent"><div class="ent-h">${esc(x.e)}</div><ul>${(x.id || []).map(a => `<li><u>${esc(a)}</u></li>`).join('')}${(x.a || []).map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>`;
+}
+function assoHTML(x) {
+  return `<div class="asso"><div class="asso-h">${esc(x.r)}</div>${x.a && x.a.length ? `<ul>${x.a.map(a => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}</div>`;
+}
+function cardHTML(x, k) {
+  if (x && x.edit) {
+    return `<div class="lnk"><span class="card edit" data-k="${k}"><select class="c-min" aria-label="Cardinalité minimale"><option value="">?</option><option>0</option><option>1</option></select>,<select class="c-max" aria-label="Cardinalité maximale"><option value="">?</option><option>1</option><option>n</option></select></span></div>`;
+  }
+  return `<div class="lnk"><span class="card">${esc(x || '')}</span></div>`;
+}
+function mcdFig(items, label) {
+  let k = 0;
+  const parts = items.map(x => (typeof x === 'string' || (x && x.edit)) ? cardHTML(x, k++) : x.e ? entHTML(x) : assoHTML(x));
+  return `<figure class="mcd${items.length > 5 ? ' long' : ''}" role="img" aria-label="${esc(label || 'Schéma entités-associations')}"><div class="mcd-row">${parts.join('')}</div></figure>`;
+}
+/* Occurrences : deux ensembles et les couples qui les relient */
+function occFig(o) {
+  const set = s => `<div class="occ-set"><div class="occ-t">${esc(s.t)}</div>${s.items.map(i => `<div class="occ-i">${esc(i)}</div>`).join('')}${s.more ? '<div class="occ-more">…</div>' : ''}</div>`;
+  return `<figure class="occ" aria-label="Occurrences reliées par l'association ${esc(o.r)}">${set(o.left)}<div class="occ-links"><div class="occ-t">${esc(o.r)}</div>${o.links.map(l => `<div class="occ-l">(${esc(l[0])}, ${esc(l[1])})${l[2] ? ` <span class="occ-attr">${esc(l[2])}</span>` : ''}</div>`).join('')}<div class="occ-cap">un ensemble de couples</div></div>${set(o.right)}</figure>`;
+}
+
+/* Entités et schémas qui reviennent dans tout le cours */
+const E_MUS = { e: 'Musicien', id: ['codeMusicien'], a: ['nomMusicien', 'prénomMusicien'] };
+const E_PAYS = { e: 'Pays', id: ['codePays'], a: ['nomPays'] };
+const E_OEU = { e: 'Oeuvre', id: ['codeOeuvre'], a: ['titreOeuvre'] };
+const E_DISQ = { e: 'Disque', id: ['codeDisque'], a: ['titreDisque'] };
+const E_ENR = { e: 'Enregistrement', id: ['codeEnregistrement'], a: ['titreEnregistrement'] };
+const R_NE = { r: 'Être né en' };
+const MCD_NE = () => mcdFig([E_MUS, '1,1', R_NE, '0,n', E_PAYS], 'Musicien (1,1) Être né en (0,n) Pays');
+
+/* Lecture d'une cardinalité, du point de vue d'une occurrence de l'entité */
+const CARD_TXT = {
+  '0,1': 'à au plus une occurrence (aucune ou une seule)',
+  '1,1': 'à exactement une occurrence (une et une seule)',
+  '0,n': 'à un nombre quelconque d\'occurrences (aucune ou plusieurs)',
+  '1,n': 'à au moins une occurrence (une ou plusieurs)'
+};
+
+/* Noms des entités pour écrire des phrases correctes : [singulier, genre, pluriel] */
+const NOUN = {
+  Musicien: ['musicien', 'm', 'musiciens'], Pays: ['pays', 'm', 'pays'], Oeuvre: ['œuvre', 'f', 'œuvres'], Client: ['client', 'm', 'clients'],
+  Commande: ['commande', 'f', 'commandes'], Etudiant: ['étudiant', 'm', 'étudiants'], Sport: ['sport', 'm', 'sports'], Disque: ['disque', 'm', 'disques'],
+  Enregistrement: ['enregistrement', 'm', 'enregistrements'], 'Salarié': ['salarié', 'm', 'salariés'], Service: ['service', 'm', 'services']
+};
+const nn = E => NOUN[E][0], fem = E => NOUN[E][1] === 'f', pl = E => NOUN[E][2];
+const un = E => (fem(E) ? 'une' : 'un'), ee = E => (fem(E) ? 'e' : ''), tout = E => (fem(E) ? 'toute' : 'tout'), aucun = E => (fem(E) ? 'aucune' : 'aucun');
+// « un musicien est relié à exactement un pays »
+function readCard(card, A, B) {
+  const fin = { '0,1': `à au plus ${un(B)} ${nn(B)}`, '1,1': `à exactement ${un(B)} ${nn(B)}`, '0,n': `à un nombre quelconque de ${pl(B)} (${aucun(B)} ou plusieurs)`, '1,n': `à au moins ${un(B)} ${nn(B)}` }[card];
+  return `${un(A)} ${nn(A)} est relié${ee(A)} ${fin}`;
+}
+
+/* content.js */
+/* Contenu du cours R1.05, partie ACSI : leçons, exercices, mémo */
+const LESSONS = [
+  {
+    id: 'l1', title: 'Vous avez dit ACSI ?', skill: "Situer la conception dans la vie d'une base de données",
+    lead: "ACSI : analyse et conception des systèmes d'information. Avant d'écrire la moindre table, on examine le réel et on décrit précisément ce dont la future application aura besoin.",
+    ex: ['l1-q1', 'l1-q2', 'l1-q3', 'l1-q4', 'l1-q5'],
+    body: () => `
+<h2>ACSI : définition</h2>
+${note('retenir', 'Définition', "<p><strong>ACSI</strong> : Analyse et Conception des Systèmes d'Information.</p><p>Examen du réel / définition de la future application / moyens pour traiter l'information.</p>")}
+<p>Quelqu'un a un besoin (« help ! »), des personnes l'analysent et conçoivent une solution, et cette solution devient une application utilisée par d'autres. <strong>Notre objectif ici : la conception de bases de données.</strong></p>
+<h2>La vie d'une base de données</h2>
+<ol class="flow">
+<li><strong>Besoin / cahier des charges</strong> : ce que veulent les futurs utilisateurs.</li>
+<li><strong>Analyse / conception</strong> : on décrit le système d'information. <em>C'est l'objet de ce chapitre.</em></li>
+<li><strong>Description du schéma</strong> de la base.</li>
+<li><strong>Implantation physique</strong> de la base.</li>
+<li><strong>Écriture de programmes</strong> qui utilisent la base.</li>
+</ol>
+<p>Le <strong>SGBD</strong> intervient à partir de l'étape 3 : description du schéma, implantation physique, écriture des programmes, puis <strong>exécution des transactions</strong> quand les utilisateurs se servent de la base (souvent plusieurs en même temps, sur un serveur).</p>
+<h2>Objectifs de la phase de conception</h2>
+<p>Deux objectifs principaux :</p>
+<ul>
+<li>réaliser une <strong>description précise</strong> du système d'information qui répond aux besoins et contraintes des utilisateurs finaux ;</li>
+<li>obtenir une <strong>estimation</strong> des charges, des coûts et du délai de réalisation.</li>
+</ul>
+<h2>La phase de conception</h2>
+<p>Description des données :</p>
+<ul>
+<li>utilisation de la notion de <strong>modèle</strong> : il permet d'appréhender la réalité, parfois (souvent) complexe, via un <strong>objet bien structuré</strong> ;</li>
+<li>on se situe au <strong>niveau conceptuel</strong> et <strong>organisationnel</strong>. C'est un niveau <strong>abstrait</strong> : on ne parle pas encore des moyens de réalisation (ni SGBD, ni tables, ni SQL) ;</li>
+<li>dans ce cours, nous allons nous intéresser à la <strong>modélisation des données</strong> (comprendre « d'une base de données »).</li>
+</ul>
+${note('convention', 'Le lien avec la suite', "<p>Les chapitres de SQL partaient d'un schéma relationnel déjà écrit. Ici, on remonte d'un cran : comment trouver ce schéma à partir d'une description en français ? Réponse : en passant par un modèle conceptuel.</p>")}`
+  },
+  {
+    id: 'l2', title: 'Le modèle conceptuel des données', skill: "Expliquer ce qu'est un MCD et comment il devient une base",
+    lead: "« Schématiser » l'organisation des données de la base : le MCD décrit les données de façon plus abstraite qu'un schéma relationnel, avec des entités et des associations.",
+    ex: ['l2-q1', 'l2-q2', 'l2-q3', 'l2-q4', 'l2-q5'],
+    body: () => `
+<h2>Rappel : le schéma relationnel</h2>
+<p>Un <strong>schéma relationnel</strong> décrit la structure d'une base de données relationnelle :</p>
+<p class="schema-line"><code>Etudiant (<u>numEtd</u>, nom, prénom, numVille)</code><br><code>Ville (<u>numVille</u>, codePostal, nomVille)</code><br><code>Etudiant.numVille référence Ville.numVille, unicité de Ville.(codePostal, nomVille)</code></p>
+<h2>Le MCD</h2>
+<p>Le <strong>modèle conceptuel de données (MCD)</strong> va décrire de façon <em>plus abstraite</em> la façon d'<em>organiser</em> un ensemble de données. Ce modèle pourra être (automatiquement) transformé en un schéma relationnel, puis en une base de données relationnelle.</p>
+<p>Pour cela, nous allons utiliser un modèle basé sur les notions d'<strong>entité</strong> et d'<strong>association</strong> entre entités. Pour cette raison, nous utiliserons parfois le terme de <strong>schéma entités-associations</strong> pour désigner un MCD.</p>
+${mcdFig([E_PAYS, '0,n', R_NE, '1,1', E_MUS, '0,n', { r: 'Composer' }, '1,n', E_OEU], 'Pays, Musicien et Oeuvre reliés par Être né en et Composer')}
+<p class="note-line">Les rectangles sont des <strong>entités</strong> (Pays, Musicien, Oeuvre) ; les rectangles arrondis sont des <strong>associations</strong> (Être né en, Composer). Les nombres sur les traits sont des cardinalités : on les voit en leçon 4.</p>
+<h2>Générer automatiquement la base de données ?</h2>
+<p>Comment ça marche ?</p>
+<ol class="flow">
+<li>On construit le MCD, grâce à un logiciel spécialisé (ou pas),</li>
+<li>on génère le schéma relationnel automatiquement (ou pas),</li>
+<li>puis on peut générer ou <strong>écrire</strong> le script de création (langage LDD du SGBD) de la base.</li>
+</ol>
+${note('attention', 'Attention', "<p><em>La base de données ainsi générée est… vide !</em> Le MCD décrit la structure, pas le contenu : il reste à la remplir.</p>")}
+<p>La transformation d'un modèle conceptuel de données en un schéma relationnel est un processus <strong>automatisable</strong> : il existe un algorithme de conversion, que nous décrirons bientôt, via l'utilisation de logiciels spécialisés.</p>
+<p>Pour nous, ce sera le logiciel <strong>Win'Design</strong> (version 17), accessible via VDI.</p>
+${tbl(['Niveau', 'Ce que l\'on décrit', 'Exemple'], [
+    ['MCD (conceptuel)', 'entités, associations, cardinalités', 'Musicien — Être né en — Pays'],
+    ['Schéma relationnel', 'tables, clés primaires, clés étrangères', c('Musicien (codeMusicien, …, codePays)')],
+    ['Script LDD (SGBD)', 'création des tables', c('CREATE TABLE Musicien (…)')]])}`
+  },
+  {
+    id: 'l3', title: 'Les entités', skill: 'Repérer les entités, leurs attributs et leur identifiant',
+    lead: "Regrouper les informations : une entité est un type d'objet du domaine, décrit par des attributs, et dont chaque occurrence est reconnue grâce à un identifiant.",
+    ex: ['l3-q1', 'l3-q2', 'l3-q3', 'l3-q4', 'l3-q5', 'l3-d1'],
+    body: () => `
+<h2>Définition</h2>
+<p>Une <strong>entité</strong> représente un « type d'objet » appartenant au domaine considéré et possédant des <strong>propriétés</strong> (ou <strong>attributs</strong>).</p>
+<ul>
+<li>Entités : Musicien, Orchestre, Disque, Œuvre…</li>
+<li>Attributs : nomMusicien, prénomMusicien…</li>
+</ul>
+<p><em>Jean-Sébastien Bach est une <strong>occurrence</strong> de l'entité Musicien.</em></p>
+<h2>L'identifiant</h2>
+${note('retenir', 'Identifiant', "<p>Chaque entité doit posséder un <strong>identifiant</strong>, composé d'un ou plusieurs attributs, qui permet d'identifier de façon <strong>unique</strong> chaque occurrence d'entité. Il correspond à la notion de <strong>clé</strong> d'une table. On le souligne.</p>")}
+<h2>Représentation graphique des entités</h2>
+<p>On peut dire que c'est « sans surprise » : le nom de l'entité en haut, puis ses attributs, l'identifiant souligné en premier.</p>
+<div class="mcd-pair">${mcdFig([E_MUS], 'Entité Musicien')}${mcdFig([E_PAYS], 'Entité Pays')}</div>
+${tbl(['Mot du MCD', 'Ce que c\'est', 'Exemple', 'Dans la base'], [
+    ['entité', 'un type d\'objet du domaine', 'Musicien', 'une table'],
+    ['attribut (propriété)', 'une information sur l\'entité', 'nomMusicien', 'une colonne'],
+    ['occurrence', 'un objet précis de ce type', 'Jean-Sébastien Bach', 'une ligne'],
+    ['identifiant', 'attribut(s) qui distinguent les occurrences', '<u>codeMusicien</u>', 'la clé primaire']])}
+${note('attention', 'Pourquoi un code ?', "<p>Comme pour les clés en SQL : deux musiciens peuvent porter le même nom, et même les mêmes nom et prénom. On ajoute donc un identifiant « artificiel » (codeMusicien) qui, lui, est unique.</p>")}`
+  },
+  {
+    id: 'l4', title: 'Les associations et les cardinalités', skill: 'Lire et choisir les cardinalités d\'une association',
+    lead: "Relier les « groupes » : une association crée des liens entre occurrences d'entités. Sur chaque rôle, la cardinalité (min, max) dit combien de liens une occurrence peut ou doit avoir.",
+    ex: ['l4-q1', 'l4-q2', 'l4-q3', 'l4-q4', 'l4-q5', 'l4-q6', 'l4-k1', 'l4-k2', 'l4-k3', 'l4-k4', 'l4-dr', 'l4-d1', 'l4-d2', 'l4-d3'],
+    body: () => `
+<h2>Les associations</h2>
+<p>Une <strong>association</strong> permet de créer des <strong>liens</strong> (ayant une signification précise) entre les occurrences d'entités.</p>
+<p>Le plus souvent, une association relie des occurrences de <strong>deux entités distinctes</strong> (mais ce n'est pas une obligation, nous le verrons).</p>
+<p>En pratique, on utilise généralement <strong>une forme verbale</strong> pour désigner une association : acheter, fournir, être né en, composer, etc.</p>
+<h2>Représentation graphique</h2>
+<p>On <strong>associe</strong> à chaque musicien un pays qui représente sa nationalité :</p>
+${mcdFig([E_MUS, '', R_NE, '', E_PAYS], 'Musicien Être né en Pays')}
+<p>Cela correspond « intuitivement » à une situation du type :</p>
+${occFig({ r: 'Être né en', left: { t: 'MUSICIEN', items: ['125 Bach Jean-Sébastien', '82 Satie Erik', '34 Wagner Richard', '17 L\'éponge Bob'], more: true }, right: { t: 'PAYS', items: ['9 Allemagne', '12 France', '4 Slovénie'], more: true }, links: [['125 Bach', '9 Allemagne'], ['82 Satie', '12 France'], ['34 Wagner', '9 Allemagne']] })}
+<h2>Rôles et cardinalités</h2>
+${MCD_NE()}
+<p>L'association relie les entités, et chaque « trait » est un <strong>rôle</strong> de l'association. À chacun de ces rôles, on associe une information, la <strong>cardinalité</strong>, qui se présente sous la forme de deux valeurs : <strong>min, max</strong>.</p>
+<ul>
+<li><strong>min</strong> : permet de dire si une occurrence peut ne pas avoir de lien (<strong>0</strong>) ou doit avoir obligatoirement au moins un lien (<strong>1</strong>) ;</li>
+<li><strong>max</strong> : permet de dire si une occurrence ne peut pas avoir plus d'un lien (<strong>1</strong>), ou si elle peut en avoir un nombre quelconque (<strong>n</strong>).</li>
+</ul>
+<div class="two-tbl">
+${note('retenir', 'Côté Musicien : 1,1', '<p><em>Tout musicien est né dans un et un seul pays.</em></p>')}
+${note('retenir', 'Côté Pays : 0,n', '<p><em>Un pays peut avoir vu naître un nombre quelconque de musiciens (aucun ou plusieurs).</em></p>')}
+</div>
+${tbl(['Cardinalité', 'Une occurrence de l\'entité est reliée…', 'Lecture'], Object.keys(CARD_TXT).map(k => [`<strong>${k}</strong>`, esc(CARD_TXT[k]), { '0,1': 'facultatif, unique', '1,1': 'obligatoire, unique', '0,n': 'facultatif, multiple', '1,n': 'obligatoire, multiple' }[k]]))}
+${note('convention', 'Comment lire', "<p>La cardinalité écrite à côté d'une entité se lit <strong>depuis cette entité</strong> : « un musicien est né dans <strong>1,1</strong> pays », « un pays a vu naître <strong>0,n</strong> musiciens ». Sur la diapositive des occurrences, Bob L'éponge n'est relié à aucun pays : avec 1,1 côté Musicien, ce serait interdit. Essaie dans l'atelier ci-dessous.</p>")}
+${atelierW()}
+<h2>Attention, attention, attention…</h2>
+${note('attention', 'Il n\'y a jamais de clé étrangère dans un MCD (schéma entités-associations) !!!', "<p><em>L'utilisation de clés étrangères n'est qu'un « moyen » de représenter des associations dans une base de données…</em> L'entité Musicien n'a donc <strong>pas</strong> d'attribut codePays : c'est l'association « Être né en » qui fait le lien.</p>")}
+${note('attention', 'Une association est un ensemble de couples', "<p>Une association (binaire) est un <strong>ensemble</strong> de couples. Ainsi, un même couple <strong>ne peut pas apparaître deux fois</strong> ! (Ceci est un « piège » classique, que nous ne tarderons pas à rencontrer… espérons que nous saurons le détecter.)</p>")}
+<h2>Cardinalités : un exemple plus complet</h2>
+${mcdFig([E_PAYS, '0,n', R_NE, '1,1', E_MUS, '0,n', { r: 'Composer' }, '1,n', E_OEU], 'Pays (0,n) Être né en (1,1) Musicien (0,n) Composer (1,n) Oeuvre')}
+<ul>
+<li>un musicien peut avoir composé un nombre quelconque d'œuvres, y compris aucune (c'est peut-être un interprète) : <strong>0,n</strong> ;</li>
+<li>toute œuvre a été composée par au moins un musicien, éventuellement plusieurs : <strong>1,n</strong>.</li>
+</ul>
+<h2>Interlude n° 1</h2>
+<p>Proposez un schéma entités-associations pour chacune des situations suivantes (exercices de conception en bas de page) :</p>
+<ol>
+<li>Les étudiants (nom, prénom) de l'IUT de Bordeaux sont inscrits dans l'un des départements (spécialité, <em>p. ex. Informatique</em>) de cet IUT.</li>
+<li>Les IUT français (nom, adresse) sont composés d'un certain nombre de départements (spécialité), dans lesquels sont inscrits des étudiants.</li>
+<li>Pour chaque étudiant ou étudiante de la situation précédente, on désire connaître sa ville de naissance, son adresse actuelle, ainsi que les sports qu'il ou elle pratique.</li>
+</ol>`
+  },
+  {
+    id: 'l5', title: 'Associations et attributs', skill: 'Placer chaque attribut au bon endroit du schéma',
+    lead: "Comme les entités, les associations peuvent posséder des attributs. Et dans un schéma entités-associations, chaque attribut n'est présent qu'en un seul endroit.",
+    ex: ['l5-q1', 'l5-q2', 'l5-q3', 'l5-q4', 'l5-k1'],
+    body: () => `
+<h2>Associations et attributs…</h2>
+<p>Comme les entités, les associations peuvent posséder des <strong>attributs</strong> :</p>
+${mcdFig([E_DISQ, '1,n', { r: 'Contenir', a: ['numéroPlage'] }, '0,n', E_ENR], 'Disque (1,n) Contenir, avec numéroPlage, (0,n) Enregistrement')}
+<p>Cela correspond « intuitivement » à une situation du type :</p>
+${occFig({ r: 'Contenir', left: { t: 'DISQUE', items: ['81 Mon disque'], more: true }, right: { t: 'ENREGISTREMENT', items: ['9 Introduction', '12 Conclusion'], more: true }, links: [['81 Mon disque', '9 Introduction', 'plage 1'], ['81 Mon disque', '12 Conclusion', 'plage 2']] })}
+<p>Le numéro de plage n'appartient ni au disque seul (un disque a plusieurs plages), ni à l'enregistrement seul (un même enregistrement peut être sur plusieurs disques, à des plages différentes) : il dépend <strong>du couple</strong> (disque, enregistrement). Il se place donc sur l'association.</p>
+<h2>MCD : très important (rappel ?)…</h2>
+${note('retenir', 'Un attribut, un seul endroit', "<p>Dans un schéma entités-associations, chaque attribut n'est présent <strong>qu'en un seul endroit</strong> du schéma !</p>")}
+<p>Par exemple, l'entité <em>Musicien</em> n'a pas d'attribut <em>codePays</em>. C'est l'association « Être né en » qui réalise le lien entre un musicien et son pays de naissance…</p>
+<p>C'est ensuite, lors de la traduction du schéma entités-associations en schéma relationnel, que ce lien va « devenir » une <strong>clé étrangère</strong> : la <strong>table</strong> Musicien possédera un attribut <em>codePays</em>…</p>
+<div class="two-tbl">
+<div>${MCD_NE()}</div>
+<div><p><strong>Plus tard</strong>, le schéma relationnel :</p><p class="schema-line"><code>Pays (<u>codePays</u>, nomPays)</code><br><code>Musicien (<u>codeMusicien</u>, nomMusicien, prénomMusicien, codePays)</code><br><code>Musicien.codePays référence Pays.codePays</code></p></div>
+</div>
+${note('attention', 'Jamais de clé étrangère dans un schéma entités-associations !!!', "<p>Si tu écris codePays dans l'entité Musicien, tu mélanges deux niveaux : le MCD (abstrait) et le schéma relationnel (une façon de le réaliser).</p>")}
+<h2>Le piège du couple en double</h2>
+<p>Une association est un ensemble de couples : un même couple n'y figure qu'une fois. Si un abonné emprunte le même livre deux fois, une association « Emprunter » entre Abonné et Livre ne peut pas garder les deux emprunts (le couple (abonné, livre) apparaîtrait deux fois). On en reparle dans l'interlude n° 2.</p>`
+  },
+  {
+    id: 'l6', title: "Les contraintes d'intégrité", skill: "Écrire la liste des contraintes qui accompagne un MCD",
+    lead: "Éviter les valeurs d'attributs incohérentes : certaines contraintes se lisent sur le schéma, les autres doivent être écrites explicitement dans une liste qui accompagne toujours le MCD.",
+    ex: ['l6-q1', 'l6-q2', 'l6-q3', 'l6-q4', 'l6-q5', 'l6-q6', 'l6-k1', 'l6-d1', 'l6-d2'],
+    body: () => `
+<h2>Les contraintes déjà dans le schéma</h2>
+<p>Tout schéma entités-associations doit comporter un ensemble de <strong>contraintes d'intégrité</strong>. Certaines sont déjà indiquées dans le schéma lui-même :</p>
+<ul>
+<li><strong>identifiant</strong> : contrainte d'unicité et attribut obligatoire ;</li>
+<li><strong>cardinalité min = 1</strong> : chaque occurrence doit posséder au moins un lien ;</li>
+<li><strong>cardinalité max = 1</strong> : aucune occurrence ne peut posséder deux liens.</li>
+</ul>
+<p class="note-line">(Notons que la cardinalité 0,n n'induit aucune contrainte.)</p>
+<h2>Les contraintes à écrire explicitement</h2>
+<p>D'autres contraintes existent, et doivent être décrites <strong>explicitement</strong>, sous forme d'une liste de contraintes :</p>
+${tbl(['Contrainte', 'Ce qu\'elle impose', 'Exemple'], [
+    ['<strong>attribut obligatoire</strong>', 'la valeur NULL est interdite', '<em>Musicien.nomMusicien est obligatoire.</em><br>(On dit souvent « tous les attributs sont obligatoires sauf… »)'],
+    ['<strong>contrainte d\'unicité</strong>', 'sur un attribut non identifiant', '<em>Unicité de Pays.nomPays</em>'],
+    ['<strong>contrainte inter-attributs</strong>', 'condition sur plusieurs attributs (p. ex. comparaison)', '<em>Musicien.dateNaissance &lt; Musicien.dateDécès</em>'],
+    ['<strong>contrainte contextuelle</strong>', 'les « inclassables »', '<em>Pour un disque donné, les numéros de plage forment un intervalle débutant à 1</em>']])}
+${note('attention', 'À ne pas oublier', '<p>Cette liste doit <strong>systématiquement accompagner</strong> le schéma entités-associations !</p>')}
+<h2>Un exemple complet</h2>
+${mcdFig([E_DISQ, '1,n', { r: 'Contenir', a: ['numéroPlage'] }, '0,n', E_ENR], 'Disque Contenir Enregistrement')}
+<p><strong>Contraintes d'intégrité :</strong></p>
+<ul class="refs">
+<li>Tous les attributs sont obligatoires.</li>
+<li>Unicité de Disque.titreDisque <span class="muted">(si l'on décide que deux disques n'ont jamais le même titre)</span>.</li>
+<li>Contenir.numéroPlage &gt; 0.</li>
+<li>Pour un disque donné, les numéros de plage forment un intervalle débutant à 1 <span class="muted">(contextuelle)</span>.</li>
+</ul>
+<h2>Interlude n° 2</h2>
+<p>Proposez un schéma entités-associations pour chacune des situations suivantes (exercices de conception en bas de page) :</p>
+<ol>
+<li>Les étudiants (nom, prénom, groupe) peuvent pratiquer un sport (discipline) dans le cadre de l'AOP sport. En fin de semestre, ils obtiendront une note pour cette AOP.</li>
+<li>Les abonnés (nom, prénom) peuvent emprunter des livres (titre, genre) à la bibliothèque. On souhaite connaître les dates d'emprunt et de retour de chaque livre emprunté (actuellement et par le passé). Attention, un abonné peut emprunter un même livre à plusieurs reprises…</li>
+</ol>`
+  }
+];
+
+/* ================================================================== EXERCICES */
+const Q = (q, choices, answer, why, o) => Object.assign({ type: 'qcm', q, choices, answer, why }, o || {});
+/* exercice de cardinalités : items du schéma avec { edit: true }, réponses attendues dans l'ordre des rôles */
+const K = (title, prompt, items, answer, why) => ({ type: 'card', title, prompt, items, answer, why });
+/* exercice de conception : on propose, puis on compare avec une correction */
+const D = (title, prompt, corr) => ({ type: 'design', title, prompt, corr });
+const ED = { edit: true };
+const EX = {
+  /* --- Leçon 1 --- */
+  'l1-q1': Q('Que signifie ACSI ?', ["Analyse et conception des systèmes d'information", "Algorithmique et calcul des systèmes informatiques", "Administration et contrôle des serveurs d'information", "Architecture client-serveur intégrée"], 0, "ACSI : Analyse et Conception des Systèmes d'Information. Examen du réel, définition de la future application, moyens pour traiter l'information."),
+  'l1-q2': Q("Dans la vie d'une base de données, qu'est-ce qui vient juste après le besoin (cahier des charges) ?", ['L\'analyse et la conception', "L'implantation physique", "L'écriture de programmes", "L'exécution de transactions"], 0, "Besoin, puis analyse / conception, puis description du schéma, implantation physique et écriture de programmes."),
+  'l1-q3': Q('À quelle étape le SGBD n\'intervient-il pas ?', ['Le recueil du besoin (cahier des charges)', 'La description du schéma', "L'implantation physique", 'L\'exécution de transactions'], 0, "Le SGBD sert à décrire le schéma, à l'implanter, aux programmes et à exécuter les transactions. Le besoin, lui, se recueille auprès des futurs utilisateurs."),
+  'l1-q4': Q('Quels sont les deux objectifs principaux de la phase de conception ?', ["Décrire précisément le système d'information et estimer charges, coûts et délai", 'Écrire les requêtes SQL et remplir la base', 'Choisir le serveur et installer le SGBD', 'Former les utilisateurs et rédiger la documentation'], 0, "Une description précise qui répond aux besoins et contraintes des utilisateurs finaux, et une estimation des charges, des coûts et du délai de réalisation."),
+  'l1-q5': Q('Au niveau conceptuel, de quoi ne parle-t-on pas encore ?', ['Des moyens de réalisation (SGBD, tables, SQL)', 'Des données à gérer', 'Des liens entre les données', 'Des besoins des utilisateurs'], 0, "C'est un niveau abstrait : on décrit les données et leur organisation, sans parler encore des moyens de réalisation."),
+  /* --- Leçon 2 --- */
+  'l2-q1': Q('Que décrit un MCD ?', ["De façon abstraite, l'organisation d'un ensemble de données", 'Les tables et leurs clés étrangères', 'Le script de création de la base', 'Le contenu des tables'], 0, "Le modèle conceptuel de données décrit de façon plus abstraite qu'un schéma relationnel la façon d'organiser les données."),
+  'l2-q2': Q('Quel autre nom donne-t-on à un MCD ?', ['Un schéma entités-associations', 'Un schéma relationnel', 'Un script LDD', 'Une vue'], 0, "Le MCD repose sur les notions d'entité et d'association : on parle aussi de schéma entités-associations."),
+  'l2-q3': Q('Dans quel ordre passe-t-on du MCD à la base ?', ['MCD, puis schéma relationnel, puis script de création (LDD)', 'Script LDD, puis MCD, puis schéma relationnel', 'Schéma relationnel, puis MCD, puis script LDD', 'MCD, puis script LDD, puis schéma relationnel'], 0, "On construit le MCD, on génère le schéma relationnel, puis on génère ou écrit le script de création dans le langage LDD du SGBD."),
+  'l2-q4': Q('Que contient la base de données générée à partir du MCD ?', ['Rien : elle est vide', 'Toutes les données décrites dans le cahier des charges', 'Des données d\'exemple', 'Les occurrences dessinées sur le schéma'], 0, "Le MCD décrit la structure. La base ainsi générée est… vide !"),
+  'l2-q5': Q('Quel logiciel utilise-t-on en TD pour construire les MCD ?', ["Win'Design (version 17), via VDI", 'SQL Server Management Studio', 'Excel', 'Un éditeur de texte'], 0, "Win'Design, version éducation, accessible via VDI. Il sait générer le schéma relationnel à partir du MCD."),
+  /* --- Leçon 3 --- */
+  'l3-q1': Q('Jean-Sébastien Bach, pour l\'entité Musicien, est…', ['une occurrence', 'un attribut', 'un identifiant', 'une association'], 0, "Une entité est un type d'objet ; Bach est un objet précis de ce type : une occurrence."),
+  'l3-q2': Q('À quoi sert l\'identifiant d\'une entité ?', ["À distinguer de façon unique chaque occurrence", "À relier l'entité à une autre", 'À donner le nom de l\'entité', 'À compter les occurrences'], 0, "Il identifie de façon unique chaque occurrence, comme la clé d'une table. On le souligne."),
+  'l3-q3': Q('Dans la liste Musicien, nomMusicien, Orchestre, prénomMusicien, quelles sont les entités ?', ['Musicien et Orchestre', 'nomMusicien et prénomMusicien', 'Musicien seulement', 'Toutes'], 0, "Musicien et Orchestre sont des types d'objets ; nomMusicien et prénomMusicien sont des propriétés (attributs) d'un musicien."),
+  'l3-q4': Q('Pourquoi ne pas prendre nomMusicien comme identifiant ?', ['Deux musiciens peuvent avoir le même nom', 'Un nom est trop long', 'Un nom peut être vide', 'Parce qu\'il n\'est pas souligné'], 0, "L'identifiant doit être unique pour chaque occurrence. Comme pour les clés en SQL, on ajoute un code artificiel : codeMusicien."),
+  'l3-q5': Q('Un identifiant peut-il être composé de plusieurs attributs ?', ['Oui, il est composé d\'un ou plusieurs attributs', 'Non, toujours un seul', 'Seulement pour les associations', 'Seulement s\'ils sont numériques'], 0, "Il est composé d'un ou plusieurs attributs, du moment qu'ils identifient chaque occurrence de façon unique."),
+  'l3-d1': D('Une entité Livre', "Une bibliothèque veut gérer ses livres : titre, année de parution et nombre de pages. Dessine (sur papier) l'entité Livre : nom, identifiant, attributs.",
+    `${mcdFig([{ e: 'Livre', id: ['codeLivre'], a: ['titre', 'annéeParution', 'nbPages'] }], 'Entité Livre')}<span class="hint-in">Le titre ne suffit pas comme identifiant (deux livres peuvent avoir le même titre) : on ajoute codeLivre, souligné.</span>`),
+  /* --- Leçon 4 --- */
+  'l4-q1': Q('Comment nomme-t-on en général une association ?', ['Par une forme verbale (acheter, composer, être né en…)', 'Par un nom de table au pluriel', 'Par le nom de l\'identifiant', 'Par un numéro'], 0, "Une association exprime un lien entre occurrences : on utilise une forme verbale."),
+  'l4-q2': Q('Musicien (1,1) — Être né en — (0,n) Pays. Que signifie 1,1 côté Musicien ?', ['Tout musicien est né dans un et un seul pays', 'Un pays a vu naître exactement un musicien', 'Un musicien peut être né dans plusieurs pays', 'Un pays doit avoir au moins un musicien'], 0, "La cardinalité se lit depuis l'entité à côté de laquelle elle est écrite : un musicien est relié à 1 pays au minimum et 1 au maximum."),
+  'l4-q3': Q('Toujours dans ce schéma, que signifie 0,n côté Pays ?', ['Un pays peut avoir vu naître un nombre quelconque de musiciens (aucun ou plusieurs)', 'Un pays a vu naître au moins un musicien', 'Un musicien est né dans 0 ou n pays', 'Un pays a vu naître au plus un musicien'], 0, "min = 0 : un pays peut n'avoir aucun musicien ; max = n : il peut en avoir plusieurs."),
+  'l4-q4': Q("Le min d'une cardinalité vaut 1. Qu'est-ce que cela impose ?", ['Chaque occurrence doit avoir obligatoirement au moins un lien', 'Chaque occurrence a au plus un lien', 'Aucune occurrence n\'a de lien', 'Rien'], 0, "min dit si une occurrence peut ne pas avoir de lien (0) ou doit en avoir au moins un (1)."),
+  'l4-q5': Q("Peut-on mettre un attribut codePays dans l'entité Musicien pour représenter Être né en ?", ['Non : il n\'y a jamais de clé étrangère dans un MCD', 'Oui, c\'est obligatoire', 'Oui, si la cardinalité est 1,1', 'Seulement dans Win\'Design'], 0, "Les clés étrangères ne sont qu'un moyen de représenter les associations dans une base. Dans le MCD, c'est l'association qui fait le lien."),
+  'l4-q6': Q('Dans une association binaire, le même couple (musicien, œuvre) peut-il apparaître deux fois ?', ['Non : une association est un ensemble de couples', 'Oui, autant de fois qu\'on veut', 'Oui, si la cardinalité max est n', 'Seulement si l\'association a un attribut'], 0, "C'est un ensemble : chaque couple y est au plus une fois. C'est le piège classique de l'interlude n° 2 (emprunter plusieurs fois le même livre)."),
+  'l4-k1': K('Clients et commandes', "Un client peut n'avoir encore rien commandé, ou avoir passé plusieurs commandes. Toute commande est passée par un et un seul client.",
+    [{ e: 'Client', id: ['numClient'], a: ['nomClient'] }, ED, { r: 'Passer' }, ED, { e: 'Commande', id: ['numCommande'], a: ['dateCommande'] }], ['0,n', '1,1'],
+    "Côté Client : aucune ou plusieurs commandes, 0,n. Côté Commande : un et un seul client, 1,1."),
+  'l4-k2': K('Composer', "Un musicien peut avoir composé un nombre quelconque d'œuvres, éventuellement aucune. Toute œuvre a été composée par au moins un musicien, parfois plusieurs.",
+    [E_MUS, ED, { r: 'Composer' }, ED, E_OEU], ['0,n', '1,n'],
+    "C'est l'exemple complet du cours : 0,n côté Musicien, 1,n côté Oeuvre."),
+  'l4-k3': K('Salariés et services', "Chaque salarié travaille dans exactement un service. Un service compte au moins un salarié.",
+    [{ e: 'Salarié', id: ['matricule'], a: ['nom'] }, ED, { r: 'Travailler dans' }, ED, { e: 'Service', id: ['codeService'], a: ['libellé'] }], ['1,1', '1,n'],
+    "Un salarié : un et un seul service (1,1). Un service : au moins un salarié, éventuellement plusieurs (1,n)."),
+  'l4-k4': K('Personnes et voitures', "Une personne possède au plus une voiture (certaines n'en ont pas). Chaque voiture a exactement un propriétaire.",
+    [{ e: 'Personne', id: ['numPersonne'], a: ['nom'] }, ED, { r: 'Posséder' }, ED, { e: 'Voiture', id: ['immatriculation'], a: ['modèle'] }], ['0,1', '1,1'],
+    "Personne : aucune ou une voiture, 0,1. Voiture : un et un seul propriétaire, 1,1."),
+  'l4-dr': { type: 'drill', kind: 'card', need: 5, title: 'Lire une cardinalité (tirée au hasard) : 5 bonnes réponses de suite' },
+  'l4-d1': D('Interlude 1.1 : étudiants et départements', "Les étudiants (nom, prénom) de l'IUT de Bordeaux sont inscrits dans l'un des départements (spécialité, p. ex. Informatique) de cet IUT. Dessine le schéma entités-associations (sur papier ou dans Win'Design), puis compare.",
+    `${mcdFig([{ e: 'Etudiant', id: ['numEtudiant'], a: ['nom', 'prénom'] }, '1,1', { r: 'Être inscrit dans' }, '0,n', { e: 'Département', id: ['numDépartement'], a: ['spécialité'] }], 'Etudiant (1,1) Être inscrit dans (0,n) Département')}
+Contraintes : tous les attributs sont obligatoires ; unicité de Département.spécialité.<br><span class="hint-in">« Inscrits dans l'un des départements » : un et un seul, 1,1. Un département peut accueillir plusieurs étudiants ; 0,n permet de créer un département avant d'y inscrire quelqu'un (1,n est aussi défendable). Pas de clé étrangère : l'étudiant n'a pas d'attribut numDépartement.</span>`),
+  'l4-d2': D('Interlude 1.2 : IUT, départements et étudiants', "Les IUT français (nom, adresse) sont composés d'un certain nombre de départements (spécialité), dans lesquels sont inscrits des étudiants.",
+    `${mcdFig([{ e: 'IUT', id: ['numIUT'], a: ['nomIUT', 'adresse'] }, '1,n', { r: 'Être composé de' }, '1,1', { e: 'Département', id: ['numDépartement'], a: ['spécialité'] }, '0,n', { r: 'Être inscrit dans' }, '1,1', { e: 'Etudiant', id: ['numEtudiant'], a: ['nom', 'prénom'] }], 'IUT, Département, Etudiant')}
+Contraintes : tous les attributs sont obligatoires ; unicité de IUT.nomIUT ; deux départements d'un même IUT n'ont pas la même spécialité (contrainte contextuelle).<br><span class="hint-in">Un département appartient à un et un seul IUT (1,1) ; un IUT a au moins un département (1,n). La spécialité n'est plus unique dans toute la base (il y a un département Informatique dans plusieurs IUT) : l'unicité ne vaut qu'à l'intérieur d'un IUT.</span>`),
+  'l4-d3': D('Interlude 1.3 : naissance, adresse et sports', "Pour chaque étudiant ou étudiante de la situation précédente, on désire connaître sa ville de naissance, son adresse actuelle, ainsi que les sports qu'il ou elle pratique.",
+    `${mcdFig([{ e: 'Ville', id: ['numVille'], a: ['nomVille'] }, '0,n', { r: 'Être né à' }, '1,1', { e: 'Etudiant', id: ['numEtudiant'], a: ['nom', 'prénom', 'adresse'] }, '0,n', { r: 'Pratiquer' }, '0,n', { e: 'Sport', id: ['numSport'], a: ['nomSport'] }], 'Ville, Etudiant, Sport')}
+(sans oublier l'association Être inscrit dans vers Département, de la situation 2)<br>Contraintes : tous les attributs sont obligatoires ; unicité de Sport.nomSport.<br><span class="hint-in">La ville de naissance est une entité (plusieurs étudiants naissent dans la même ville). L'adresse actuelle est propre à chaque étudiant : un attribut suffit ici (on pourrait aussi relier l'étudiant à une Ville de résidence, comme dans le TD de SQL). Un étudiant peut pratiquer plusieurs sports, ou aucun : 0,n des deux côtés.</span>`),
+  /* --- Leçon 5 --- */
+  'l5-q1': Q("Dans Disque — Contenir — Enregistrement, où placer numéroPlage ?", ['Sur l\'association Contenir', 'Dans l\'entité Disque', "Dans l'entité Enregistrement", 'Dans les deux entités'], 0, "Le numéro de plage dépend du couple (disque, enregistrement) : un disque a plusieurs plages, et un enregistrement peut figurer sur plusieurs disques à des plages différentes."),
+  'l5-q2': Q('Combien de fois un attribut peut-il apparaître dans un schéma entités-associations ?', ['Une seule fois', 'Autant de fois que nécessaire', 'Deux fois : dans l\'entité et dans l\'association', 'Une fois par entité'], 0, "Chaque attribut n'est présent qu'en un seul endroit du schéma."),
+  'l5-q3': Q("Quand l'attribut codePays apparaîtra-t-il dans Musicien ?", ['Lors de la traduction en schéma relationnel (clé étrangère de la table Musicien)', 'Dès le MCD', 'Jamais', 'Seulement si un musicien a plusieurs pays'], 0, "Dans le MCD, c'est l'association « Être né en » qui fait le lien. C'est la traduction en schéma relationnel qui en fait une clé étrangère de la table Musicien."),
+  'l5-q4': Q("Un abonné peut emprunter le même livre plusieurs fois. Pourquoi une simple association Emprunter (dateEmprunt) entre Abonné et Livre ne convient-elle pas ?", ['Le couple (abonné, livre) devrait apparaître plusieurs fois, ce qui est interdit', 'Une association ne peut pas avoir d\'attribut', 'Il faudrait une clé étrangère', 'La cardinalité serait 1,1'], 0, "Une association est un ensemble de couples : un même couple n'y figure qu'une fois. Il faut une autre modélisation (une entité Emprunt, par exemple)."),
+  'l5-k1': K('Disques et enregistrements', "Un disque contient au moins un enregistrement. Un enregistrement peut ne figurer sur aucun disque, ou sur plusieurs.",
+    [E_DISQ, ED, { r: 'Contenir', a: ['numéroPlage'] }, ED, E_ENR], ['1,n', '0,n'],
+    "C'est le schéma du cours : 1,n côté Disque, 0,n côté Enregistrement."),
+  /* --- Leçon 6 --- */
+  'l6-q1': Q('« Unicité de Pays.nomPays » est une contrainte…', ["d'unicité", 'inter-attributs', 'contextuelle', 'd\'attribut obligatoire'], 0, "Unicité sur un attribut qui n'est pas l'identifiant."),
+  'l6-q2': Q('« Musicien.dateNaissance < Musicien.dateDécès » est une contrainte…', ['inter-attributs', "d'unicité", 'd\'attribut obligatoire', 'de cardinalité'], 0, "Une condition qui porte sur plusieurs attributs (ici une comparaison)."),
+  'l6-q3': Q('« Pour un disque donné, les numéros de plage forment un intervalle débutant à 1 » est une contrainte…', ['contextuelle', "d'unicité", 'inter-attributs', 'd\'attribut obligatoire'], 0, "Elle ne rentre dans aucune autre catégorie : c'est une « inclassable », une contrainte contextuelle."),
+  'l6-q4': Q('Quelle cardinalité n\'induit aucune contrainte ?', ['0,n', '1,1', '1,n', '0,1'], 0, "min = 0 n'oblige à rien, max = n ne limite rien."),
+  'l6-q5': Q("Quelles contraintes sont déjà indiquées par le schéma lui-même ?", ['Identifiant, cardinalité min = 1 et cardinalité max = 1', 'Unicité et inter-attributs', 'Seulement les contraintes contextuelles', 'Aucune'], 0, "L'identifiant (unicité et attribut obligatoire), min = 1 (au moins un lien) et max = 1 (pas deux liens) se lisent sur le schéma."),
+  'l6-q6': Q('Que doit toujours accompagner un schéma entités-associations ?', ["La liste des contraintes d'intégrité", 'Le script SQL de création', 'Le contenu des tables', 'La liste des clés étrangères'], 0, "Cette liste doit systématiquement accompagner le schéma entités-associations !"),
+  'l6-k1': K('L\'AOP sport', "Un étudiant peut pratiquer un sport dans le cadre de l'AOP sport (un seul, ou aucun). Un sport peut être pratiqué par un nombre quelconque d'étudiants.",
+    [{ e: 'Etudiant', id: ['numEtudiant'], a: ['nom', 'prénom', 'groupe'] }, ED, { r: 'Pratiquer', a: ['note'] }, ED, { e: 'Sport', id: ['numSport'], a: ['discipline'] }], ['0,1', '0,n'],
+    "« Peuvent pratiquer un sport » : aucun ou un seul, 0,1. Un sport : aucun ou plusieurs étudiants, 0,n. La note dépend du couple (étudiant, sport) : elle est sur l'association."),
+  'l6-d1': D('Interlude 2.1 : l\'AOP sport', "Les étudiants (nom, prénom, groupe) peuvent pratiquer un sport (discipline) dans le cadre de l'AOP sport. En fin de semestre, ils obtiendront une note pour cette AOP. Schéma et liste des contraintes.",
+    `${mcdFig([{ e: 'Etudiant', id: ['numEtudiant'], a: ['nom', 'prénom', 'groupe'] }, '0,1', { r: 'Pratiquer', a: ['note'] }, '0,n', { e: 'Sport', id: ['numSport'], a: ['discipline'] }], 'Etudiant (0,1) Pratiquer, avec note, (0,n) Sport')}
+Contraintes : tous les attributs sont obligatoires sauf Pratiquer.note (connue seulement en fin de semestre) ; unicité de Sport.discipline ; 0 ≤ Pratiquer.note ≤ 20.<br><span class="hint-in">La note n'est ni celle de l'étudiant seul (il n'en a pas s'il ne pratique pas), ni celle du sport : elle va sur l'association. Pas d'attribut numSport dans Etudiant (jamais de clé étrangère dans un MCD).</span>`),
+  'l6-d2': D('Interlude 2.2 : la bibliothèque', "Les abonnés (nom, prénom) peuvent emprunter des livres (titre, genre). On souhaite connaître les dates d'emprunt et de retour de chaque livre emprunté (actuellement et par le passé). Attention, un abonné peut emprunter un même livre à plusieurs reprises…",
+    `${mcdFig([{ e: 'Abonné', id: ['numAbonné'], a: ['nom', 'prénom'] }, '0,n', { r: 'Effectuer' }, '1,1', { e: 'Emprunt', id: ['numEmprunt'], a: ['dateEmprunt', 'dateRetour'] }, '1,1', { r: 'Concerner' }, '0,n', { e: 'Livre', id: ['numLivre'], a: ['titre', 'genre'] }], 'Abonné, Emprunt, Livre')}
+Contraintes : tous les attributs sont obligatoires sauf Emprunt.dateRetour (livre pas encore rendu) ; Emprunt.dateEmprunt ≤ Emprunt.dateRetour (inter-attributs) ; un livre ne peut pas faire l'objet de deux emprunts en cours en même temps (contextuelle).<br><span class="hint-in">Le piège : une association Emprunter (dateEmprunt, dateRetour) entre Abonné et Livre ne peut pas garder deux emprunts du même livre par le même abonné, car le couple (abonné, livre) apparaîtrait deux fois. Chaque emprunt devient donc une occurrence d'une entité Emprunt. (Le genre pourrait aussi devenir une entité Genre.)</span>`)
+};
+const EX_IDS = Object.keys(EX);
+
+/* ================================================================== MÉMO */
+const MEMO = {
+  vocab: [
+    ['ACSI', "analyse et conception des systèmes d'information"],
+    ['MCD', 'modèle conceptuel des données, ou schéma entités-associations'],
+    ['entité', "un type d'objet du domaine (Musicien), qui deviendra une table"],
+    ['attribut (propriété)', 'une information sur une entité ou une association (nomMusicien)'],
+    ['occurrence', "un objet précis d'une entité (Jean-Sébastien Bach)"],
+    ['identifiant', 'attribut(s) qui distinguent chaque occurrence ; souligné ; deviendra la clé primaire'],
+    ['association', 'un lien entre occurrences, nommé par une forme verbale (Être né en)'],
+    ['rôle', "chaque « trait » entre l'association et une entité"],
+    ['cardinalité', 'min,max sur chaque rôle, lue depuis l\'entité']
+  ],
+  pieges: [
+    ['Une clé étrangère dans une entité', "Jamais de clé étrangère dans un MCD : c'est l'association qui fait le lien. Elle n'apparaîtra qu'en schéma relationnel."],
+    ['Un attribut à deux endroits', "Chaque attribut n'est présent qu'en un seul endroit du schéma."],
+    ['Lire la cardinalité du mauvais côté', "La cardinalité écrite à côté d'une entité se lit depuis cette entité : « un musicien est né dans 1,1 pays »."],
+    ['Un couple en double', "Une association est un ensemble de couples : si le même lien peut se répéter (emprunter deux fois le même livre), il faut une entité (Emprunt)."],
+    ["Un attribut d'association mis dans une entité", "S'il dépend du couple (numéro de plage, note de l'AOP), il va sur l'association."],
+    ['Oublier la liste des contraintes', "Elle accompagne systématiquement le schéma : obligatoire, unicité, inter-attributs, contextuelles."],
+    ["Un identifiant qui n'est pas unique", "Un nom ne suffit pas : on ajoute un code (codeMusicien)."]
+  ]
+};
+
+/* app.js */
+/* Application : routage, exercices, entraînement, atelier de cardinalités */
+Store.load();
+const NAV = [
+  { group: 'Cours', items: LESSONS.map((l, i) => ({ id: l.id, label: l.title, n: i + 1 })) },
+  { group: 'Outils', items: [{ id: 'atelier', label: 'Atelier cardinalités', n: '›' }, { id: 'memo', label: 'Mémo', n: '≡' }] }
+];
+const ALL_IDS = ['accueil', ...NAV.flatMap(g => g.items.map(i => i.id))];
+const ORDER = LESSONS.map(l => l.id);
+const main = () => $('#main');
+const rnd = n => Math.floor(Math.random() * n);
+const pick = a => a[rnd(a.length)];
+
+/* ---------- Exercices ---------- */
+function exercise(id) {
+  const def = EX[id], done = !!Store.data.done[id];
+  const head = k => `<header class="ex-h"><span class="ex-kind">${k}</span><span class="ex-badge" ${done ? '' : 'hidden'}>✓ Réussi</span></header>`;
+  if (def.type === 'qcm') {
+    return `<section class="ex ex-qcm${done ? ' is-done' : ''}" data-ex="${id}">${head('Question')}
+  <p class="ex-q">${esc(def.q)}</p>
+  <div class="choices" role="group" aria-label="Réponses">${qOrder(def.choices).map(i => [def.choices[i], i]).map(([ch, i]) => `<button type="button" class="choice" data-act="qcm" data-i="${i}"><span class="mark" aria-hidden="true"></span><span class="ct">${def.codeChoices ? `<code>${esc(ch)}</code>` : esc(ch)}</span></button>`).join('')}</div>
+  <p class="ex-fb" role="status"></p></section>`;
+  }
+  if (def.type === 'card') {
+    return `<section class="ex ex-card${done ? ' is-done' : ''}" data-ex="${id}">${head('Cardinalités')}
+  <h4 class="ex-title">${esc(def.title)}</h4><p class="ex-q">${esc(def.prompt)}</p>
+  ${mcdFig(def.items, 'Schéma à compléter : choisis min et max de chaque côté')}
+  <div class="ex-actions"><button type="button" class="btn" data-act="card-check">Vérifier</button></div>
+  <p class="ex-fb" role="status"></p></section>`;
+  }
+  if (def.type === 'design') {
+    return `<section class="ex ex-design${done ? ' is-done' : ''}" data-ex="${id}">${head('Conception')}
+  <h4 class="ex-title">${esc(def.title)}</h4><p class="ex-q">${esc(def.prompt)}</p>
+  <label class="sr-only" for="ta-${id}">Ta proposition</label>
+  <textarea class="sql-ta plain" id="ta-${id}" rows="4" placeholder="Note ici tes entités (identifiant souligné → _code_), tes associations avec leurs cardinalités, et la liste des contraintes…">${esc(Store.data.notes[id] || '')}</textarea>
+  <div class="ex-actions"><button type="button" class="btn" data-act="d-show">Voir une correction</button></div>
+  <div class="corr" hidden><p><strong>Une correction possible :</strong></p><div class="corr-b">${def.corr}</div><div class="ex-actions"><button type="button" class="btn" data-act="d-ok">J'avais l'essentiel ✓</button></div><p class="note-line">Plusieurs solutions peuvent être valables : compare surtout les entités, les associations, les cardinalités et la liste des contraintes.</p></div></section>`;
+  }
+  if (def.type === 'drill') return `<section class="ex ex-drill${done ? ' is-done' : ''}" data-ex="${id}" data-kind="${def.kind}" data-need="${def.need}">${head('Entraînement')}<div class="drill-host" data-title="${esc(def.title || '')}"></div></section>`;
+  return '';
+}
+function markDone(id) {
+  if (!Store.data.done[id]) { Store.data.done[id] = 1; Store.save(); }
+  const sec = $(`[data-ex="${id}"]`);
+  if (sec) { sec.classList.add('is-done'); const b = $('.ex-badge', sec); if (b) b.hidden = false; }
+  window.updateProgress();
+}
+function setFb(sec, text, cls) { const fb = $('.ex-fb', sec); if (fb) { fb.textContent = text; fb.className = 'ex-fb ' + (cls || ''); } }
+
+/* ---------- Entraînement : lire une cardinalité ---------- */
+const DRILL_ASSOS = [['Musicien', 'Être né en', 'Pays'], ['Client', 'Passer', 'Commande'], ['Musicien', 'Composer', 'Oeuvre'], ['Etudiant', 'Pratiquer', 'Sport'], ['Disque', 'Contenir', 'Enregistrement'], ['Salarié', 'Travailler dans', 'Service']];
+const CARDS = ['0,1', '1,1', '0,n', '1,n'];
+const DRILLS = {
+  card() {
+    const [A, R, B] = pick(DRILL_ASSOS), ca = pick(CARDS), cb = pick(CARDS);
+    const side = rnd(2), card = side ? cb : ca, W = side ? B : A, O = side ? A : B, [mn, mx] = card.split(',');
+    const cap = t => t[0].toUpperCase() + t.slice(1);
+    const tests = [
+      [`${cap(un(W))} ${nn(W)} peut n'être relié${ee(W)} à ${aucun(O)} ${nn(O)}.`, mn === '0'],
+      [`${cap(tout(W))} ${nn(W)} est relié${ee(W)} à au moins ${un(O)} ${nn(O)}.`, mn === '1'],
+      [`${cap(un(W))} ${nn(W)} peut être relié${ee(W)} à plusieurs ${pl(O)}.`, mx === 'n'],
+      [`${cap(un(W))} ${nn(W)} est relié${ee(W)} à au plus ${un(O)} ${nn(O)}.`, mx === '1']
+    ];
+    const [phrase, truth] = pick(tests);
+    return {
+      q: `<code>${esc(A)} (${ca}) — ${esc(R)} — (${cb}) ${esc(B)}</code><br>« ${esc(phrase)} » Vrai ou faux ?`,
+      ok: v => (v === 'vrai') === truth, show: truth ? 'Vrai' : 'Faux',
+      why: `Côté ${W}, la cardinalité est ${card} : ${readCard(card, W, O)}.`
+    };
+  }
+};
+function mountDrill(host, kind, need, onDone, title) {
+  let streak = 0, cur = null, answered = false;
+  const render = () => {
+    cur = DRILLS[kind](); answered = false;
+    host.innerHTML = `${title ? `<h4 class="ex-title">${esc(title)}</h4>` : ''}<p class="ex-q">${cur.q}</p>
+    <div class="bool-btns" role="group"><button type="button" class="choice" data-d="vrai"><span class="mark"></span>Vrai</button><button type="button" class="choice" data-d="faux"><span class="mark"></span>Faux</button></div>
+    <p class="ex-fb" role="status"></p><p class="streak" aria-live="polite">Série : <strong>${streak}</strong> / ${need}</p>`;
+  };
+  const answer = v => {
+    if (answered) return; answered = true;
+    const ok = cur.ok(v); streak = ok ? streak + 1 : 0;
+    const fb = $('.ex-fb', host); fb.className = 'ex-fb ' + (ok ? 'ok' : 'ko');
+    fb.textContent = ok ? 'Juste ! ' + cur.why : `Pas tout à fait : ${cur.show}. ${cur.why}`;
+    $('.streak', host).innerHTML = `Série : <strong>${streak}</strong> / ${need}`;
+    if (streak >= need) { fb.textContent = 'Série complète, bravo !'; if (onDone) onDone(); }
+    const nxt = document.createElement('button'); nxt.type = 'button'; nxt.className = 'btn ghost'; nxt.textContent = 'Question suivante'; nxt.onclick = render; fb.after(nxt); nxt.focus();
+    $$('.choice', host).forEach(x => { x.disabled = true; });
+  };
+  host.addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (b) answer(b.dataset.d); });
+  render();
+}
+
+/* ---------- Atelier : des occurrences qui respectent (ou non) les cardinalités ---------- */
+const SCEN = {
+  ne: { t: 'Musicien — Être né en — Pays', r: 'Être né en', A: { e: 'Musicien', items: ['125 Bach', '82 Satie', '34 Wagner', "17 L'éponge"] }, B: { e: 'Pays', items: ['9 Allemagne', '12 France', '4 Slovénie'] }, ca: '1,1', cb: '0,n', links: [[0, 0], [1, 1], [2, 0]] },
+  compose: { t: 'Musicien — Composer — Oeuvre', r: 'Composer', A: { e: 'Musicien', items: ['125 Bach', '82 Satie', '34 Wagner', "17 L'éponge"] }, B: { e: 'Oeuvre', items: ['1 Gymnopédies', '2 La Chevauchée des Walkyries', '3 Messe en si mineur', '4 Tristan et Isolde'] }, ca: '0,n', cb: '1,n', links: [[0, 2], [1, 0], [2, 1], [2, 3]] },
+  aop: { t: 'Etudiant — Pratiquer — Sport', r: 'Pratiquer', A: { e: 'Etudiant', items: ['1 Martin Chloé', '2 Durand Luc', '3 Petit Zoé'] }, B: { e: 'Sport', items: ['1 Escalade', '2 Rugby', '3 Natation'] }, ca: '0,1', cb: '0,n', links: [[0, 0], [2, 2], [2, 1]] }
+};
+const atelierW = key => `<div class="widget cardlab" data-widget="cardlab"${key ? ` data-scen="${key}"` : ''}></div>`;
+function mountCardLab(host, fixed) {
+  let key = fixed || (SCEN[Store.data.atelier] ? Store.data.atelier : 'ne');
+  let s, ca, cb, on;
+  const load = k => { key = k; s = SCEN[k]; ca = s.ca; cb = s.cb; on = new Set(s.links.map(([i, j]) => i + ':' + j)); };
+  const sel = (side, v) => `<select class="cl-sel" data-side="${side}" aria-label="Cardinalité côté ${side === 'a' ? s.A.e : s.B.e}">${CARDS.map(x => `<option${x === v ? ' selected' : ''}>${x}</option>`).join('')}</select>`;
+  const draw = () => {
+    const nA = s.A.items.map((_, i) => s.B.items.filter((__, j) => on.has(i + ':' + j)).length);
+    const nB = s.B.items.map((_, j) => s.A.items.filter((__, i) => on.has(i + ':' + j)).length);
+    const check = (items, n, card, ent, other) => {
+      const [mn, mx] = card.split(','), out = [];
+      items.forEach((it, k) => {
+        if (mn === '1' && n[k] === 0) out.push(`${it} (${nn(ent)}) n'est relié${ee(ent)} à ${aucun(other)} ${nn(other)} : interdit avec min = 1 côté ${ent}.`);
+        if (mx === '1' && n[k] > 1) out.push(`${it} (${nn(ent)}) est relié${ee(ent)} à ${n[k]} ${pl(other)} : interdit avec max = 1 côté ${ent}.`);
+      });
+      return out;
+    };
+    const errs = [...check(s.A.items, nA, ca, s.A.e, s.B.e), ...check(s.B.items, nB, cb, s.B.e, s.A.e)];
+    host.innerHTML = `<h4 class="ex-title">Atelier : les occurrences respectent-elles les cardinalités ?</h4>
+  ${fixed ? '' : `<label class="cl-scen">Situation <select class="cl-pick">${Object.keys(SCEN).map(k => `<option value="${k}"${k === key ? ' selected' : ''}>${esc(SCEN[k].t)}</option>`).join('')}</select></label>`}
+  <p class="cl-line"><strong>${esc(s.A.e)}</strong> ${sel('a', ca)} — <em>${esc(s.r)}</em> — ${sel('b', cb)} <strong>${esc(s.B.e)}</strong></p>
+  <ul class="cl-read"><li>${esc(readCard(ca, s.A.e, s.B.e))}.</li><li>${esc(readCard(cb, s.B.e, s.A.e))}.</li></ul>
+  <p class="note-line">Coche une case pour créer le couple (une ligne, une colonne) : chaque couple existe au plus une fois.</p>
+  <div class="tbl-wrap"><table class="cl-grid"><thead><tr><th scope="col">${esc(s.A.e)} \\ ${esc(s.B.e)}</th>${s.B.items.map((b, j) => `<th scope="col">${esc(b)}<span class="cl-n${(cb.startsWith('1') && !nB[j]) || (cb.endsWith(',1') && nB[j] > 1) ? ' bad' : ''}">${nB[j]} lien${nB[j] > 1 ? 's' : ''}</span></th>`).join('')}</tr></thead>
+  <tbody>${s.A.items.map((a, i) => `<tr><th scope="row">${esc(a)}<span class="cl-n${(ca.startsWith('1') && !nA[i]) || (ca.endsWith(',1') && nA[i] > 1) ? ' bad' : ''}">${nA[i]} lien${nA[i] > 1 ? 's' : ''}</span></th>${s.B.items.map((b, j) => `<td><input type="checkbox" class="cl-cb" data-i="${i}" data-j="${j}"${on.has(i + ':' + j) ? ' checked' : ''} aria-label="Couple (${esc(a)}, ${esc(b)})"></td>`).join('')}</tr>`).join('')}</tbody></table></div>
+  <p class="cl-res ${errs.length ? 'ko' : 'ok'}" role="status">${errs.length ? `<strong>${errs.length} problème${errs.length > 1 ? 's' : ''} :</strong></p><ul class="cl-errs">${errs.map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : '<strong>Ces occurrences respectent les cardinalités.</strong></p>'}
+  <div class="ex-actions"><button type="button" class="btn ghost cl-reset">Situation d'origine</button></div>`;
+  };
+  host.addEventListener('change', e => {
+    const t = e.target;
+    if (t.classList.contains('cl-cb')) { const k = t.dataset.i + ':' + t.dataset.j; if (t.checked) on.add(k); else on.delete(k); }
+    else if (t.classList.contains('cl-sel')) { if (t.dataset.side === 'a') ca = t.value; else cb = t.value; }
+    else if (t.classList.contains('cl-pick')) { load(t.value); Store.data.atelier = t.value; Store.save(); }
+    else return;
+    const f = document.activeElement && document.activeElement.dataset ? Object.assign({}, document.activeElement.dataset) : null;
+    draw();
+    if (f) { const el = f.i !== undefined ? $(`.cl-cb[data-i="${f.i}"][data-j="${f.j}"]`, host) : f.side ? $(`.cl-sel[data-side="${f.side}"]`, host) : $('.cl-pick', host); if (el) el.focus(); }
+  });
+  host.addEventListener('click', e => { if (e.target.closest('.cl-reset')) { load(key); draw(); } });
+  load(key);
+  draw();
+}
+
+function mountWidgets(root) {
+  $$('[data-widget="cardlab"]', root).forEach(w => mountCardLab(w, w.dataset.scen));
+  $$('.ex-drill', root).forEach(sec => { const h = $('.drill-host', sec); mountDrill(h, sec.dataset.kind, +sec.dataset.need, () => markDone(sec.dataset.ex), h.dataset.title); });
+  $$('.ex .sql-ta', root).forEach(ta => {
+    ta.addEventListener('input', () => { const id = ta.closest('.ex').dataset.ex; Store.data.notes[id] = ta.value; Store.save(); });
+  });
+}
+
+/* ---------- Pages ---------- */
+function progress() {
+  const done = EX_IDS.filter(id => Store.data.done[id]).length;
+  return { done, total: EX_IDS.length, lessons: LESSONS.filter(l => Store.data.lessons[l.id]).length, nl: LESSONS.length };
+}
+function homeSummary() {
+  const p = progress(), nx = LESSONS.find(l => !Store.data.lessons[l.id]);
+  return `<p class="sum-line"><strong>${p.lessons}</strong> leçon${p.lessons > 1 ? 's' : ''} sur ${p.nl} terminée${p.lessons > 1 ? 's' : ''} · <strong>${p.done}</strong> exercice${p.done > 1 ? 's' : ''} réussi${p.done > 1 ? 's' : ''} sur ${p.total}</p>` +
+    (nx ? `<a class="btn" href="#${nx.id}">${p.done || p.lessons ? 'Continuer' : 'Commencer'} : ${esc(nx.title)}</a>` : '<p class="sum-line">Tout est fait. L\'atelier et le mémo sont là pour t\'entraîner librement.</p>');
+}
+window.updateProgress = function () {
+  const p = progress(), pct = Math.round(100 * p.done / p.total);
+  const bar = $('#prog-bar'), txt = $('#prog-txt');
+  if (bar) { bar.style.width = pct + '%'; bar.parentElement.setAttribute('aria-valuenow', String(pct)); }
+  if (txt) txt.textContent = `${p.done}/${p.total} exercices`;
+  $$('.nav a').forEach(a => a.classList.toggle('is-done', !!Store.data.lessons[a.dataset.id]));
+  $$('.skill[data-l]').forEach(s => s.classList.toggle('is-done', !!Store.data.lessons[s.dataset.l]));
+  const sum = $('#home-sum'); if (sum) sum.innerHTML = homeSummary();
+};
+const navHTML = () => NAV.map(g => `<div class="nav-g"><div class="nav-h">${g.group}</div>${g.items.map(i => `<a href="#${i.id}" data-id="${i.id}"><span class="nav-n">${i.n}</span><span class="nav-t">${esc(i.label)}</span></a>`).join('')}</div>`).join('');
+
+function pageAccueil() {
+  return `<div class="home">
+  <section class="hero"><p class="kicker">R1.05 · ACSI</p>
+  <h1>Avant les tables, le modèle : concevoir une base avec un MCD.</h1>
+  <p class="lead">Analyse et conception des systèmes d'information : le modèle conceptuel des données, ses entités, ses associations et leurs cardinalités, et la liste des contraintes d'intégrité qui l'accompagne. Schémas dessinés, questions corrigées automatiquement, interludes de conception avec une correction, et un atelier pour voir quand des occurrences respectent (ou non) les cardinalités.</p>
+  <div id="home-sum" class="home-sum">${homeSummary()}</div></section>
+  ${MCD_NE()}
+  <ul class="an-legend mcd-legend"><li><strong>Musicien</strong>, <strong>Pays</strong> : des entités (identifiant souligné)</li><li><strong>Être né en</strong> : une association</li><li><strong>1,1</strong> et <strong>0,n</strong> : les cardinalités (min, max) de chaque rôle</li></ul>
+  <h2>Ce que tu sauras faire</h2><p>Chaque compétence se coche quand tu termines la leçon.</p>
+  <ul class="skills">${LESSONS.map((l, i) => `<li class="skill${Store.data.lessons[l.id] ? ' is-done' : ''}" data-l="${l.id}"><a href="#${l.id}"><span class="sk-n">${i + 1}</span><span class="sk-t">${esc(l.skill)}</span><span class="sk-l">${esc(l.title)}</span></a></li>`).join('')}</ul>
+  <p><a class="btn ghost" href="#atelier">Ouvrir l'atelier</a> <a class="btn ghost" href="#memo">Voir le mémo</a> <a class="btn ghost" href="sql-requetes-simples.html">Chapitre précédent : requêtes simples</a></p></div>`;
+}
+function pageLesson(l, idx) {
+  const done = !!Store.data.lessons[l.id], prev = ORDER[idx - 1], next = ORDER[idx + 1];
+  const t = id => LESSONS.find(x => x.id === id).title;
+  return `<article class="page"><p class="kicker">Leçon ${idx + 1} sur ${LESSONS.length}</p><h1>${esc(l.title)}</h1><p class="lead">${esc(l.lead)}</p>
+  <div class="body">${l.body()}</div>
+  <section class="practice"><h2>S'entraîner</h2>${l.ex.map(exercise).join('')}</section>
+  <div class="finish"><button type="button" class="btn${done ? ' ghost' : ''}" data-app="finish" data-l="${l.id}" aria-pressed="${done}">${done ? '✓ Leçon terminée' : 'Marquer la leçon comme terminée'}</button></div>
+  <nav class="pager" aria-label="Navigation">${prev ? `<a href="#${prev}"><span>Précédent</span>${esc(t(prev))}</a>` : '<span></span>'}${next ? `<a class="next" href="#${next}"><span>Suivant</span>${esc(t(next))}</a>` : '<a class="next" href="#memo"><span>Pour finir</span>Mémo</a>'}</nav></article>`;
+}
+function pageMemo() {
+  return `<article class="page"><p class="kicker">Aide-mémoire</p><h1>Mémo</h1><p class="lead">Tout le chapitre sur une page.</p>
+  <h2>Un schéma entités-associations</h2>${mcdFig([E_PAYS, '0,n', R_NE, '1,1', E_MUS, '0,n', { r: 'Composer' }, '1,n', E_OEU], 'Pays, Musicien et Oeuvre')}
+  <h2>Vocabulaire</h2>${tbl(['Mot', 'Sens'], MEMO.vocab.map(r => [`<strong>${esc(r[0])}</strong>`, esc(r[1])]))}
+  <h2>Les cardinalités</h2>${tbl(['Cardinalité', 'Une occurrence de l\'entité est reliée…', 'Contrainte'], [['0,1', esc(CARD_TXT['0,1']), 'max = 1 : pas deux liens'], ['1,1', esc(CARD_TXT['1,1']), 'min = 1 et max = 1'], ['0,n', esc(CARD_TXT['0,n']), 'aucune'], ['1,n', esc(CARD_TXT['1,n']), 'min = 1 : au moins un lien']])}
+  <h2>Les contraintes d'intégrité</h2>${tbl(['Dans le schéma', 'À écrire dans la liste'], [['identifiant (unicité, obligatoire)', 'attribut obligatoire (« tous les attributs sont obligatoires sauf… »)'], ['cardinalité min = 1', 'unicité d\'un attribut non identifiant'], ['cardinalité max = 1', 'inter-attributs (dateNaissance &lt; dateDécès)'], ['', 'contextuelle (les « inclassables »)']])}
+  <h2>Du MCD à la base</h2><ol class="flow"><li>MCD (Win'Design)</li><li>schéma relationnel : les entités deviennent des tables, les identifiants des clés primaires, certaines associations des clés étrangères</li><li>script de création (LDD), puis la base… vide</li></ol>
+  <h2>Les pièges classiques</h2><ul class="pieges">${MEMO.pieges.map(p => `<li><strong>${esc(p[0])}</strong><span>${esc(p[1])}</span></li>`).join('')}</ul></article>`;
+}
+function pageAtelier() {
+  return `<article class="page wide"><p class="kicker">Outil</p><h1>Atelier cardinalités</h1>
+  <p class="lead">Choisis une situation et ses cardinalités, puis crée ou supprime des couples : l'atelier signale chaque occurrence qui ne respecte pas un min ou un max.</p>
+  ${atelierW()}
+  ${note('convention', 'Pour essayer', "<ul><li>Situation de départ « Être né en » : Bob L'éponge n'a pas de pays. Avec 1,1 côté Musicien, c'est un problème ; passe à 0,1 et il disparaît.</li><li>Coche « Bach – France » en plus de « Bach – Allemagne » : max = 1 est violé.</li><li>« Composer » : une œuvre sans compositeur viole le 1,n côté Oeuvre.</li></ul>")}</article>`;
+}
+
+/* ---------- Routage ---------- */
+function route() {
+  let id = (location.hash || '').replace('#', '');
+  if (!ALL_IDS.includes(id)) id = 'accueil';
+  const li = LESSONS.findIndex(l => l.id === id);
+  let html;
+  if (id === 'accueil') html = pageAccueil(); else if (li >= 0) html = pageLesson(LESSONS[li], li); else if (id === 'atelier') html = pageAtelier(); else html = pageMemo();
+  const m = main(); m.innerHTML = html;
+  $$('.nav a').forEach(a => a.setAttribute('aria-current', a.dataset.id === id ? 'page' : 'false'));
+  document.title = id === 'accueil' ? 'ACSI R1.05' : ((li >= 0 ? LESSONS[li].title : id === 'atelier' ? 'Atelier cardinalités' : 'Mémo') + ' · ACSI R1.05');
+  mountWidgets(m);
+  window.updateProgress(); closeDrawer(); window.scrollTo(0, 0); m.focus({ preventScroll: true });
+}
+function closeDrawer() { document.body.classList.remove('drawer-open'); const b = $('#menu-btn'); if (b) b.setAttribute('aria-expanded', 'false'); }
+function setTheme(t) { try { localStorage.setItem('cours-theme', t || ''); } catch (e) { /* indisponible */ } if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
+
+function act(b) {
+  const k = b.dataset.act, sec = b.closest('.ex');
+  if (k === 'qcm') {
+    if (sec.classList.contains('is-done') && $('.choice.ok', sec)) return;
+    const def = EX[sec.dataset.ex], i = +b.dataset.i;
+    if (i === def.answer) { b.classList.add('ok'); $$('.choice', sec).forEach(x => { x.disabled = true; }); setFb(sec, 'Exact. ' + def.why, 'ok'); markDone(sec.dataset.ex); }
+    else { b.classList.add('ko'); b.disabled = true; setFb(sec, "Ce n'est pas celle-là. Relis le cours et essaie une autre réponse.", 'ko'); }
+  } else if (k === 'card-check') {
+    const def = EX[sec.dataset.ex];
+    const got = $$('.card.edit', sec).map(s => `${$('.c-min', s).value},${$('.c-max', s).value}`);
+    if (got.some(g => g.includes('?') || g.startsWith(',') || g.endsWith(','))) { setFb(sec, 'Choisis le min et le max de chaque côté.', 'ko'); return; }
+    const ok = got.map((g, i) => g === def.answer[i]);
+    $$('.card.edit', sec).forEach((s, i) => { s.classList.toggle('ok', ok[i]); s.classList.toggle('ko', !ok[i]); });
+    if (ok.every(Boolean)) { setFb(sec, 'Exact. ' + def.why, 'ok'); markDone(sec.dataset.ex); }
+    else setFb(sec, `${ok.filter(Boolean).length} côté${ok.filter(Boolean).length > 1 ? 's' : ''} juste${ok.filter(Boolean).length > 1 ? 's' : ''} sur ${ok.length}. Relis la phrase du point de vue de chaque entité : « un(e) … est relié(e) à combien de … au minimum ? au maximum ? »`, 'ko');
+  } else if (k === 'd-show') { $('.corr', sec).hidden = false; b.hidden = true; }
+  else if (k === 'd-ok') { markDone(sec.dataset.ex); b.disabled = true; b.textContent = '✓ Noté'; }
+}
+function init() {
+  document.getElementById('app').innerHTML = `
+<a class="skip" href="#main">Aller au contenu</a>
+<header class="top">
+  <button type="button" id="menu-btn" class="icon-btn" aria-label="Menu" aria-expanded="false" aria-controls="side">☰</button>
+  <a class="back" href="index.html" title="Retour à la matière" aria-label="Retour à la matière">⌂</a><a class="brand" href="#accueil"><span class="brand-mark">MCD</span>R1.05</a>
+  <div class="meter" role="progressbar" aria-label="Progression" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="prog-bar"></i></div>
+  <span id="prog-txt" class="prog-txt"></span>
+  <div class="tools"><button type="button" id="theme-btn" class="icon-btn" aria-label="Changer le thème" title="Thème clair / sombre">◐</button></div>
+</header>
+<div class="shell"><nav id="side" class="side nav" aria-label="Sommaire">${navHTML()}</nav><div class="scrim" data-app="scrim"></div><main id="main" tabindex="-1"></main></div>`;
+  document.addEventListener('click', e => {
+    const a = e.target.closest('[data-act]'); if (a) act(a);
+    const b = e.target.closest('[data-app]'); if (!b) return;
+    const k = b.dataset.app;
+    if (k === 'finish') {
+      const id = b.dataset.l; Store.data.lessons[id] = !Store.data.lessons[id]; Store.save();
+      const on = !!Store.data.lessons[id];
+      b.textContent = on ? '✓ Leçon terminée' : 'Marquer la leçon comme terminée'; b.classList.toggle('ghost', on); b.setAttribute('aria-pressed', String(on)); window.updateProgress();
+    } else if (k === 'scrim') closeDrawer();
+  });
+  $('#menu-btn').addEventListener('click', () => { const o = document.body.classList.toggle('drawer-open'); $('#menu-btn').setAttribute('aria-expanded', String(o)); });
+  $('#theme-btn').addEventListener('click', () => {
+    const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    setTheme(dark ? 'light' : 'dark');
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+  window.addEventListener('hashchange', route);
+  route();
+}
+init();
+
+;(function(){var o=window.updateProgress;window.updateProgress=function(){if(o)o.apply(this,arguments);try{var d=Store.data.done||{},l=Store.data.lessons||{};localStorage.setItem('hub:sql/acsi-mcd',JSON.stringify({done:EX_IDS.filter(function(k){return d[k]}).length,total:EX_IDS.length,lessons:LESSONS.filter(function(x){return l[x.id]}).length,nl:LESSONS.length}))}catch(e){}};window.updateProgress()})();
+
+</script>
+</body>
+</html>
