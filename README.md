@@ -16,7 +16,7 @@ Mon site, en deux espaces choisis depuis l'accueil (`index.html`) :
 | --- | --- |
 | [Algorithmique](algo/index.html) (ExAlgo · Java) | Cycle 1 (les bases), Cycle 2 (les boucles), Cycle 3 (les tableaux) |
 | [Système](systeme/index.html) (Linux) | Le terminal et les permissions |
-| [Bases de données](sql/index.html) (R1.05 · SQL) | Modèle relationnel et requêtes simples, ACSI : le modèle conceptuel des données (MCD) |
+| [Bases de données](sql/index.html) (R1.05 · SQL) | Modèle relationnel et requêtes simples, 1 bis : exercices de requêtes simples, ACSI : le modèle conceptuel des données (MCD) |
 | [Management](management/index.html) (R1.08) | Introduction à la gestion, Stratégie |
 | [Mathématiques](maths/index.html) (maths discrètes) | Logique, Arithmétique dans ℤ, Récurrence, Second degré, Révision générale |
 
@@ -50,6 +50,8 @@ jeux/mine-clic/        jeu Mine Clic : index.html, style.css, et dans js/ trois 
 <matière>/index.html   accueil d'une matière, avec une carte par chapitre
 <matière>/*.html       un fichier par chapitre (application complète)
 maths/app.js           code commun aux 5 pages de maths
+sql/exercices-requetes.js   bases et exercices du chapitre 1 bis (voir « Ajouter un exercice SQL »)
+assets/sql-moteur.js   moteur SQL commun aux pages de la matière Bases de données
 assets/common.js       code commun à toutes les pages (thème, QCM, hors ligne)
 assets/hub.js          pages d'accueil : thème, barres de progression, partie en cours, installation
 assets/recherche*.js   recherche (recherche-index.js est généré)
@@ -59,6 +61,7 @@ sw.js, manifest.webmanifest   application installable et hors ligne
 404.html               page « introuvable »
 outils/construire.js   régénère l'index de recherche et la liste hors ligne
 outils/tester-voie-libre.js   tests du jeu Voie libre (parcours franchissable, mécanismes, progression, rendu 3D)
+outils/tester-exercices-sql.js  vérifie les bases et les exercices du chapitre 1 bis
 outils/tester-mine-clic.js    tests du jeu Mine Clic (clics, achats, Max, capacités, missions, coffres, dimensions, renaissance, pouvoirs, sauvegarde, téléphone)
 .github/workflows/     lance outils/construire.js automatiquement sur GitHub
 ```
@@ -69,6 +72,10 @@ outils/tester-mine-clic.js    tests du jeu Mine Clic (clics, achats, Max, capaci
 2. Ajouter sa carte dans le `index.html` de la matière.
 3. Dans `cours.html`, ajouter le chapitre à l'attribut `data-prog` de la carte de la matière et mettre à jour le nombre de chapitres.
 4. C'est tout : à chaque modification de `main`, une GitHub Action (`.github/workflows/construire.yml`) régénère l'index de recherche et la liste hors ligne, puis enregistre le résultat. Elle lance aussi les tests des jeux Voie libre et Mine Clic (`outils/tester-voie-libre.js`, `outils/tester-mine-clic.js`), sur `main` comme sur chaque demande de fusion. L'onglet **Actions** du dépôt montre son déroulement.
+
+## Ajouter un exercice SQL
+
+Les exercices du chapitre 1 bis (`sql/exercices-requetes.html`) sont tous dans `sql/exercices-requetes.js` : ajouter un bloc dans `EXERCICES` (identifiant, titre, niveau, base, énoncé, requête solution, indice) suffit. L'exercice apparaît dans le sommaire, sur l'accueil du chapitre, dans la progression, la recherche et le mode hors ligne, avec le modèle de sa base. Une nouvelle base s'ajoute de la même façon dans `BASES`. La GitHub Action vérifie le fichier (`outils/tester-exercices-sql.js`) : base existante, clés cohérentes, solution qui s'exécute.
 
 ## Ajouter un jeu
 

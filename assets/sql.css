@@ -102,3 +102,19 @@ table.res{border-collapse:collapse;width:100%;font-size:.88rem;background:var(--
 .cl-cb{width:1.2em;height:1.2em;accent-color:var(--accent);cursor:pointer}
 .cl-res{margin:.8em 0 .2em}.cl-res.ok{color:var(--ok)}.cl-res.ko{color:var(--ko)}
 .cl-errs{margin:.2em 0;color:var(--ko);font-size:.92rem}
+/* ===== Chapitre 1 bis : liste d'exercices, étiquettes, modèle de la base ===== */
+.ex-liste{list-style:none;margin:16px 0;padding:0;display:grid;gap:10px}
+.ex-liste a{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:center;padding:12px 14px;border:2px solid var(--ink);border-radius:var(--r);background:var(--paper);color:var(--ink);text-decoration:none}
+.ex-liste a:hover{background:var(--accent-soft)}
+.exl-t{font-weight:700}.exl-tags{grid-column:2;display:flex;flex-wrap:wrap;gap:6px}
+.ex-liste .is-done a{border-color:var(--ok)}.ex-liste .is-done .sk-n::after{content:" ✓";color:var(--ok)}
+.ex-tags-l{display:flex;flex-wrap:wrap;gap:6px;margin:-.3em 0 1em}
+.ex-tag,.ex-niv{display:inline-block;padding:.1em .6em;border-radius:99px;font:600 .75rem var(--f-mono);border:1.5px solid var(--line);color:var(--ink2);background:var(--paper)}
+.ex-tag.base{font-family:var(--f-body)}
+.ex-niv{font-family:var(--f-body);border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
+.ex-niv.niv-moyen{border-color:var(--warn);color:var(--warn);background:var(--warn-soft)}.ex-niv.niv-difficile{border-color:var(--ko);color:var(--ko);background:var(--ko-soft)}
+.enonce{font-size:1.08rem}
+.modele{margin:12px 0}.modele[open] summary{margin-bottom:.4em}
+.table-apercu:not(:empty){margin-top:8px;border:2px solid var(--line);border-radius:8px}
+.attendu{margin-top:10px}
+.ex-liste .sk-n{min-width:2.4em}
