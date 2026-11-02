@@ -118,3 +118,5 @@ table.res{border-collapse:collapse;width:100%;font-size:.88rem;background:var(--
 .table-apercu:not(:empty){margin-top:8px;border:2px solid var(--line);border-radius:8px}
 .attendu{margin-top:10px}
 .ex-liste .sk-n{min-width:2.4em}
+.niv-titre{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:1.4em 0 .4em}
+.niv-titre .ex-niv{font-size:.85rem}.niv-prog{margin-left:auto;font:600 .85rem var(--f-body);color:var(--ink2)}
