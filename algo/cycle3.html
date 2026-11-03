@@ -5458,7 +5458,7 @@ Store.load();
 const NAV = [
   { group: 'Cours', items: LESSONS.map((l, i) => ({ id: l.id, label: l.title, n: i + 1 })) },
   { group: 'Projet : gestion de notes', items: PROJECT.map((p, i) => ({ id: p.id, label: p.title.replace(/^Étape \d+ : /, ''), n: String(i + 1) })) },
-  { group: 'Outils', items: [{ id: 'atelier', label: 'Atelier ExAlgo', n: '›' }, { id: 'memo', label: 'Mémo ExAlgo ↔ Java', n: '≡' }] }
+  { group: 'Outils', items: [{ id: 'fiche', label: 'Fiche de révision', n: '★' }, { id: 'atelier', label: 'Atelier ExAlgo', n: '›' }, { id: 'memo', label: 'Mémo ExAlgo ↔ Java', n: '≡' }] }
 ];
 const ALL_IDS = ['accueil', ...NAV.flatMap(g => g.items.map(i => i.id))];
 const ORDER = [...LESSONS.map(l => l.id), ...PROJECT.map(p => p.id)];
@@ -5536,7 +5536,7 @@ function pageAccueil() {
   </ul>
   <h2>Le projet</h2>
   <p>Un logiciel de gestion de notes en trois parties : l'étudiant consulte ses notes et sait s'il valide son année ; la direction des études affiche les moyennes et les absences, organise les rattrapages, gère les personnes tutrices et trouve les étudiants « maxi ». Tu écris une quarantaine de petites fonctions ; celles que tu n'as pas encore écrites sont complétées automatiquement pour que tes tests tournent quand même.</p>
-  <p><a class="btn ghost" href="#p1">Voir le projet</a> <a class="btn ghost" href="#atelier">Ouvrir l'atelier</a></p>
+  <p><a class="btn ghost" href="#fiche">Fiche de révision</a> <a class="btn ghost" href="#p1">Voir le projet</a> <a class="btn ghost" href="#atelier">Ouvrir l'atelier</a></p>
 </div>`;
 }
 
@@ -5558,6 +5558,51 @@ function pageLesson(l, idx) {
     ${prev ? `<a href="#${prev}"><span>Précédent</span>${esc(find(prev).title)}</a>` : '<span></span>'}
     ${next ? `<a class="next" href="#${next}"><span>Suivant</span>${esc(find(next).title)}</a>` : '<a class="next" href="#memo"><span>Pour finir</span>Mémo ExAlgo ↔ Java</a>'}
   </nav>
+</article>`;
+}
+
+/* ================================================================ FICHE DE RÉVISION */
+/* Une carte par notion : une ou deux phrases, puis ExAlgo et Java côte à côte. */
+const FICHE = [
+  { t: 'Plusieurs classes', d: "Le code est rangé dans des classes au nom en CamelCase (GestionNotes). Pour utiliser une fonction ou une constante d'une autre classe : NomDeLaClasse.nom.",
+    ex: 'GestionNotes.somme(t)\nGestionNotes.NB_UE', java: 'GestionNotes.somme(t);\nGestionNotes.NB_UE' },
+  { t: 'Paramètre E ou ES', d: "E : la fonction lit le paramètre, sans le modifier. ES : elle modifie la variable de l'appelant (on lui passe une variable). Java ne sait pas faire ES avec un int, mais un tableau passé à une fonction peut être modifié par elle.",
+    ex: "Fonction f(E n : entier)\nFonction g(ES t : tableau d'entiers)", java: 'static void f(int n)\nstatic void g(int[] t)   // t modifiable' },
+  { t: 'Déclarer un tableau', d: "Des cases du même type, en nombre fixe, numérotées de 0 à taille - 1. Penser à initialiser la taille et chaque case.",
+    ex: 'Var t : tableau de 5 entiers\nVar u : tableau de n réels', java: 'int[] t = new int[5];\ndouble[] u = new double[n];' },
+  { t: 'Une case, la taille', d: "t[i] est la case d'indice i ; la première est t[0], la dernière t[t.taille - 1].",
+    ex: 't[0] ← 12\nx ← t[i]\nt.taille', java: 't[0] = 12;\nx = t[i];\nt.length' },
+  { t: 'Parcourir tout le tableau', d: "Une boucle Pour de 0 à t.taille - 1.",
+    ex: 'Pour i de 0 à t.taille - 1 Faire\n    ecrire(t[i] + " ")', java: 'for (int i = 0; i < t.length; i++) {\n    System.out.print(t[i] + " ");\n}' },
+  { t: 'Tableau en paramètre ou en retour', d: "Un tableau est un type comme un autre : E pour le lire, ES pour le modifier, ou le retourner.",
+    ex: "Fonction lire(E t : tableau d'entiers)\nFonction remplir(ES t : tableau d'entiers)\nFonction creer() : tableau d'entiers", java: 'static void lire(int[] t)\nstatic void remplir(int[] t)\nstatic int[] creer()' },
+  { t: 'Agréger : somme, moyenne, maximum', d: "Pour sur tout le tableau, accumulateur initialisé AVANT la boucle. Un Si dans la boucle pour ne compter que certaines cases. Le maximum part de t[0].",
+    ex: 'somme ← 0\nPour i de 0 à t.taille - 1 Faire\n    somme ← somme + t[i]\nmoy ← (réel)somme / t.taille', java: 'int somme = 0;\nfor (int i = 0; i < t.length; i++) {\n    somme = somme + t[i];\n}\ndouble moy = (double) somme / t.length;' },
+  { t: 'Vérifier une propriété (recherche)', d: "Tant Que : on s'arrête dès qu'une case permet de conclure. Deux sorties : trouvé, ou fin du tableau. Un seul Retourner, après la boucle.",
+    ex: 'trouve ← faux\ni ← 0\nTant Que non trouve et i < t.taille Faire\n    Si t[i] == v Alors\n        trouve ← vrai\n    Sinon\n        i ← i + 1', java: 'boolean trouve = false;\nint i = 0;\nwhile (!trouve && i < t.length) {\n    if (t[i] == v) {\n        trouve = true;\n    } else {\n        i = i + 1;\n    }\n}' },
+  { t: 'Tableau 2D', d: "Toujours t[ligne][colonne]. t.taille = nombre de lignes, t[0].taille = nombre de colonnes.",
+    ex: "Var m : tableau de 2 x 3 entiers\nm[1][2] ← 7\nm.taille        // 2 lignes\nm[0].taille     // 3 colonnes", java: 'int[][] m = new int[2][3];\nm[1][2] = 7;\nm.length        // 2 lignes\nm[0].length     // 3 colonnes' },
+  { t: 'Parcourir un tableau 2D', d: "Deux Pour imbriqués : les lignes, puis les colonnes de chaque ligne.",
+    ex: 'Pour i de 0 à m.taille - 1 Faire\n    Pour j de 0 à m[i].taille - 1 Faire\n        ecrire(m[i][j] + " ")\n    ecrireLigne("")', java: 'for (int i = 0; i < m.length; i++) {\n    for (int j = 0; j < m[i].length; j++) {\n        System.out.print(m[i][j] + " ");\n    }\n    System.out.println();\n}' }
+];
+const FICHE_PIEGES = [
+  'Les indices vont de 0 à taille - 1 : t[t.taille] n\'existe pas.',
+  'Une case jamais remplie ne se lit pas (Java y met 0, ExAlgo signale une erreur).',
+  'Un tableau en mode E ne se modifie pas : il faut ES.',
+  'Le maximum s\'initialise avec t[0], pas avec 0.',
+  'Moyenne : (réel)somme / t.taille, sinon la division est entière.',
+  'En Java, System.out.println(t) n\'affiche pas les cases : il faut une boucle.'
+];
+function pageFiche() {
+  return `<article class="page fiche-page">
+  <p class="kicker">Fiche de révision</p>
+  <h1>Le cycle 3 en une page</h1>
+  <p class="lead">L'essentiel de chaque notion, en une phrase, avec ExAlgo et Java côte à côte.</p>
+  <p><button type="button" class="btn ghost" data-app="imprimer">Imprimer la fiche</button></p>
+  <div class="fiche">${FICHE.map(f => `<section class="fiche-c"><h2>${esc(f.t)}</h2><p>${esc(f.d)}</p>
+    <div class="fiche-2"><div><div class="fiche-l">ExAlgo</div><pre class="ex-code"><code>${hlEx(f.ex)}</code></pre></div><div><div class="fiche-l">Java</div><pre class="ex-code"><code>${hlJava(f.java)}</code></pre></div></div></section>`).join('')}
+  <section class="fiche-c fiche-pieges"><h2>Les pièges</h2><ul>${FICHE_PIEGES.map(x => `<li>${esc(x)}</li>`).join('')}</ul></section></div>
+  <p class="note-line muted">Pour le détail : les leçons du cours, ou le <a href="#memo">mémo ExAlgo ↔ Java</a>.</p>
 </article>`;
 }
 
@@ -5631,10 +5676,11 @@ function route() {
   else if (li >= 0) html = pageLesson(LESSONS[li], li);
   else if (id === 'atelier') html = pageAtelier();
   else if (id === 'memo') html = pageMemo();
+  else if (id === 'fiche') html = pageFiche();
   else html = pageLesson(PROJECT.find(p => p.id === id));
   m.innerHTML = html;
   $$('.nav a').forEach(a => a.setAttribute('aria-current', a.dataset.id === id ? 'page' : 'false'));
-  document.title = (id === 'accueil' ? 'ExAlgo Cycle 3' : ((LESSONS.find(l => l.id === id) || PROJECT.find(p => p.id === id) || { title: id === 'atelier' ? 'Atelier' : 'Mémo' }).title + ' · ExAlgo Cycle 3'));
+  document.title = (id === 'accueil' ? 'ExAlgo Cycle 3' : ((LESSONS.find(l => l.id === id) || PROJECT.find(p => p.id === id) || { title: id === 'atelier' ? 'Atelier' : id === 'fiche' ? 'Fiche de révision' : 'Mémo' }).title + ' · ExAlgo Cycle 3'));
   mountExercises(m);
   if (id === 'atelier') mountAtelier();
   window.updateProgress();
@@ -5681,6 +5727,7 @@ function init() {
       b.classList.toggle('ghost', on); b.setAttribute('aria-pressed', String(on));
       window.updateProgress();
     } else if (k === 'scrim') closeDrawer();
+    else if (k === 'imprimer') window.print();
   });
   $('#menu-btn').addEventListener('click', () => {
     const o = document.body.classList.toggle('drawer-open');
