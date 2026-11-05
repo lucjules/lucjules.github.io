@@ -6425,7 +6425,7 @@ Store.load();
 const NAV = [
   { group: 'Cours', items: LESSONS.map((l, i) => ({ id: l.id, label: l.title, n: i + 1 })) },
   { group: 'Projet : gestion de notes', items: PROJECT.map((p, i) => ({ id: p.id, label: p.title.replace(/^Étape \d+ : /, ''), n: String(i + 1) })) },
-  { group: 'Outils', items: [{ id: 'atelier', label: 'Atelier ExAlgo', n: '›' }, { id: 'memo', label: 'Mémo ExAlgo ↔ Java', n: '≡' }] }
+  { group: 'Outils', items: [{ id: 'atelier', label: 'Atelier ExAlgo', n: '›' }, { id: 'verif', label: 'Vérifier mon projet', n: '✓' }, { id: 'memo', label: 'Mémo ExAlgo ↔ Java', n: '≡' }] }
 ];
 const ALL_IDS = ['accueil', ...NAV.flatMap(g => g.items.map(i => i.id))];
 const ORDER = [...LESSONS.map(l => l.id), ...PROJECT.map(p => p.id)];
@@ -6587,6 +6587,204 @@ function mountAtelier() {
   $('[data-app="at-reset"]').addEventListener('click', () => { ta.value = SNIPPETS[sel.value]; ta.dispatchEvent(new Event('input')); });
 }
 
+/* ---------- Vérifier mon projet : phase par phase ---------- */
+const VERIF_PHASES = [
+  { id: 'v1', titre: 'Tirage des notes', desc: "Le tirage au hasard des notes d'un semestre (partie 1, étape 2).", fns: ['etuRemplirTableauAleatoire'] },
+  { id: 'v2', titre: "Menu et notes d'une UE", desc: "La saisie contrôlée, le menu étudiant et l'affichage des notes d'un semestre (étape 3).", fns: ['gestionNotesSaisirNombreIntervalle', 'etuAfficherMenu', 'etuNotesUeSem', 'etuAfficherNotes', 'etuAfficherNotesUE', 'etuMenu'] },
+  { id: 'v3', titre: "Synthèse de l'année", desc: "Somme, moyenne, minimum, maximum, puis l'affichage des statistiques (étape 4).", fns: ['gestionNotesSomme', 'gestionNotesMoyenne', 'gestionNotesMin', 'gestionNotesMax', 'etuMoyenneUE', 'etuMoyenneAnnee', 'etuAfficherStats', 'etuAfficherLigneUE', 'etuAfficherInfosDesUE'] },
+  { id: 'v4', titre: 'Note à obtenir et année validée', desc: "La note à obtenir au prochain devoir, la validation d'une UE et de l'année (étape 5).", fns: ['etuCalculNoteAObtenir', 'etuAfficherNoteAObtenir', 'etuUeValidee', 'etuAnneeValidee', 'etuAfficherAnneeValidee'] },
+  { id: 'v5', titre: 'Préparation de la partie DDE', desc: "Le choix étudiant ou DDE, le menu DDE et les deux nouveaux tableaux (étape 6).", fns: ['gestionNotesPrincipal', 'ddeAfficherMenu', 'ddeInitMoyennes', 'ddeInitAbsences', 'ddeMenu'] },
+  { id: 'v6', titre: 'Informations et rattrapages', desc: "Les moyennes et absences des étudiants, puis la liste des rattrapages (étape 7).", fns: ['ddeMoyenneUE', 'ddeAfficherInfos', 'ddeAAbsence', 'ddeNbUeSousMoyenne', 'ddeAfficherRattrapages'] },
+  { id: 'v7', titre: 'Personnes tutrices', desc: "Afficher, ajouter et retirer une personne tutrice dans un tableau de taille fixe (étape 8).", fns: ['ddeIndiceTuteur', 'ddeAfficherTuteurs', 'ddeAjouterTuteur', 'ddeRetirerTuteur', 'ddeGererTuteurs'] },
+  { id: 'v8', titre: 'Modifier une moyenne, étudiants maxi', desc: "La nouvelle moyenne après rattrapage et la recherche des étudiants maxi (étape 9).", fns: ['ddeMaxEtudiant', 'ddeNouvelleMoyenne', 'ddeModifierMoyenne', 'ddeMaxUE', 'ddeEstMaxi', 'ddeAfficherMaxi'] }
+];
+
+/* Signature Java d'une fonction du projet, lue dans la version de référence */
+function javaSigOf(fn) {
+  const m = REF_JAVA[fn].match(/static\s+([\w\[\]]+)\s+(\w+)\s*\(([\s\S]*?)\)\s*\{/);
+  const params = m[3].trim() ? m[3].split(',').map(p => p.trim().replace(/\s+/g, ' ')).map(p => { const i = p.lastIndexOf(' '); return { type: p.slice(0, i), name: p.slice(i + 1) }; }) : [];
+  return { ret: m[1], name: m[2], params };
+}
+function javadocOf(fn, indent) {
+  const s = javaSigOf(fn), pad = indent || '';
+  const lines = ['/**', ' * TODO : décrire en une phrase ce que fait ' + s.name + '.'];
+  if (s.params.length || s.ret !== 'void') lines.push(' *');
+  s.params.forEach(p => lines.push(' * @param ' + p.name + ' TODO : ce que représente ' + p.name));
+  if (s.ret !== 'void') lines.push(' * @return TODO : ce que représente la valeur retournée');
+  lines.push(' */');
+  return lines.map(l => pad + l).join('\n');
+}
+function javaStubOf(fn) {
+  const s = javaSigOf(fn);
+  const dflt = { int: '0', double: '0.0', boolean: 'false' }[s.ret];
+  const ret = s.ret === 'void' ? '' : '\n        return ' + (dflt !== undefined ? dflt : 'null') + ';';
+  return javadocOf(fn, '    ') + '\n    static ' + s.ret + ' ' + s.name + '(' + s.params.map(p => p.type + ' ' + p.name).join(', ') + ') {\n        // TODO' + ret + '\n    }';
+}
+// Littéral ExAlgo (tableau, vrai/faux, nombre) -> littéral Java du type donné
+function exToJava(v, type) {
+  let t = String(v).replace(/\bvrai\b/g, 'true').replace(/\bfaux\b/g, 'false');
+  if (type.endsWith('[]')) t = 'new ' + type + t.replace(/\[/g, '{').replace(/\]/g, '}');
+  return t;
+}
+function junitOf(cls, fns) {
+  const body = fns.map(fn => {
+    const s = javaSigOf(fn), tests = (PROJECT_EX[fn].tests || []);
+    const calls = [];
+    let skipped = 0;
+    tests.forEach(t => {
+      if (!('expect' in t) || t.stdin || t.rand) { skipped++; return; }
+      const call = cls + '.' + fn + '(' + t.args.map((a, i) => exToJava(a, s.params[i].type)).join(', ') + ')';
+      const exp = exToJava(t.expect, s.ret);
+      if (s.ret === 'boolean') calls.push('        ' + (exp === 'true' ? 'assertTrue(' : 'assertFalse(') + call + ');');
+      else if (s.ret === 'double') calls.push('        assertEquals(' + exp + ', ' + call + ', 0.001);');
+      else if (s.ret.endsWith('[]')) calls.push('        assertArrayEquals(' + exp + ', ' + call + ');');
+      else calls.push('        assertEquals(' + exp + ', ' + call + ');');
+    });
+    if (skipped) calls.push('        // TODO : ' + skipped + ' test' + (skipped > 1 ? 's' : '') + " d'affichage ou de saisie à écrire à la main (voir l'énoncé de l'étape)");
+    return '    @Test\n    public void test' + fn[0].toUpperCase() + fn.slice(1) + '() {\n' + calls.join('\n') + '\n    }';
+  }).join('\n\n');
+  return 'import org.junit.Test;\nimport static org.junit.Assert.*;\n\npublic class ' + cls + 'Test {\n\n' + body + '\n}\n';
+}
+// Regroupe les fonctions d'une phase par classe
+function verifByClass(ph) {
+  const m = new Map();
+  ph.fns.forEach(fn => { const c = REF_CLASS[fn]; if (!m.has(c)) m.set(c, []); m.get(c).push(fn); });
+  return [...m.entries()];
+}
+function verifDocs(ph, kind) {
+  if (kind === 'javadoc') return ph.fns.map(fn => ({ nom: fn, fichier: null, code: javadocOf(fn) + '\nstatic ' + javaSigOf(fn).ret + ' ' + fn + '(...)' }));
+  if (kind === 'junit') return verifByClass(ph).map(([cls, fns]) => ({ nom: cls + 'Test.java', fichier: cls + 'Test.java', code: junitOf(cls, fns) }));
+  return verifByClass(ph).map(([cls, fns]) => ({ nom: cls + '.java', fichier: cls + '.java', code: 'public class ' + cls + ' {\n\n' + fns.map(javaStubOf).join('\n\n') + '\n}\n' }));
+}
+
+function pageVerif() {
+  const phases = VERIF_PHASES.map((ph, i) => `<details class="vp" data-ph="${ph.id}"${i === 0 ? ' open' : ''}>
+  <summary><span class="vp-n">Phase ${i + 1}</span><span class="vp-t">${esc(ph.titre)}</span><span class="vp-state" data-state="${ph.id}"></span></summary>
+  <div class="vp-body">
+    <p>${esc(ph.desc)}</p>
+    <ul class="vf-list">${ph.fns.map(fn => `<li class="vf" data-fn="${fn}"><span class="vf-mark" aria-hidden="true">${Store.data.done['x-' + fn] ? '✓' : '○'}</span><code>${fn}</code><span class="cls-tag">${REF_CLASS[fn]}</span><div class="vf-res"></div></li>`).join('')}</ul>
+    <div class="vp-actions">
+      <button type="button" class="btn" data-vp="check">Vérifier cette phase</button>
+      <button type="button" class="btn ghost" data-vp="hint">Indice</button>
+      <button type="button" class="btn ghost" data-vp="doc" data-kind="javadoc">Ajouter la javadoc</button>
+      <button type="button" class="btn ghost" data-vp="doc" data-kind="junit">Tests JUnit</button>
+      <button type="button" class="btn ghost" data-vp="doc" data-kind="start">Fichiers Java de départ</button>
+    </div>
+    <p class="hint vp-hint" hidden></p>
+    <div class="vp-doc" hidden></div>
+  </div>
+</details>`).join('');
+  return `<article class="page wide">
+  <p class="kicker">Outil</p>
+  <h1>Vérifier mon projet</h1>
+  <p class="lead">Colle ici ton propre code ExAlgo, puis vérifie-le une phase à la fois. Rien n'est corrigé à ta place : tu vois seulement quels tests passent, et tu peux demander un indice.</p>
+  ${note('convention', 'Comment ça marche', "<ul><li>Utilise les noms de fonctions du projet (<code>etuMenu</code>, <code>ddeAfficherRattrapages</code>…) : ils sont dans les étapes du projet.</li><li>Une fonction que tu n'as pas encore écrite est signalée « absente » ; si une autre fonction l'appelle, la version de référence est utilisée, ce qui te permet de vérifier dans l'ordre que tu veux.</li><li>Les boutons « javadoc », « tests JUnit » et « fichiers de départ » préparent des modèles <strong>Java</strong> à compléter dans NetBeans.</li></ul>")}
+  <h2>Mon code</h2>
+  ${editorHTML('verif', '')}
+  <div class="vp-top"><button type="button" class="btn" data-vp="all">Vérifier toutes les phases</button><span class="vp-sum" role="status"></span></div>
+  <h2>Les phases</h2>
+  ${phases}
+</article>`;
+}
+
+async function verifFonction(fn, code) {
+  let prog;
+  try { prog = Exalgo.compile(code); } catch (e) { return { fatal: e }; }
+  if (!prog.fns.has(fn)) return { absent: true };
+  return Runner.runCodeExercise(EXERCISES['x-' + fn], code);
+}
+function verifResHTML(results) {
+  return `<ul class="res-list">${results.filter(x => !x.ok).map(x => `<li class="ko"><span class="res-mark" aria-hidden="true">✗</span><div><code>${esc(x.label)}</code>${x.detail ? `<pre class="res-detail">${esc(x.detail)}</pre>` : ''}</div></li>`).join('')}</ul>`;
+}
+function verifMajEtat(det) {
+  const ph = VERIF_PHASES.find(p => p.id === det.dataset.ph);
+  const n = ph.fns.filter(fn => Store.data.done['x-' + fn]).length;
+  $('.vp-state', det).textContent = n + ' / ' + ph.fns.length;
+  det.classList.toggle('is-done', n === ph.fns.length);
+}
+// Vérifie les fonctions d'une phase ; retourne le nombre de fonctions réussies
+async function verifPhase(det, ed) {
+  const ph = VERIF_PHASES.find(p => p.id === det.dataset.ph);
+  const code = $('.ta', ed).value;
+  editorMark(ed, 0);
+  let ok = 0;
+  for (const fn of ph.fns) {
+    const li = $(`.vf[data-fn="${fn}"]`, det), res = $('.vf-res', li), mark = $('.vf-mark', li);
+    const r = await verifFonction(fn, code);
+    li.classList.remove('ok', 'ko', 'abs');
+    if (r.fatal) {
+      editorMark(ed, r.fatal.line);
+      mark.textContent = '✗'; li.classList.add('ko');
+      res.innerHTML = `<p class="res-err"><strong>${r.fatal.line ? 'Erreur ligne ' + r.fatal.line : 'Erreur'}</strong> : ${esc(r.fatal.message)}</p>`;
+    } else if (r.absent) {
+      mark.textContent = '–'; li.classList.add('abs');
+      res.innerHTML = '<p class="muted">Fonction absente de ton code.</p>';
+    } else {
+      const good = r.results.filter(x => x.ok).length, all = good === r.results.length;
+      mark.textContent = all ? '✓' : '✗'; li.classList.add(all ? 'ok' : 'ko');
+      res.innerHTML = all ? `<p class="muted">${good} test${good > 1 ? 's' : ''} réussi${good > 1 ? 's' : ''}.</p>` : `<p class="res-sum ko">${good} test${good > 1 ? 's' : ''} réussi${good > 1 ? 's' : ''} sur ${r.results.length}</p>` + verifResHTML(r.results);
+      if (all) { markDone('x-' + fn); ok++; }
+    }
+  }
+  verifMajEtat(det);
+  return ok;
+}
+function mountVerif() {
+  const ed = $('[data-editor="verif"]'), ta = $('.ta', ed);
+  ta.value = Store.data.code.verif || '// Colle ici ton code ExAlgo (constantes, fonctions, programme principal)\n';
+  initEditor(ed, { onChange: v => { Store.data.code.verif = v; Store.save(); } });
+  editorUpdate(ed);
+  $$('.vp').forEach(verifMajEtat);
+  const root = $('article.page');
+  root.addEventListener('click', async e => {
+    const b = e.target.closest('[data-vp]');
+    if (!b) return;
+    const det = b.closest('.vp'), kind = b.dataset.vp;
+    if (kind === 'all') {
+      const sum = $('.vp-sum', root);
+      sum.textContent = 'Vérification…';
+      let total = 0, ok = 0;
+      for (const d of $$('.vp', root)) { d.open = true; ok += await verifPhase(d, ed); total += VERIF_PHASES.find(p => p.id === d.dataset.ph).fns.length; }
+      sum.textContent = ok + ' fonction' + (ok > 1 ? 's' : '') + ' validée' + (ok > 1 ? 's' : '') + ' sur ' + total;
+    } else if (kind === 'check') {
+      await verifPhase(det, ed);
+    } else if (kind === 'hint') {
+      const ph = VERIF_PHASES.find(p => p.id === det.dataset.ph);
+      const todo = ph.fns.filter(fn => !Store.data.done['x-' + fn]);
+      const box = $('.vp-hint', det);
+      if (!todo.length) { box.hidden = false; box.textContent = 'Toute la phase est validée : rien à débloquer.'; return; }
+      const k = Math.min(+(box.dataset.k || 0), todo.length - 1);
+      box.dataset.k = k + 1;
+      box.hidden = false;
+      box.textContent = todo[k] + ' : ' + PROJECT_EX[todo[k]].hint + (todo.length > 1 ? '  (clique encore pour l\'indice de la fonction suivante)' : '');
+    } else if (kind === 'doc') {
+      const ph = VERIF_PHASES.find(p => p.id === det.dataset.ph);
+      const panel = $('.vp-doc', det);
+      if (!panel.hidden && panel.dataset.kind === b.dataset.kind) { panel.hidden = true; return; }
+      const docs = verifDocs(ph, b.dataset.kind);
+      panel.dataset.kind = b.dataset.kind;
+      panel.dataset.docs = '';
+      panel._docs = docs;
+      panel.innerHTML = (b.dataset.kind === 'javadoc' ? '<p class="muted">Modèles de javadoc à coller au-dessus de chaque méthode et à compléter.</p>' : b.dataset.kind === 'junit' ? '<p class="muted">Une classe de test par classe de code. Les tests d\'affichage et de saisie sont à écrire toi-même.</p>' : '<p class="muted">Un fichier par classe, avec les méthodes vides à compléter.</p>') +
+        docs.map((d, i) => `<figure class="cb vdoc"><div class="cb-bar"><span class="cb-lang">${esc(d.nom)}</span><div class="cb-actions"><button type="button" class="btn mini ghost" data-vp="copy" data-i="${i}">Copier</button>${d.fichier ? `<button type="button" class="btn mini ghost" data-vp="save" data-i="${i}">Télécharger</button>` : ''}</div></div><pre class="cb-code"><code>${hlJava(d.code)}</code></pre></figure>`).join('');
+      panel.hidden = false;
+    } else if (kind === 'copy' || kind === 'save') {
+      const d = $('.vp-doc', det)._docs[+b.dataset.i];
+      if (kind === 'copy') {
+        const old = b.textContent;
+        try { await navigator.clipboard.writeText(d.code); b.textContent = 'Copié ✓'; } catch (err) { b.textContent = 'Copie impossible'; }
+        setTimeout(() => { b.textContent = old; }, 1500);
+      } else {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([d.code], { type: 'text/plain;charset=utf-8' }));
+        a.download = d.fichier;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      }
+    }
+  });
+}
+
 /* ---------- Routeur ---------- */
 function route() {
   let id = (location.hash || '').replace('#', '');
@@ -6598,12 +6796,14 @@ function route() {
   else if (li >= 0) html = pageLesson(LESSONS[li], li);
   else if (id === 'atelier') html = pageAtelier();
   else if (id === 'memo') html = pageMemo();
+  else if (id === 'verif') html = pageVerif();
   else html = pageLesson(PROJECT.find(p => p.id === id));
   m.innerHTML = html;
   $$('.nav a').forEach(a => a.setAttribute('aria-current', a.dataset.id === id ? 'page' : 'false'));
-  document.title = (id === 'accueil' ? 'ExAlgo Cycle 3' : ((LESSONS.find(l => l.id === id) || PROJECT.find(p => p.id === id) || { title: id === 'atelier' ? 'Atelier' : 'Mémo' }).title + ' · ExAlgo Cycle 3'));
+  document.title = (id === 'accueil' ? 'ExAlgo Cycle 3' : ((LESSONS.find(l => l.id === id) || PROJECT.find(p => p.id === id) || { title: id === 'atelier' ? 'Atelier' : id === 'verif' ? 'Vérifier mon projet' : 'Mémo' }).title + ' · ExAlgo Cycle 3'));
   mountExercises(m);
   if (id === 'atelier') mountAtelier();
+  if (id === 'verif') mountVerif();
   window.updateProgress();
   closeDrawer();
   window.scrollTo(0, 0);
