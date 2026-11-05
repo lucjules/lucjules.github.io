@@ -24,3 +24,8 @@
 .t1-form label{display:flex;align-items:center;gap:.4em;font-family:var(--f-mono)}
 .t1-form .t1-i{width:6em;min-width:0;flex:none}
 .cls-tag{display:inline-block;margin-left:.6em;padding:.05em .5em;border-radius:99px;background:var(--accent-soft);color:var(--accent);font:600 .72rem var(--f-mono);vertical-align:middle}
+.chrono{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:.6em 0;padding:8px 12px;border:2px solid var(--ink);border-radius:var(--r);background:var(--paper2)}
+.chrono-l{font-weight:700}
+.chrono-t{font-family:var(--f-mono);font-size:1.1rem;font-variant-numeric:tabular-nums}
+.chrono.over .chrono-t{color:var(--ko);font-weight:700}
+@media print{.chrono{display:none}}

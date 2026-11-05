@@ -3,7 +3,7 @@
    essayé d'abord (pour avoir la dernière version) et le cache sert de secours.
    VERSION et FICHIERS sont générés par outils/construire.js : ne pas les modifier à la main. */
 // <généré>
-const VERSION = 'e76a8d8ab8';
+const VERSION = '6db0662840';
 const FICHIERS = [
   './',
   '404.html',
@@ -11,6 +11,8 @@ const FICHIERS = [
   'algo/cycle2.html',
   'algo/cycle3.html',
   'algo/index.html',
+  'algo/ressources-cycle3/Cycle3.zip',
+  'algo/ressources-cycle3/analyseTableaux.zip',
   'assets/algo.css',
   'assets/apple-touch-icon.png',
   'assets/base.css',

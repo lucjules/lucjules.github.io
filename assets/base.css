@@ -163,7 +163,7 @@ table{border-collapse:collapse;background:var(--paper);min-width:260px}
 .cb-code,.ex-code,.prog,.house-out,.afl-out{margin:0;padding:14px 16px;color:var(--slate-ink);background:var(--slate);overflow-x:auto;font-size:.88rem;line-height:1.65;tab-size:4}
 .numbered .ln,.prog .ln{display:block;padding-left:3em;position:relative;min-height:1.65em}
 .cb-code.numbered .ln::before,.numbered .ln::before,.prog .ln::before{counter-increment:ln;content:counter(ln);position:absolute;left:0;width:2em;text-align:right;color:var(--slate-mute)}
-.cb.numbered .cb-code,.prog{counter-reset:ln}
+.cb.numbered .cb-code,.prog,.ex-code.numbered{counter-reset:ln}
 .ln.active{background:#7aa2ff33;box-shadow:inset 3px 0 0 var(--k)}
 .c-kw{color:var(--k);font-weight:600}.c-type{color:var(--t)}.c-str{color:var(--s)}.c-num{color:var(--n)}.c-com{color:var(--cm);font-style:italic}.c-fn,.c-bi{color:var(--f)}.c-op{color:#ffb0a0}
 .cb-term{border-top:1px solid #ffffff1c}

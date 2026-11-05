@@ -3309,6 +3309,598 @@ static void afficherMemesMoyennes(double[][] moyennes) {
     if (nb == 0) {
         System.out.println("Aucun étudiant n'a la même moyenne qu'un autre.");
     }
+}` } },
+
+  /* ================= Leçon 7 : les tableaux en Java (MémoTP) ================= */
+  'l7-q1': { type: 'qcm', lang: 'java', code: `double a = (double) 1 / 3;
+System.out.printf("a=%.2f", a);`, q: "Qu'affiche ce programme (avec les paramètres régionaux français) ?",
+    choices: ['a=0,33', 'a=0,3333333333333333', 'a=0,3', 'a=0,333'], answer: 0,
+    why: "%.2f demande 2 décimales : le nombre est arrondi à 0,33. Avec println, on aurait eu toutes les décimales." },
+  'l7-q2': { type: 'qcm', lang: 'java', code: `int[] t = {4, 8, 2};
+int s = 0;
+for (int x : t) {
+    s = s + x;
+}
+System.out.println(s);`, q: "Qu'affiche ce programme ?",
+    choices: ['14', '2', '8', 'Une erreur : il faut un indice'], answer: 0,
+    why: "La boucle « pour chaque » donne à x, tour à tour, chaque valeur du tableau (4, puis 8, puis 2), sans qu'on ait besoin de l'indice : 4 + 8 + 2 = 14." },
+  'l7-q3': { type: 'qcm', lang: 'java', code: `static void mettreAZero(int[] t) {
+    for (int i = 0; i < t.length; i++) {
+        t[i] = 0;
+    }
+}
+
+int[] tab = {-1, 21, 0};
+mettreAZero(tab);
+System.out.println(tab[1]);`, q: "Qu'affiche ce programme ?",
+    choices: ['0', '21', '-1', "Rien n'est modifié : les paramètres sont copiés"], answer: 0,
+    why: "Un tableau est toujours passé « par référence » : la fonction travaille sur le tableau de l'appelant, comme un paramètre ES en ExAlgo. tab vaut maintenant {0, 0, 0}." },
+  'l7-q4': { type: 'qcm', lang: 'java', code: `int n = 7;
+char r = n % 2 == 0 ? 'p' : 'i';
+System.out.println(r);`, q: "Qu'affiche ce programme ?",
+    choices: ['i', 'p', '7', 'true'], answer: 0,
+    why: "L'opérateur ternaire b ? v1 : v2 vaut v1 si b est vrai, v2 sinon. Ici n % 2 == 0 est faux (7 est impair) : r vaut donc 'i'." },
+  'l7-q5': { type: 'qcm', codeChoices: true, q: "Dans un test unitaire, comment vérifier que le tableau resultat contient exactement 1, 2, 3 ?",
+    choices: ['assertArrayEquals(new int[]{1, 2, 3}, resultat);', 'assertEquals(new int[]{1, 2, 3}, resultat);', 'assertTrue(resultat == {1, 2, 3});', 'assertArrayEquals(1, 2, 3, resultat);'], answer: 0,
+    why: "assertArrayEquals compare les tableaux case par case et indique l'indice de la première différence. assertEquals comparerait les références des deux tableaux, qui sont toujours différentes." },
+  'l7-q6': { type: 'qcm', lang: 'java', code: `int[][] t = new int[4][3];`, q: 'Que valent t.length et t[0].length ?',
+    choices: ['4 et 3', '3 et 4', '12 et 3', '4 et 12'], answer: 0,
+    why: "Comme en ExAlgo, un tableau 2D est un tableau de lignes : t.length est le nombre de lignes (4), et t[0].length le nombre de colonnes (3)." },
+  'l7-q7': { type: 'qcm', lang: 'java', code: `int[] t = new int[3];
+System.out.println(t[1]);`, q: "Que se passe-t-il en Java ?",
+    choices: ["Il affiche 0 : Java met les cases d'un tableau d'entiers à 0, mais le cours demande de toujours les initialiser soi-même", "Une erreur, comme en ExAlgo : la case n'a pas de valeur", 'Il affiche null', 'Il affiche une valeur au hasard'], answer: 0,
+    why: "Java remplit les cases d'un tableau d'entiers de 0 à la création. Mais ce n'est pas une raison pour s'y fier : en ExAlgo la même ligne est une erreur, et les règles du cours demandent d'initialiser le contenu de chaque case." },
+  'l7-q8': { type: 'qcm', q: "Pourquoi écrit-on public static void main(String[] args), alors qu'il n'y a qu'un seul package ?",
+    choices: ["Parce que main est appelée depuis l'extérieur du package (c'est Java qui lance le programme)", 'Parce que sans public, la méthode ne compile pas', "Pour que la méthode puisse s'appeler elle-même", 'Pour que la méthode soit plus rapide'], answer: 0,
+    why: "public rend une méthode accessible en dehors de son package. Dans un seul package on n'en a pas besoin, sauf pour ce qui est appelé de l'extérieur : le lancement du main et les tests unitaires." },
+  'l7-q9': { type: 'qcm', q: 'À quoi sert une ligne import ?',
+    choices: ["À écrire le nom court d'une classe d'un autre package, par exemple Scanner au lieu de java.util.Scanner", "À copier le fichier d'une autre classe dans le projet", 'À rendre une méthode accessible depuis un autre package', 'À lancer le main'], answer: 0,
+    why: "import indique de quel package vient une classe, pour ne pas avoir à écrire son nom complet partout. (Seul java.lang, qui contient Math et String, est importé automatiquement.)" },
+
+  /* ================= Leçon 8 : ExosTP, lire des algorithmes ================= */
+  'l8-q1': { type: 'qcm', code: `Const TAILLE ← 6 : entier
+Var tab : tableau de TAILLE entiers
+tab[0] ← 3
+tab[1] ← 6
+tab[2] ← 7
+tab[3] ← 12
+tab[4] ← 15
+tab[5] ← 20
+ecrire(mystere1(tab, 2))
+
+Fonction mystere1(E t : tableau d'entiers, E n : entier) : entier
+Var i, resultat : entier
+Début
+    resultat ← 0
+    Pour i de 0 à t.taille - 1 Faire
+        Si t[i] % n == 0 Alors
+            resultat ← resultat + 1
+    Retourner resultat
+Fin`, q: "Qu'écrit l'algorithme 1 ?", choices: ['3', '6', '0', '12'], answer: 0,
+    why: "On compte les cases divisibles par n = 2 : 6, 12 et 20. Les autres (3, 7, 15) ont un reste différent de 0. Le résultat est 3." },
+  'l8-q2': { type: 'qcm', q: "Que fait mystere1(t, n), en une phrase ?",
+    choices: ['Elle compte les éléments de t qui sont des multiples de n', 'Elle additionne les éléments de t divisibles par n', 'Elle retourne le plus grand multiple de n dans t', "Elle dit si n divise tous les éléments de t"], answer: 0,
+    why: "Le compteur resultat augmente de 1 à chaque case dont le reste dans la division par n est 0. Un bon nom serait compterMultiples." },
+  'l8-q3': { type: 'qcm', code: `t1 = [4, 2, 1, 3, 5]
+t2 = [6, 7, 2, 1, 4]
+cible ← 14
+numTableau ← mystere2(t1, t2, cible)`, q: "Quelle valeur reçoit numTableau ? (rappel : la fonction ajoute t1[i] à s1 et t2[i] à s2 tant qu'aucune somme n'a atteint la cible)",
+    choices: ['2', '0', '1', '-1'], answer: 0,
+    why: "Sommes après chaque tour : (4, 6), (6, 13), (7, 15). Au 3e tour, s2 = 15 atteint la cible 14 alors que s1 = 7 non : c'est le tableau numéro 2 qui l'atteint en premier." },
+  'l8-q4': { type: 'qcm', q: "Que fait mystere2(t1, t2, cible), en général ?",
+    choices: ["Elle dit quel tableau atteint le premier la somme cible quand on les additionne case par case (0 : les deux en même temps, -1 : aucun)", 'Elle retourne la plus grande des deux sommes', 'Elle compte les cases où t1 et t2 sont égaux', 'Elle retourne le numéro du tableau le plus long'], answer: 0,
+    why: "La boucle s'arrête dès qu'une somme atteint la cible (ou en fin de tableau). Les Si de la fin traduisent ce qui s'est passé : 0 pour les deux, 1 pour t1 seul, 2 pour t2 seul, -1 pour aucun." },
+  'l8-q5': { type: 'qcm', code: `Pour l de 0 à mot.taille - 1 Faire
+    Pour v de 0 à voyelles.taille - 1 Faire
+        Si mot[l] == voyelles[v] Alors
+            c[v] ← c[v] + 1`, q: "Le mot a 20 lettres : e, l, e, v, a, t, i, o, n, u, y, e, e, e, x, a, m, e, n, s. À la fin, que contient c pour la voyelle 'e' ?",
+    choices: ['6', '5', '7', '1'], answer: 0,
+    why: "Le 'e' apparaît aux positions 0, 2, 11, 12, 13 et 17 : 6 fois. L'algorithme écrit donc « e --> 6 »." },
+  'l8-q6': { type: 'qcm', q: "Dans mystere3(E mot, E voyelles, ES c), pourquoi c est-il en mode ES alors que mot et voyelles sont en E ?",
+    choices: ["Parce que la fonction modifie les cases de c (les compteurs) et que l'appelant doit voir ces modifications", 'Parce que c est le plus grand des trois tableaux', 'Parce que c est un tableau d\'entiers et les deux autres de caractères', 'Pour que la fonction puisse retourner c'], answer: 0,
+    why: "mot et voyelles sont seulement lus. c est modifié (c[v] ← c[v] + 1) : sans le mode ES, ce serait une erreur de syntaxe, et l'appelant ne verrait pas les comptes." },
+  'l8-c1': { type: 'code', title: 'Algorithme 1 : le coder avec un bon nom',
+    prompt: "Écris compterMultiples(E t : tableau d'entiers, E n : entier) : entier (c'est mystere1 avec un nom explicite) : elle retourne le nombre d'éléments de t qui sont des multiples de n.",
+    starter: `Fonction compterMultiples(E t : tableau d'entiers, E n : entier) : entier
+Var i, resultat : entier
+Début
+    // à compléter
+Fin`,
+    tests: [[['[3, 6, 7, 12, 15, 20]', 2], 3], [['[3, 6, 7, 12, 15, 20]', 3], 4], [['[1, 2, 3]', 5], 0], [['[]', 4], 0], [['[10]', 5], 1]].map(([a, e]) => callT('compterMultiples', a, e)),
+    srcChecks: [{ re: 'Pour\\s', min: 1, label: 'Utilise un Pour', msg: "On parcourt tout le tableau : un Pour de 0 à t.taille - 1 convient." }],
+    hint: "resultat ← 0 ; Pour i de 0 à t.taille - 1 Faire Si t[i] % n == 0 Alors resultat ← resultat + 1 ; puis Retourner resultat.",
+    solution: { ex: `Fonction compterMultiples(E t : tableau d'entiers, E n : entier) : entier
+Var i, resultat : entier
+Début
+    resultat ← 0
+    Pour i de 0 à t.taille - 1 Faire
+        Si t[i] % n == 0 Alors
+            resultat ← resultat + 1
+    Retourner resultat
+Fin`, java: `/**
+ * Compte les éléments d'un tableau qui sont des multiples d'un entier.
+ *
+ * @param t le tableau à parcourir
+ * @param n l'entier dont on cherche les multiples (non nul)
+ * @return le nombre d'éléments de t divisibles par n
+ */
+static int compterMultiples(int[] t, int n) {
+    int resultat = 0;
+    for (int i = 0; i < t.length; i++) {
+        if (t[i] % n == 0) {
+            resultat = resultat + 1;
+        }
+    }
+    return resultat;
+}` } },
+  'l8-c2': { type: 'code', title: 'Algorithme 2 : quel tableau atteint la cible le premier ?',
+    prompt: "Écris quiAtteintLaCible(E t1, E t2 : tableaux d'entiers, E cible : entier) : entier (c'est mystere2). On ajoute t1[i] à s1 et t2[i] à s2 case par case, tant qu'on n'a pas dépassé la fin d'un tableau et qu'aucune somme n'a atteint la cible (>=). Retourne 0 si les deux sommes atteignent la cible, 1 si seule s1 l'atteint, 2 si seule s2 l'atteint, -1 si aucune.",
+    starter: `Fonction quiAtteintLaCible(E t1 : tableau d'entiers, E t2 : tableau d'entiers, E cible : entier) : entier
+Var s1, s2, i, resultat : entier
+Début
+    // à compléter
+Fin`,
+    tests: [[['[4, 2, 1, 3, 5]', '[6, 7, 2, 1, 4]', 14], 2], [['[10, 10]', '[1, 1]', 15], 1], [['[5, 5]', '[5, 5]', 10], 0], [['[1, 1]', '[1, 1]', 10], -1], [['[3, 3, 3]', '[1, 1, 20]', 5], 1]].map(([a, e]) => callT('quiAtteintLaCible', a, e)),
+    srcChecks: [{ re: 'Tant\\s+Que', min: 1, label: 'Utilise Tant Que', msg: "On doit pouvoir s'arrêter dès qu'une somme atteint la cible : utilise un Tant Que." }],
+    hint: "Tant Que i < t1.taille et i < t2.taille et s1 < cible et s2 < cible Faire (ajoute les deux cases, i ← i + 1). Ensuite, des Si imbriqués sur s1 >= cible et s2 >= cible donnent le résultat.",
+    solution: { ex: `Fonction quiAtteintLaCible(E t1 : tableau d'entiers, E t2 : tableau d'entiers, E cible : entier) : entier
+Var s1, s2, i, resultat : entier
+Début
+    s1 ← 0
+    s2 ← 0
+    i ← 0
+    Tant Que i < t1.taille et i < t2.taille et s1 < cible et s2 < cible Faire
+        s1 ← s1 + t1[i]
+        s2 ← s2 + t2[i]
+        i ← i + 1
+    Si s1 >= cible Alors
+        Si s2 >= cible Alors
+            resultat ← 0
+        Sinon
+            resultat ← 1
+    Sinon
+        Si s2 >= cible Alors
+            resultat ← 2
+        Sinon
+            resultat ← -1
+    Retourner resultat
+Fin`, java: `/**
+ * Dit lequel de deux tableaux atteint le premier une somme cible, en les
+ * additionnant case par case.
+ *
+ * @param t1 le premier tableau
+ * @param t2 le second tableau
+ * @param cible la somme à atteindre
+ * @return 0 si les deux sommes atteignent la cible simultanément, 1 si seule
+ *         celle de t1 l'atteint, 2 si seule celle de t2 l'atteint, -1 si aucune
+ */
+static int quiAtteintLaCible(int[] t1, int[] t2, int cible) {
+    int s1 = 0;
+    int s2 = 0;
+    int i = 0;
+    while (i < t1.length && i < t2.length && s1 < cible && s2 < cible) {
+        s1 = s1 + t1[i];
+        s2 = s2 + t2[i];
+        i = i + 1;
+    }
+    int resultat;
+    if (s1 >= cible) {
+        resultat = s2 >= cible ? 0 : 1;
+    } else {
+        resultat = s2 >= cible ? 2 : -1;
+    }
+    return resultat;
+}` } },
+  'l8-c3': { type: 'code', title: 'Algorithme 3 : compter les voyelles (mode ES)',
+    prompt: "Complète compterVoyelles(E mot, E voyelles : tableaux de caractères, ES c : tableau d'entiers) : pour chaque lettre du mot, si c'est la voyelle numéro v, ajoute 1 à c[v]. Avec « banane », le programme en dessous doit afficher « [2, 1, 0, 0, 0, 0] ».",
+    starter: `Fonction compterVoyelles(E mot : tableau de caractères, E voyelles : tableau de caractères, ES c : tableau d'entiers)
+Var l, v : entier
+Début
+    // à compléter
+Fin
+
+Var voyelles : tableau de 6 caractères
+Var compte : tableau de 6 entiers
+Var mot : tableau de 6 caractères
+voyelles ← ['a', 'e', 'i', 'o', 'u', 'y']
+compte ← [0, 0, 0, 0, 0, 0]
+mot ← ['b', 'a', 'n', 'a', 'n', 'e']
+compterVoyelles(mot, voyelles, compte)
+ecrireLigne(compte)`,
+    tests: [{ script: true, out: '[2, 1, 0, 0, 0, 0]' }],
+    hint: "Deux Pour imbriqués : l'extérieur sur les lettres du mot (l), l'intérieur sur les voyelles (v). Si mot[l] == voyelles[v] Alors c[v] ← c[v] + 1.",
+    solution: { ex: `Fonction compterVoyelles(E mot : tableau de caractères, E voyelles : tableau de caractères, ES c : tableau d'entiers)
+Var l, v : entier
+Début
+    Pour l de 0 à mot.taille - 1 Faire
+        Pour v de 0 à voyelles.taille - 1 Faire
+            Si mot[l] == voyelles[v] Alors
+                c[v] ← c[v] + 1
+Fin
+
+Var voyelles : tableau de 6 caractères
+Var compte : tableau de 6 entiers
+Var mot : tableau de 6 caractères
+voyelles ← ['a', 'e', 'i', 'o', 'u', 'y']
+compte ← [0, 0, 0, 0, 0, 0]
+mot ← ['b', 'a', 'n', 'a', 'n', 'e']
+compterVoyelles(mot, voyelles, compte)
+ecrireLigne(compte)`, java: `/**
+ * Compte, pour chaque voyelle, combien de fois elle apparaît dans un mot.
+ *
+ * @param mot le mot à analyser
+ * @param voyelles les voyelles à compter
+ * @param c les compteurs, modifiés : c[v] augmente à chaque occurrence de voyelles[v]
+ */
+static void compterVoyelles(char[] mot, char[] voyelles, int[] c) {
+    for (int l = 0; l < mot.length; l++) {
+        for (int v = 0; v < voyelles.length; v++) {
+            if (mot[l] == voyelles[v]) {
+                c[v] = c[v] + 1;
+            }
+        }
+    }
+}` } },
+
+  /* ================= Leçon 9 : ExosTP, documenter et déboguer ================= */
+  'l9-q1': { type: 'qcm', lang: 'java', code: `static void fct0(int[] t) {
+    for (int i = 0; i < t.length; i++) {
+        t[i] = (int) (Math.random() * 100);
+    }
+}`, q: 'Que fait fct0 ?', choices: ['Elle remplit le tableau de nombres entiers tirés au hasard entre 0 et 99', 'Elle affiche le tableau', 'Elle retourne un nombre aléatoire', 'Elle crée un nouveau tableau de 100 cases'], answer: 0,
+    why: "Math.random() donne un réel dans [0 ; 1[. Multiplié par 100 puis converti en int, cela donne un entier de 0 à 99, rangé dans chaque case : le tableau (passé en ES) est modifié. Un nom possible : remplirAleatoirement." },
+  'l9-q2': { type: 'qcm', lang: 'java', code: `static void fct1(int[] t) {
+    for (int i = 0; i < t.length; i++) {
+        System.out.println("t[" + i + "]=" + t[i]);
+    }
+}`, q: 'Que fait fct1, et quel nom lui donner ?', choices: ['Elle affiche chaque case avec son indice : afficherTableau', 'Elle remplit le tableau : remplirTableau', 'Elle compte les cases : compterCases', 'Elle recherche une valeur : chercherValeur'], answer: 0,
+    why: "Une ligne est affichée par case, sous la forme t[0]=12. C'est un parcours qui ne modifie rien : afficherTableau est un nom clair." },
+  'l9-q3': { type: 'qcm', lang: 'java', code: `static int fct2(int[] t) {
+    int s = 0;
+    for (int i = 0; i < t.length; i++) {
+        s += t[i];
+    }
+    return s;
+}`, q: 'Que fait fct2, et quel nom lui donner ?', choices: ['Elle additionne toutes les cases : somme', 'Elle retourne la dernière case : derniere', 'Elle compte les cases : taille', 'Elle retourne la moyenne : moyenne'], answer: 0,
+    why: "L'accumulateur s part de 0 et reçoit chaque case : c'est un parcours « agréger sur toutes les données ». Attention à ne pas dire moyenne : on ne divise jamais par le nombre de cases." },
+  'l9-q4': { type: 'qcm', lang: 'java', code: `static int fct3(int[] t) {
+    int m = t[0];
+    for (int i = 1; i < t.length; i++) {
+        m = t[i] < m ? m : t[i];
+    }
+    return m;
+}`, q: 'Que fait fct3 ?', choices: ['Elle retourne le plus grand élément du tableau', 'Elle retourne le plus petit élément du tableau', "Elle retourne l'indice du plus grand élément", 'Elle trie le tableau'], answer: 0,
+    why: "À chaque tour, si t[i] < m on garde m, sinon on prend t[i] : m ne fait que grandir, c'est le maximum. Nom possible : maximum. (Elle suppose un tableau non vide, à écrire dans la javadoc.)" },
+  'l9-q5': { type: 'qcm', lang: 'java', code: `static int compterNombreVoyelles(char[] tab) {
+    int compteur = 1;
+    for (int i = 0; i < tab.length; i++) {
+        char c = Character.toLowerCase(tab[i]);
+        if (c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u') {
+            compteur++;
+        }
+    }
+    return compteur;
+}`, q: "Les tests attendent 6 pour {a, e, i, o, u, y}, 0 pour {b, c, d, f, g} et 1 pour {A}. Où sont les erreurs ?",
+    choices: ["compteur démarre à 1 au lieu de 0, et le 'y' n'est pas compté comme voyelle", "La boucle oublie la dernière case, et compteur démarre à 1", "toLowerCase est interdit sur un caractère, et le return est faux", "Il n'y en a pas : ce sont les tests qui sont faux"], answer: 0,
+    why: "Le cas {b, c, d, f, g} donne 1 au lieu de 0 : l'accumulateur doit démarrer à 0. Et {a, e, i, o, u, y} donne 5 au lieu de 6 : les tests comptent 'y' parmi les voyelles, il manque c == 'y'." },
+  'l9-q6': { type: 'qcm', lang: 'java', code: `static void convertirMinMaj(char[] tab) {
+    for (int i = 0; i < tab.length - 1; i++) {
+        if (Character.isLowerCase(tab[i])) {
+            tab[i] = Character.toUpperCase(tab[i]);
+        }
+    }
+}`, q: 'Pourquoi le test avec {a, b, c} (attendu {A, B, C}) échoue-t-il ?',
+    choices: ["La condition i < tab.length - 1 ne traite jamais la dernière case : il faut i < tab.length", "isLowerCase renvoie toujours false", "toUpperCase ne marche pas sur les tableaux", "La boucle commence à l'indice 1"], answer: 0,
+    why: "Avec length - 1, la boucle s'arrête avant la dernière case : le 'c' reste en minuscule. Ce piège « un tour de trop / un tour de moins » se trouve en regardant le premier tour et le dernier tour de la boucle." },
+  'l9-q7': { type: 'qcm', lang: 'java', code: `static boolean contientCaractereInterdit(char[] tab, char[] interdits) {
+    int i = 0;
+    boolean trouve = true;
+    while (i < tab.length || trouve) {
+        int j = 0;
+        while (j < interdits.length || trouve) {
+            if (tab[i] == interdits[j]) {
+                trouve = false;
+            }
+            j++;
+        }
+        i++;
+    }
+    return trouve;
+}`, q: "Les tests lèvent une ArrayIndexOutOfBoundsException. Quelle est la bonne description du problème ?",
+    choices: ["trouve vaut true au départ au lieu de false, on le passe à false quand on trouve (sens inversé), et les deux conditions utilisent || au lieu de && !trouve", "Il manque seulement un i++ dans la boucle intérieure", "Il faut remplacer tab[i] par tab[j]", "Le return devrait être dans la boucle"], answer: 0,
+    why: "Un parcours « vérifier une propriété » : trouve ← false au départ, trouve ← true à la découverte, et on boucle tant que i < taille ET non trouve. Avec ||, la boucle continue tant que trouve vaut true, c'est-à-dire presque toujours, jusqu'à sortir du tableau." },
+  'l9-q8': { type: 'qcm', lang: 'java', code: `@Test
+public void testRemplacerLettres() {
+    char[] tab1 = {'a', 'b', 'c'};
+    AnalyseTableauCaracteres.remplacerLettres(tab1, 'b', 'x');
+    assertArrayEquals(new char[]{'a', 'x', 'c'}, tab1);
+
+    char[] tab2 = {'a', 'b', 'b', 'c'};
+    AnalyseTableauCaracteres.remplacerLettres(tab2, 'b', 'z');
+    assertArrayEquals(new char[]{'a', 'z', 'z', 'c'}, tab1);
+
+    char[] tab4 = {'a', 'b', 'c'};
+    AnalyseTableauCaracteres.remplacerLettres(tab4, 'b', 'b');
+    assertArrayEquals(new char[]{'a', 'b', 'b'}, tab4);
+}`, q: "La méthode remplacerLettres est pourtant correcte. Qu'est-ce qui fait échouer ce test ?",
+    choices: ["Le test lui-même : le deuxième assert compare tab1 au lieu de tab2, et le troisième attend {a, b, b} alors que remplacer 'b' par 'b' ne change rien", "La méthode devrait retourner le tableau", "Le type char[] est interdit dans un test", "assertArrayEquals ne compare pas les char"], answer: 0,
+    why: "Un test peut aussi contenir une erreur ! Ici, un copier-coller laisse tab1 à la place de tab2, et une attente fausse : {a, b, c} est le bon résultat pour tab4. Quand un test échoue, on se demande toujours qui a tort : le code ou le test." },
+  'l9-q9': { type: 'qcm', lang: 'java', code: `static boolean contientSousMot(char[] texte, char[] mot) {
+    boolean present = false;
+    int i = 0;
+    while (i <= texte.length - mot.length && !present) {
+        int j = 0;
+        while (j < mot.length && texte[i + j] == mot[j] && !present) {
+            j++;
+        }
+        if (j == mot.length) {
+            present = true;
+        }
+        i++;
+    }
+    return present;
+}`, q: "Tous les tests passent sauf celui où mot est un tableau vide (attendu : false). Pourquoi ?",
+    choices: ["Avec un mot vide, j vaut 0 donc j == mot.length dès le premier tour : present devient true", "La première boucle ne s'exécute jamais", "texte[i + j] sort du tableau", "present n'est jamais remis à false"], answer: 0,
+    why: "Un mot vide est « trouvé » partout, ce qui est faux pour le cahier des charges. Il faut traiter ce cas : par exemple if (j == mot.length && mot.length > 0). Les cas limites (tableau vide, un seul élément) sont ceux que les tests unitaires doivent couvrir." },
+  'l9-c1': { type: 'code', title: 'Corriger compterNombreVoyelles',
+    prompt: "Cette version échoue aux tests : corrige-la (deux erreurs). Elle doit retourner le nombre de voyelles a, e, i, o, u, y d'un tableau de lettres minuscules.",
+    starter: `Fonction compterNombreVoyelles(E tab : tableau de caractères) : entier
+Var i, compteur : entier
+    c : caractère
+Début
+    compteur ← 1
+    Pour i de 0 à tab.taille - 1 Faire
+        c ← tab[i]
+        Si c == 'a' ou c == 'e' ou c == 'i' ou c == 'o' ou c == 'u' Alors
+            compteur ← compteur + 1
+    Retourner compteur
+Fin`,
+    tests: [[["['a', 'e', 'i', 'o', 'u', 'y']"], 6], [["['b', 'c', 'd', 'f', 'g']"], 0], [["['h', 'e', 'l', 'l', 'o']"], 2], [["['b', 'j', 'j', 'f', 'r', 'y']"], 1], [["['a']"], 1], [["['!']"], 0]].map(([a, e]) => callT('compterNombreVoyelles', a, e)),
+    hint: "Avec un tableau sans voyelle, la fonction retourne 1 : l'accumulateur ne démarre pas au bon endroit. Et regarde le test {a, e, i, o, u, y}.",
+    solution: { ex: `Fonction compterNombreVoyelles(E tab : tableau de caractères) : entier
+Var i, compteur : entier
+    c : caractère
+Début
+    compteur ← 0
+    Pour i de 0 à tab.taille - 1 Faire
+        c ← tab[i]
+        Si c == 'a' ou c == 'e' ou c == 'i' ou c == 'o' ou c == 'u' ou c == 'y' Alors
+            compteur ← compteur + 1
+    Retourner compteur
+Fin`, java: `/**
+ * Compte les voyelles (a, e, i, o, u, y, majuscules ou minuscules) d'un tableau de caractères.
+ *
+ * @param tab le tableau de caractères à analyser
+ * @return le nombre de voyelles de tab
+ */
+static int compterNombreVoyelles(char[] tab) {
+    int compteur = 0;
+    for (int i = 0; i < tab.length; i++) {
+        char c = Character.toLowerCase(tab[i]);
+        if (c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u' || c == 'y') {
+            compteur++;
+        }
+    }
+    return compteur;
+}` } },
+  'l9-c2': { type: 'code', title: 'Corriger contientCaractereInterdit',
+    prompt: "Cette version plante ou se trompe : corrige-la pour qu'elle retourne vrai si au moins un caractère de tab figure dans interdits. Pense au schéma « vérifier une propriété » : trouve vaut faux au départ, et on s'arrête dès qu'il vaut vrai.",
+    starter: `Fonction contientCaractereInterdit(E tab : tableau de caractères, E interdits : tableau de caractères) : booléen
+Var i, j : entier
+    trouve : booléen
+Début
+    trouve ← vrai
+    i ← 0
+    Tant Que i < tab.taille ou trouve Faire
+        j ← 0
+        Tant Que j < interdits.taille ou trouve Faire
+            Si tab[i] == interdits[j] Alors
+                trouve ← faux
+            j ← j + 1
+        i ← i + 1
+    Retourner trouve
+Fin`,
+    tests: [[["['a', 'b', 'c']", "['x', 'y', 'b']"], 'vrai'], [["['a', 'b', 'c']", "['x', 'y', 'z']"], 'faux'], [["['x', 'y', 'z']", "['z']"], 'vrai'], [["['%']", "['&']"], 'faux'], [["['!', '@', '#']", "['!', '@', '#']"], 'vrai']].map(([a, e]) => callT('contientCaractereInterdit', a, e)),
+    srcChecks: [{ re: 'Tant\\s+Que[^\\n]*non\\s+trouve', min: 2, label: 'Les deux boucles s\'arrêtent dès que trouve vaut vrai', msg: "Chaque Tant Que doit contenir « et non trouve »." }],
+    hint: "Trois changements : trouve ← faux au départ, trouve ← vrai à la découverte, et chaque condition de boucle devient « … et non trouve » au lieu de « … ou trouve ».",
+    solution: { ex: `Fonction contientCaractereInterdit(E tab : tableau de caractères, E interdits : tableau de caractères) : booléen
+Var i, j : entier
+    trouve : booléen
+Début
+    trouve ← faux
+    i ← 0
+    Tant Que i < tab.taille et non trouve Faire
+        j ← 0
+        Tant Que j < interdits.taille et non trouve Faire
+            Si tab[i] == interdits[j] Alors
+                trouve ← vrai
+            j ← j + 1
+        i ← i + 1
+    Retourner trouve
+Fin`, java: `/**
+ * Teste si un tableau de caractères contient au moins un caractère interdit.
+ *
+ * @param tab le tableau de caractères à vérifier
+ * @param interdits les caractères interdits
+ * @return true si au moins un caractère de tab figure dans interdits
+ */
+static boolean contientCaractereInterdit(char[] tab, char[] interdits) {
+    int i = 0;
+    boolean trouve = false;
+    while (i < tab.length && !trouve) {
+        int j = 0;
+        while (j < interdits.length && !trouve) {
+            if (tab[i] == interdits[j]) {
+                trouve = true;
+            }
+            j++;
+        }
+        i++;
+    }
+    return trouve;
+}` } },
+  'l9-c3': { type: 'code', title: 'Corriger contientSousMot (le cas du mot vide)',
+    prompt: "Cette version passe tous les tests sauf deux : un mot vide ne doit jamais être trouvé (attendu : faux). Corrige-la sans casser les autres cas.",
+    starter: `Fonction contientSousMot(E texte : tableau de caractères, E mot : tableau de caractères) : booléen
+Var i, j : entier
+    present : booléen
+Début
+    present ← faux
+    i ← 0
+    Tant Que i <= texte.taille - mot.taille et non present Faire
+        j ← 0
+        Tant Que j < mot.taille et texte[i + j] == mot[j] Faire
+            j ← j + 1
+        Si j == mot.taille Alors
+            present ← vrai
+        i ← i + 1
+    Retourner present
+Fin`,
+    tests: [[["['b', 'o', 'n', 'j', 'o', 'u', 'r']", "['b', 'o', 'n']"], 'vrai'], [["['s', 'a', 'l', 'u', 't']", "['l', 'u']"], 'vrai'], [["['a', 'b', 'c', 'd', 'e']", "['d', 'e']"], 'vrai'], [["['a', 'b', 'c']", "['x', 'y']"], 'faux'], [["['a', 'b', 'c']", '[]'], 'faux'], [["['a', 'b']", "['a', 'b', 'c']"], 'faux'], [["['o', 'k']", "['o', 'k']"], 'vrai'], [['[]', "['a']"], 'faux'], [["['a', 'b', 'c', 'd']", "['b', 'd']"], 'faux']].map(([a, e]) => callT('contientSousMot', a, e)),
+    hint: "Un mot vide a j == mot.taille dès le départ. Ajoute une condition pour que present ne passe à vrai que si le mot contient au moins une lettre.",
+    solution: { ex: `Fonction contientSousMot(E texte : tableau de caractères, E mot : tableau de caractères) : booléen
+Var i, j : entier
+    present : booléen
+Début
+    present ← faux
+    i ← 0
+    Tant Que i <= texte.taille - mot.taille et non present Faire
+        j ← 0
+        Tant Que j < mot.taille et texte[i + j] == mot[j] Faire
+            j ← j + 1
+        Si j == mot.taille et mot.taille > 0 Alors
+            present ← vrai
+        i ← i + 1
+    Retourner present
+Fin`, java: `/**
+ * Teste si un mot apparaît tel quel (lettres consécutives) dans un texte.
+ *
+ * @param texte le texte dans lequel chercher
+ * @param mot le mot cherché
+ * @return true si mot (non vide) figure dans texte, false sinon
+ */
+static boolean contientSousMot(char[] texte, char[] mot) {
+    boolean present = false;
+    int i = 0;
+    while (i <= texte.length - mot.length && !present) {
+        int j = 0;
+        while (j < mot.length && texte[i + j] == mot[j]) {
+            j++;
+        }
+        if (j == mot.length && mot.length > 0) {
+            present = true;
+        }
+        i++;
+    }
+    return present;
+}` } },
+
+  /* ================= Leçon 10 : entraînement, exercices mécaniques ================= */
+  'l10-c1': { type: 'code', title: 'compterOccurences (Pour) : 5 minutes',
+    prompt: "Écris compterOccurences(E t : tableau d'entiers, E v : entier) : entier, qui retourne le nombre de fois que v est présent dans t. Avec {1, 2, 3, 3, 4} : 2 pour v = 3, 0 pour v = 5.",
+    starter: `Fonction compterOccurences(E t : tableau d'entiers, E v : entier) : entier
+Var i, nb : entier
+Début
+    // à compléter
+Fin`,
+    tests: [[['[1, 2, 3, 3, 4]', 3], 2], [['[1, 2, 3, 3, 4]', 5], 0], [['[]', 1], 0], [['[7, 7, 7]', 7], 3], [['[4]', 4], 1]].map(([a, e]) => callT('compterOccurences', a, e)),
+    srcChecks: [{ re: 'Pour\\s', min: 1, label: 'Utilise un Pour', msg: "Cet exercice s'entraîne avec une boucle Pour." }],
+    hint: "nb ← 0 ; Pour i de 0 à t.taille - 1 Faire Si t[i] == v Alors nb ← nb + 1 ; Retourner nb.",
+    solution: { ex: `Fonction compterOccurences(E t : tableau d'entiers, E v : entier) : entier
+Var i, nb : entier
+Début
+    nb ← 0
+    Pour i de 0 à t.taille - 1 Faire
+        Si t[i] == v Alors
+            nb ← nb + 1
+    Retourner nb
+Fin`, java: `static int compterOccurences(int[] t, int v) {
+    int nb = 0;
+    for (int i = 0; i < t.length; i++) {
+        if (t[i] == v) {
+            nb++;
+        }
+    }
+    return nb;
+}` } },
+  'l10-c2': { type: 'code', title: 'estPresent (Tant Que) : 5 minutes',
+    prompt: "Écris estPresent(E t : tableau d'entiers, E v : entier) : booléen, qui retourne vrai si v est présent dans t, faux sinon. Avec {1, 2, 3, 3, 4} : vrai pour v = 3, faux pour v = 5. Cette fois, avec un Tant Que qui s'arrête dès que v est trouvé.",
+    starter: `Fonction estPresent(E t : tableau d'entiers, E v : entier) : booléen
+Var i : entier
+    trouve : booléen
+Début
+    // à compléter
+Fin`,
+    tests: [[['[1, 2, 3, 3, 4]', 3], 'vrai'], [['[1, 2, 3, 3, 4]', 5], 'faux'], [['[]', 1], 'faux'], [['[9]', 9], 'vrai'], [['[1, 2, 3]', 1], 'vrai']].map(([a, e]) => callT('estPresent', a, e)),
+    srcChecks: [{ re: 'Tant\\s+Que', min: 1, label: 'Utilise Tant Que', msg: "Cet exercice s'entraîne avec une boucle Tant Que." }],
+    hint: "trouve ← faux ; i ← 0 ; Tant Que non trouve et i < t.taille Faire … Si t[i] == v Alors trouve ← vrai Sinon i ← i + 1.",
+    solution: { ex: `Fonction estPresent(E t : tableau d'entiers, E v : entier) : booléen
+Var i : entier
+    trouve : booléen
+Début
+    trouve ← faux
+    i ← 0
+    Tant Que non trouve et i < t.taille Faire
+        Si t[i] == v Alors
+            trouve ← vrai
+        Sinon
+            i ← i + 1
+    Retourner trouve
+Fin`, java: `static boolean estPresent(int[] t, int v) {
+    boolean trouve = false;
+    int i = 0;
+    while (!trouve && i < t.length) {
+        if (t[i] == v) {
+            trouve = true;
+        } else {
+            i++;
+        }
+    }
+    return trouve;
+}` } },
+  'l10-c3': { type: 'code', title: 'positionSomme (Tant Que) : 7 minutes',
+    prompt: "Écris positionSomme(E t : tableau d'entiers, E seuil : entier) : entier, qui retourne l'indice de la case où la somme des éléments (depuis le début) dépasse strictement seuil, ou -1 si elle ne le dépasse jamais. Avec {1, -2, 3, 3, 4} : 0 pour -3 (dès la première case on dépasse -3), 3 pour 3 (sommes 1, -1, 2, 5), -1 pour 9 (la somme totale vaut 9, sans dépasser).",
+    starter: `Fonction positionSomme(E t : tableau d'entiers, E seuil : entier) : entier
+Var i, somme : entier
+    trouve : booléen
+Début
+    // à compléter
+Fin`,
+    tests: [[['[1, -2, 3, 3, 4]', -3], 0], [['[1, -2, 3, 3, 4]', 3], 3], [['[1, -2, 3, 3, 4]', 0], 0], [['[1, -2, 3, 3, 4]', 9], -1], [['[1, -2, 3, 3, 4]', 10], -1], [['[5]', 4], 0], [['[]', 0], -1]].map(([a, e]) => callT('positionSomme', a, e)),
+    srcChecks: [{ re: 'Tant\\s+Que', min: 1, label: 'Utilise Tant Que', msg: "Il faut s'arrêter dès que la somme dépasse le seuil : utilise un Tant Que." }],
+    hint: "Garde une somme qui augmente de t[i] à chaque tour. Quand somme > seuil, trouve ← vrai (et on ne touche plus à i). À la sortie, si non trouve, retourne -1 ; sinon retourne i.",
+    solution: { ex: `Fonction positionSomme(E t : tableau d'entiers, E seuil : entier) : entier
+Var i, somme : entier
+    trouve : booléen
+Début
+    somme ← 0
+    i ← 0
+    trouve ← faux
+    Tant Que non trouve et i < t.taille Faire
+        somme ← somme + t[i]
+        Si somme > seuil Alors
+            trouve ← vrai
+        Sinon
+            i ← i + 1
+    Si non trouve Alors
+        i ← -1
+    Retourner i
+Fin`, java: `static int positionSomme(int[] t, int seuil) {
+    int somme = 0;
+    int i = 0;
+    boolean trouve = false;
+    while (!trouve && i < t.length) {
+        somme = somme + t[i];
+        if (somme > seuil) {
+            trouve = true;
+        } else {
+            i++;
+        }
+    }
+    if (!trouve) {
+        i = -1;
+    }
+    return i;
 }` } }
 };
 
@@ -4111,6 +4703,22 @@ const handlers = {
     const h = $('.hint', b.closest('.ex'));
     h.hidden = !h.hidden;
   },
+  'chrono'(b) {
+    const w = b.closest('.chrono'), out = $('.chrono-t', w), but = +w.dataset.min * 60;
+    const deux = n => String(n).padStart(2, '0');
+    if (w._t) { clearInterval(w._t); w._t = null; b.textContent = 'Relancer'; return; }
+    const t0 = Date.now();
+    const tick = () => {
+      if (!document.contains(w)) { clearInterval(w._t); w._t = null; return; }
+      const sec = Math.floor((Date.now() - t0) / 1000);
+      out.textContent = deux(Math.floor(sec / 60)) + ':' + deux(sec % 60) + ' / ' + deux(+w.dataset.min) + ':00';
+      w.classList.toggle('over', sec > but);
+    };
+    w.classList.remove('over');
+    tick();
+    w._t = setInterval(tick, 500);
+    b.textContent = 'Arrêter';
+  },
   'code-sol'(b) {
     const s = $('.sol', b.closest('.ex'));
     s.hidden = !s.hidden;
@@ -4391,6 +4999,10 @@ document.addEventListener('submit', async e => {
 /* Contenu du cycle 3 : leçons (MémoTD), projet, mémo, atelier */
 const c = s => `<code>${esc(s)}</code>`;
 const tbl = (head, rows, cls) => `<div class="tbl-wrap"><table class="tbl ${cls || ''}"><thead><tr>${head.map(h => `<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+// Bloc de code Java seul (sans onglets ExAlgo)
+const jv = code => `<pre class="ex-code"><code>${hlJava(code)}</code></pre>`;
+// Chronomètre des exercices mécaniques : min = temps imparti en minutes
+const chrono = min => `<div class="chrono" data-min="${min}"><span class="chrono-l">Chronomètre</span><output class="chrono-t">00:00 / ${String(min).padStart(2, '0')}:00</output><button type="button" class="btn mini" data-act="chrono">Démarrer</button></div>`;
 const PROG_RUN = '\ngestionNotesPrincipal()\n';
 
 const PROG_CONTIENT_Z = `Var tab : tableau de 4 caractères
@@ -4923,6 +5535,361 @@ ${tbl(['Pour…', 'ExAlgo', 'Java'], [
     ['le nombre de lignes', c('t.taille'), c('t.length')],
     ['le nombre de colonnes', c('t[0].taille'), c('t[0].length')]])}
 `
+  },
+  /* ------------------------------------------------------------ 7 */
+  {
+    id: 'l7', title: 'Les tableaux en Java (MémoTP)', ex: ['l7-q1', 'l7-q2', 'l7-q3', 'l7-q4', 'l7-q5', 'l7-q6', 'l7-q7', 'l7-q8', 'l7-q9'],
+    lead: "Le MémoTP du cycle : tout ce qu'il faut pour écrire en Java les tableaux vus en ExAlgo, les tester, et quelques mots-clés à connaître.",
+    skill: 'Écrire et tester des tableaux 1D et 2D en Java',
+    body: () => `
+<h2>Plusieurs classes, tests et lancement</h2>
+<p>Comme en ExAlgo, nous utilisons plusieurs classes en Java à partir de ce cycle. Les règles expliquées dans la première leçon sont applicables en Java.</p>
+<ul>
+<li><strong>Tests</strong> : pour les tests unitaires, on crée une <strong>classe de test par classe de code</strong>. Par exemple ${c('GestionNotesEtuTest')} pour les tests portant sur la classe ${c('GestionNotesEtu')}.</li>
+<li><strong>Lancement</strong> : en Java, on exécute une <em>classe</em> (flèche verte ou ${c('F6')}), ce qui lance sa fonction ${c('main()')}. Chaque classe peut avoir (ou non) une telle fonction ${c('main()')}. Attention donc, au lancement, à vérifier <strong>quelle classe</strong> est lancée (idem quand plusieurs projets sont ouverts dans NetBeans).</li>
+</ul>
+<h2>Affichage formaté de doubles</h2>
+<p>La méthode ${c('System.out.println()')} affiche un nombre prédéfini de décimales pour les doubles. Pour choisir le nombre de décimales affichées, on utilise ${c('System.out.printf()')} :</p>
+${jv(`double a = (double) 1 / 3;
+double b = 2.5487451;
+System.out.println("a=" + a + " b=" + b);
+System.out.printf("a=%.2f b=%.3f ", a, b);
+System.out.println();`)}
+<p>Ce code affiche :</p>
+<pre class="ex-code"><code>a=0.3333333333333333 b=2.5487451
+a=0,33 b=2,549</code></pre>
+<p>Dans ${c('%.2f')}, le <em>f</em> désigne un réel et <em>.2</em> demande deux décimales (avec arrondi). Chaque ${c('%…')} est remplacé, dans l'ordre, par l'un des arguments qui suivent le texte.</p>
+<h2>Les tableaux 1D en Java</h2>
+<h3>Déclaration</h3>
+<p>Les tableaux sont déclarés avec ${c('type[]')}, initialisés avec ${c('new')} et accédés avec ${c('[]')} :</p>
+${jv(`// déclaration d'un tableau de 5 entiers
+int[] monTab;
+// initialisation de ce tableau
+monTab = new int[5];
+
+char[] tab2 = new char[6];                // tableau de 6 caractères (déclaration + initialisation)
+double[] ceJoliTableau = new double[1000]; // tableau de 1000 réels`)}
+<h3>Initialisation complète à la déclaration</h3>
+<p>Il est également possible d'initialiser complètement un tableau dès sa déclaration :</p>
+${jv(`int[] dimensions = {20, 5, 4};
+char[] salles = {'A', 'C', 'R'};`)}
+${note('attention', 'Attention : règles sur les tableaux (comme en ExAlgo)', "<ul><li>En Java, le premier indice d'un tableau est toujours <strong>0</strong>.</li><li>Tous les éléments d'un tableau sont du <strong>même type</strong>.</li><li>Un tableau est de <strong>taille fixe</strong> et pré-définie.</li><li>Il faut toujours penser à initialiser : la taille d'un tableau, et le contenu de chaque case d'un tableau.</li></ul>")}
+<h3>Modification et accès aux cases</h3>
+<p>Voici un exemple complet. Remarque : ${c('nbJours.length')} donne la taille du tableau (12 dans notre cas).</p>
+${jv(`int[] nbJours = new int[12];   // déclaration et initialisation d'un tableau de 12 entiers
+nbJours[0] = 31;
+nbJours[1] = 28;
+nbJours[2] = 31;
+//...
+nbJours[10] = 30;
+nbJours[11] = 31;
+
+// on boucle sur toutes les cases du tableau
+// interdiction d'écrire i < 12, il faut utiliser nbJours.length
+for (int i = 0; i < nbJours.length; i++) {
+    faireQuelqueChose(nbJours[i]);
+}`)}
+<h3>Boucle sur les éléments</h3>
+<p>Un autre type de boucle est possible sur les tableaux, lorsqu'on souhaite accéder à ses éléments (dans l'ordre) mais que l'on n'a <strong>pas besoin de l'indice</strong> :</p>
+${jv(`char[] voyelles = {'a', 'e', 'i', 'o', 'u', 'y'};
+System.out.print("Les voyelles sont :");
+for (char voyelle : voyelles) {
+    System.out.print(" " + voyelle);
+}
+System.out.println(".");`)}
+<p>Cette boucle ne permet que de <em>lire</em> les valeurs : pour les modifier, il faut garder la boucle avec l'indice ${c('i')}.</p>
+<h3>Un tableau en paramètre</h3>
+${jv(`static void afficherTableau(int[] monTableau) {
+    for (int i = 0; i < monTableau.length; i++) {
+        System.out.println("La case numéro " + i + " de ce tableau vaut " + monTableau[i]);
+    }
+}
+
+// appel
+int[] tab = new int[3];
+tab[0] = -1;
+tab[1] = 21;
+tab[2] = 0;
+afficherTableau(tab);`)}
+<p>Un tableau est <strong>toujours passé en mode ES</strong> (entrée/sortie). On parle de passage par <em>référence</em> : lorsque des modifications sont faites sur le tableau dans la fonction appelée, elles sont en réalité faites sur le tableau de la fonction appelante.</p>
+${jv(`static void mettreAZeroTableau(int[] monTableau) {
+    for (int i = 0; i < monTableau.length; i++) {
+        monTableau[i] = 0;
+    }
+}
+
+afficherTableau(tab);       // affiche : -1 21 0
+mettreAZeroTableau(tab);
+afficherTableau(tab);       // affiche : 0 0 0`)}
+<h3>Un tableau en retour</h3>
+<p>Une fonction peut retourner un tableau :</p>
+${jv(`static int[] multiplesDeTrois(int n) {
+    int[] tab = new int[n];
+    for (int i = 0; i < n; i++) {
+        tab[i] = 3 * i;
+    }
+    return tab;
+}`)}
+<h3>Tests unitaires sur les tableaux</h3>
+<p>Pour les tests unitaires, vous pourrez avoir à comparer deux tableaux entre eux. On utilise pour cela ${c('assertArrayEquals(attendu, obtenu)')}, qui compare les tableaux sans avoir à écrire soi-même la boucle :</p>
+${jv(`assertArrayEquals(new int[]{1, 2, 3}, new int[]{1, 21, 3});`)}
+<p>Ce test échoue et génère un affichage dans lequel est indiqué l'indice de la première case qui diffère (ici l'indice 1).</p>
+<h2>Les tableaux 2D en Java</h2>
+<p>Comme en ExAlgo, un tableau à deux dimensions peut être vu comme un tableau de <strong>lignes</strong> :</p>
+${jv(`// création et initialisation d'un tableau de 4 lignes et 3 colonnes
+int[][] tab1 = {{2, -1, 1}, {2, 0, 0}, {2, 0, 0}, {4, 10, -5}};
+// première case
+System.out.println(tab1[0][0]);
+// dernière case
+System.out.println(tab1[3][2]);
+
+// création et initialisation d'un tableau de 2 lignes et 3 colonnes
+int[][] tab2 = new int[2][3];
+tab2[0][0] = 5;
+tab2[0][1] = -6;
+tab2[0][2] = 12;
+tab2[1][0] = 32;
+tab2[1][1] = -2;
+tab2[1][2] = 5;
+
+// tab2.length vaut 2, tab2[i].length vaut 3
+for (int i = 0; i < tab2.length; i++) {
+    for (int j = 0; j < tab2[i].length; j++) {
+        System.out.println("valeur de la case [" + i + "][" + j + "]=" + tab2[i][j]);
+    }
+}`)}
+<h2>Projet initial</h2>
+<p>Importe le projet NetBeans de base (comme vu dans le tutoriel NetBeans) dans ton dossier <code>R1.01_AlgoProg/TP</code> : <a href="ressources-cycle3/Cycle3.zip" download>Cycle3.zip</a>. Il contient les trois classes du projet (<code>GestionNotes</code>, <code>GestionNotesEtu</code>, <code>GestionNotesDDE</code>) et leurs classes de test, à compléter.</p>
+<h2>L'opérateur ternaire (séance 2)</h2>
+<p>Il est classique de vouloir affecter une valeur à une variable en fonction d'une condition booléenne :</p>
+${jv(`char formeCorrecte;
+if (niveau == 1) {
+    formeCorrecte = 't';
+} else {
+    formeCorrecte = 'c';
+}`)}
+<p>En Java, l'<strong>opérateur ternaire</strong> permet de simplifier :</p>
+${jv(`char formeCorrecte = niveau == 1 ? 't' : 'c';`)}
+<p>La forme générique de cet opérateur est ${c('b ? v1 : v2')} où ${c('b')} est une expression booléenne, ${c('v1')} la valeur de l'expression si ${c('b')} vaut ${c('true')}, et ${c('v2')} sa valeur si ${c('b')} vaut ${c('false')}.</p>
+<h2>public et import (séance 2)</h2>
+<h3>Le mot-clé public</h3>
+${jv(`public static void main(String[] args) {
+    ...
+}`)}
+<p>${c('public')} signifie que la méthode (ou l'attribut) est accessible <strong>en dehors de son package</strong>. Comme nous n'utilisons qu'un package, nous n'en avons pas besoin. Les seules exceptions à cette règle se situent là où le code est accédé depuis l'extérieur de son package : pour lancer le ${c('main')} et pour les tests unitaires.</p>
+<h3>Le mot-clé import</h3>
+${jv(`package gestionPoint;
+
+import java.lang.Math;
+
+class Point {
+    ...
+    static double distance(double abs, double ord) {
+        // sqrt est une méthode de la classe Math
+        return (double) Math.sqrt(abs * abs + ord * ord);
+    }
+    ...
+}`)}
+<p>Ici, ${c('import')} sert à indiquer que la classe ${c('Math')} utilisée est celle du package ${c('java.lang')}. Sinon il faudrait écrire ${c('java.lang.Math.sqrt')} à la place de ${c('Math.sqrt')} partout.</p>
+${note('retenir', 'À savoir', "<p>Le package <code>java.lang</code> (qui contient <code>Math</code>, <code>String</code>, <code>Character</code>…) est importé automatiquement : l'exemple ci-dessus montre le principe. Pour une classe d'un autre package, comme <code>Scanner</code> (package <code>java.util</code>), la ligne <code>import java.util.Scanner;</code> est indispensable.</p>")}
+`
+  },
+  /* ------------------------------------------------------------ 8 */
+  {
+    id: 'l8', title: 'ExosTP : lire des algorithmes', ex: [],
+    lead: "Exercices supplémentaires de la feuille de TP : trois algorithmes « mystère » à comprendre, à renommer, puis à écrire.",
+    skill: "Comprendre ce que fait un algorithme et lui donner un nom explicite",
+    body: () => `
+<h2>Exercices supplémentaires</h2>
+<p>Ces exercices sont facultatifs, et à réaliser en TP uniquement si toutes les fonctionnalités obligatoires ont été codées et testées. Pour chacun des trois algorithmes ci-dessous, la feuille demande de :</p>
+<ol>
+<li><strong>comprendre</strong> ce qu'il fait ;</li>
+<li><strong>coder les tests unitaires</strong> ;</li>
+<li>faire la <strong>javadoc</strong> ;</li>
+<li>l'<strong>écrire en Java</strong>.</li>
+</ol>
+${note('retenir', 'Comment comprendre un algorithme inconnu', "<p>Ne cherche pas à tout deviner d'un coup : <strong>déroule-le à la main</strong> sur l'exemple donné (une trace), repère le <em>schéma</em> (agréger, vérifier une propriété…), puis dis-le en une phrase. Le nom de la fonction doit alors venir tout seul : <code>mystere1</code> est un mauvais nom, <code>compterMultiples</code> en est un bon.</p>")}
+<h2>Algorithme 1</h2>
+${cb({ ex: `Const TAILLE ← 6 : entier
+Var tab : tableau de TAILLE entiers
+Var n : entier
+tab[0] ← 3
+tab[1] ← 6
+tab[2] ← 7
+tab[3] ← 12
+tab[4] ← 15
+tab[5] ← 20
+n ← 2
+ecrire(mystere1(tab, n))
+
+Fonction mystere1(E t : tableau d'entiers, E n : entier) : entier
+Var i, resultat : entier
+Début
+    resultat ← 0
+    Pour i de 0 à t.taille - 1 Faire
+        Si t[i] % n == 0 Alors
+            resultat ← resultat + 1
+    Retourner resultat
+Fin`, run: true })}
+${exercise('l8-q1')}
+${exercise('l8-q2')}
+${exercise('l8-c1')}
+<h2>Algorithme 2</h2>
+${cb({ ex: `Const TAILLE ← 5 : entier
+Var t1, t2 : tableau de TAILLE entiers
+Var cible, numTableau : entier
+t1[0] ← 4
+t1[1] ← 2
+t1[2] ← 1
+t1[3] ← 3
+t1[4] ← 5
+t2[0] ← 6
+t2[1] ← 7
+t2[2] ← 2
+t2[3] ← 1
+t2[4] ← 4
+cible ← 14
+numTableau ← mystere2(t1, t2, cible)
+Si numTableau < 0 Alors
+    ecrire("Aucun tableau ne correspond.")
+Sinon
+    Si numTableau == 0 Alors
+        ecrire("Les deux tableaux correspondent simultanément.")
+    Sinon
+        ecrire("Le tableau numéro " + numTableau + " correspond en premier.")
+
+Fonction mystere2(E t1 : tableau d'entiers, E t2 : tableau d'entiers, E cible : entier) : entier
+Var s1, s2, i, resultat : entier
+Début
+    s1 ← 0
+    s2 ← 0
+    i ← 0
+    Tant Que i < t1.taille et i < t2.taille et s1 < cible et s2 < cible Faire
+        s1 ← s1 + t1[i]
+        s2 ← s2 + t2[i]
+        i ← i + 1
+    resultat ← 0
+    Si s1 >= cible Alors
+        Si s2 >= cible Alors
+            resultat ← 0
+        Sinon
+            resultat ← 1
+    Sinon
+        Si s2 >= cible Alors
+            resultat ← 2
+        Sinon
+            resultat ← -1
+    Retourner resultat
+Fin`, run: true })}
+${exercise('l8-q3')}
+${exercise('l8-q4')}
+${exercise('l8-c2')}
+<h2>Algorithme 3</h2>
+${cb({ ex: `Const NB_VOYELLES ← 6 : entier
+Const TAILLE_MOT ← 20 : entier
+Var voyelles : tableau de NB_VOYELLES caractères
+Var compte : tableau de NB_VOYELLES entiers
+Var mot : tableau de TAILLE_MOT caractères
+Var i : entier
+voyelles ← ['a', 'e', 'i', 'o', 'u', 'y']
+Pour i de 0 à NB_VOYELLES - 1 Faire
+    compte[i] ← 0
+mot ← ['e', 'l', 'e', 'v', 'a', 't', 'i', 'o', 'n', 'u', 'y', 'e', 'e', 'e', 'x', 'a', 'm', 'e', 'n', 's']
+mystere3(mot, voyelles, compte)
+Pour i de 0 à NB_VOYELLES - 1 Faire
+    ecrireLigne(voyelles[i] + " --> " + compte[i])
+
+Fonction mystere3(E mot : tableau de caractères, E voyelles : tableau de caractères, ES c : tableau d'entiers)
+Var l, v : entier
+Début
+    Pour l de 0 à mot.taille - 1 Faire
+        Pour v de 0 à voyelles.taille - 1 Faire
+            Si mot[l] == voyelles[v] Alors
+                c[v] ← c[v] + 1
+Fin`, run: true })}
+${exercise('l8-q5')}
+${exercise('l8-q6')}
+${exercise('l8-c3')}
+`
+  },
+  /* ------------------------------------------------------------ 9 */
+  {
+    id: 'l9', title: 'ExosTP : documenter et déboguer', ex: [],
+    lead: "Deux autres exercices de la feuille de TP : donner du sens à du code sans documentation, puis retrouver les erreurs qui font échouer des tests.",
+    skill: 'Documenter une fonction (javadoc) et retrouver un bug à partir d\'un test qui échoue',
+    body: () => `
+<h2>Code mal documenté</h2>
+<p>Le projet de l'exercice contient quatre fonctions nommées ${c('fct0')}, ${c('fct1')}, ${c('fct2')} et ${c('fct3')}. La feuille demande, après avoir compris ce que fait chaque fonction, de :</p>
+<ul>
+<li>les <strong>renommer</strong> pour qu'elles soient plus explicites ;</li>
+<li>rédiger la <strong>javadoc</strong> ;</li>
+<li>depuis le ${c('main')}, appeler ces 4 fonctions et afficher ce qui est retourné.</li>
+</ul>
+<h3>La javadoc</h3>
+<p>La javadoc est un commentaire placé juste avant une méthode, entre ${c('/**')} et ${c('*/')}. Elle dit <em>ce que fait</em> la méthode (pas comment), puis décrit chaque paramètre et le résultat :</p>
+${jv(`/**
+ * Calcule la somme des éléments d'un tableau d'entiers.
+ *
+ * @param t le tableau à additionner
+ * @return la somme des éléments de t (0 si t est vide)
+ */
+static int sommeElements(int[] t) {
+    ...
+}`)}
+<ul>
+<li>la première phrase résume le rôle de la méthode ;</li>
+<li>${c('@param nom')} : une ligne par paramètre, avec ce qu'il représente (et les conditions éventuelles, par exemple « non vide ») ;</li>
+<li>${c('@return')} : ce que représente la valeur retournée (absent pour une méthode ${c('void')}). Pour une méthode ${c('void')} qui modifie un tableau, on dit dans la description ce qui est modifié.</li>
+</ul>
+<p>Lis chacune de ces quatre fonctions et trouve ce qu'elle fait :</p>
+${exercise('l9-q1')}
+${exercise('l9-q2')}
+${exercise('l9-q3')}
+${exercise('l9-q4')}
+<h2>Où est le bug ?</h2>
+<p>Le fichier ${c('AnalyseTableauCaracteres.java')} contient 5 méthodes permettant de manipuler ou d'analyser un tableau de caractères. Le fichier ${c('AnalyseTableauCaracteresTest.java')} contient 5 méthodes de test. <strong>Aucun de ces tests ne passe.</strong></p>
+<p>Le projet NetBeans de l'exercice est à télécharger : <a href="ressources-cycle3/analyseTableaux.zip" download>analyseTableaux.zip</a> (il contient aussi les fonctions <code>fct0</code> à <code>fct3</code> de l'exercice précédent).</p>
+<p>La feuille demande de comprendre ce que fait chaque méthode, de rédiger sa javadoc, d'<strong>identifier quelles lignes de tests ne passent pas</strong>, puis de corriger ce qui pose problème.</p>
+${note('convention', 'Trois fonctions de Java utilisées (à ne pas apprendre)', "<ul><li><code>Character.isLowerCase(c)</code> indique si le caractère est une minuscule ;</li><li><code>Character.toUpperCase(c)</code> renvoie le caractère en majuscule équivalent (ou le caractère lui-même s'il n'en existe pas) ;</li><li><code>Character.toLowerCase(c)</code> fait la même chose envers les minuscules.</li></ul>")}
+${note('retenir', 'Méthode pour déboguer', "<ol><li>Lis le message du test : il dit <em>quelle ligne</em> échoue, ce qui était attendu et ce qui a été obtenu.</li><li>Cherche l'entrée la plus simple qui échoue (souvent un cas limite : tableau vide, un seul élément, première ou dernière case).</li><li>Déroule la méthode à la main sur cette entrée.</li><li>Corrige <strong>une</strong> erreur, relance tous les tests, recommence.</li><li>Si le code te semble juste, relis le test : <strong>un test peut aussi se tromper</strong>.</li></ol>")}
+<p>Voici les cinq méthodes, une par une.</p>
+<h3>1. compterNombreVoyelles</h3>
+${exercise('l9-q5')}
+${exercise('l9-c1')}
+<h3>2. convertirMinMaj</h3>
+${exercise('l9-q6')}
+<h3>3. contientCaractereInterdit</h3>
+${exercise('l9-q7')}
+${exercise('l9-c2')}
+<h3>4. remplacerLettres</h3>
+${exercise('l9-q8')}
+<h3>5. contientSousMot</h3>
+${exercise('l9-q9')}
+${exercise('l9-c3')}
+${note('retenir', 'Ce que ce TP apprend', "<ul><li>Les erreurs viennent presque toujours de l'<strong>initialisation</strong> (compteur à 0, booléen au bon sens), des <strong>bornes</strong> (<code>length - 1</code>) ou des <strong>conditions de sortie</strong> (<code>||</code> au lieu de <code>&amp;&amp; !trouve</code>).</li><li>Les <strong>cas limites</strong> (tableau vide, un seul élément) doivent toujours avoir un test.</li><li>Un test est du code : il peut contenir un copier-coller oublié.</li></ul>")}
+`
+  },
+  /* ------------------------------------------------------------ 10 */
+  {
+    id: 'l10', title: 'Entraînement : exercices mécaniques', ex: [],
+    lead: "Des exercices de base à refaire jusqu'à les réussir dans le temps imparti, pour que l'écriture d'une boucle sur un tableau devienne un réflexe.",
+    skill: "Écrire un parcours de tableau de tête, dans un temps imparti",
+    body: () => `
+<h2>Exercices mécaniques</h2>
+<p>Lorsqu'on débute en tant que développeur ou développeuse, il est parfois compliqué d'acquérir de bonnes <strong>mécaniques</strong> lorsqu'on doit écrire un code à partir d'une page vide. Ces exercices sont à faire en autonomie entre les séances de TD/TP. Ils sont donnés en Java dans la feuille, mais il faut savoir les faire également en ExAlgo : ici tu les écris en ExAlgo, et la solution montre aussi la version Java.</p>
+<h2>Méthodologie</h2>
+<p>Pour acquérir des mécaniques, il faut faire et refaire des exercices de base et arriver à les réaliser <strong>dans un temps imparti</strong>. Donc tant que tu n'arrives pas à faire l'exercice dans le temps imparti, il faut <strong>effacer</strong> ce que tu as codé, puis <strong>recommencer depuis le début</strong>.</p>
+${note('convention', 'Comment utiliser le chronomètre', "<p>Lance le chronomètre, écris la fonction sans regarder l'indice ni la solution, clique sur « Vérifier mon code », puis arrête le chronomètre. Si tu dépasses le temps (le compteur devient rouge) ou si les tests échouent, clique sur « Réinitialiser » et recommence.</p>")}
+<h2>Exercice 1 — for : 5 minutes</h2>
+${chrono(5)}
+${exercise('l10-c1')}
+<h2>Exercice 2 — while : 5 minutes</h2>
+${chrono(5)}
+${exercise('l10-c2')}
+<h2>Exercice 3 — while : 7 minutes</h2>
+${chrono(7)}
+${exercise('l10-c3')}
+`
   }
 ];
 
@@ -5323,7 +6290,7 @@ ${fnCards(['ddeMaxEtudiant', 'ddeNouvelleMoyenne', 'ddeModifierMoyenne', 'ddeMax
 </ul>
 <p>Les deux premières sont des exercices corrigés ci-dessous. Pour la troisième : si tes fonctions utilisent ${c('t.taille')}, ${c('t[0].taille')} et les constantes ${c('NB_ETUDIANTS')} et ${c('NB_UE')} plutôt que 5 et 3, il suffit de changer les constantes. Pour la quatrième : ${c('entierAléatoire(0, 2) == 1')} est un booléen tiré au hasard.</p>
 <h2>Exercices supplémentaires</h2>
-<p>(En TP) Voir la section ExosTP de la feuille. Les leçons de ce site en proposent aussi une trentaine, corrigés automatiquement.</p>
+<p>(En TP) Voir la section ExosTP de la feuille : elle est reprise dans les leçons <a href="#l8">ExosTP : lire des algorithmes</a> et <a href="#l9">ExosTP : documenter et déboguer</a>, avec des exercices corrigés automatiquement. Pour t'entraîner entre les séances, voir aussi <a href="#l10">Entraînement : exercices mécaniques</a>.</p>
 <h2>Check-list avant le DS blanc</h2>
 <ul class="check">
 <li>Je sais déclarer un tableau 1D et 2D, avec ou sans taille.</li>
