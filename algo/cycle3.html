@@ -6425,7 +6425,7 @@ Store.load();
 const NAV = [
   { group: 'Cours', items: LESSONS.map((l, i) => ({ id: l.id, label: l.title, n: i + 1 })) },
   { group: 'Projet : gestion de notes', items: PROJECT.map((p, i) => ({ id: p.id, label: p.title.replace(/^Étape \d+ : /, ''), n: String(i + 1) })) },
-  { group: 'Outils', items: [{ id: 'atelier', label: 'Atelier ExAlgo', n: '›' }, { id: 'verif', label: 'Vérifier mon projet', n: '✓' }, { id: 'memo', label: 'Mémo ExAlgo ↔ Java', n: '≡' }] }
+  { group: 'Outils', items: [{ id: 'atelier', label: 'Atelier ExAlgo', n: '›' }, { id: 'verif', label: 'Vérifier mon projet', n: '✓' }, { id: 'compare', label: 'Comparer avec un code', n: '⇄' }, { id: 'memo', label: 'Mémo ExAlgo ↔ Java', n: '≡' }] }
 ];
 const ALL_IDS = ['accueil', ...NAV.flatMap(g => g.items.map(i => i.id))];
 const ORDER = [...LESSONS.map(l => l.id), ...PROJECT.map(p => p.id)];
@@ -6785,6 +6785,92 @@ function mountVerif() {
   });
 }
 
+/* ---------- Comparer avec un code ---------- */
+// Découpe un programme ExAlgo en fonctions (de « Fonction … » à « Fin » en début de ligne) ; le reste forme le programme principal
+function cmpDecoupe(code) {
+  const fns = new Map(), reste = [];
+  let cur = null;
+  code.replace(/\r/g, '').split('\n').forEach(l => {
+    const m = !cur && l.match(/^Fonction\s+([A-Za-z_]\w*)/i);
+    if (m) { cur = { nom: m[1], lignes: [] }; fns.set(cur.nom, cur); }
+    if (cur) { cur.lignes.push(l); if (/^Fin\s*$/i.test(l.trim()) && !/^\s/.test(l)) cur = null; } else reste.push(l);
+  });
+  return { fns, reste };
+}
+// Forme comparable d'une ligne : sans commentaire, espaces réduits, flèche d'affectation normalisée
+const cmpNorm = l => l.replace(/\/\/.*$/, '').replace(/<-/g, '←').replace(/\s+/g, ' ').trim();
+// Différences ligne à ligne (plus longue sous-suite commune)
+function cmpDiff(a, b) {
+  const A = a.map(cmpNorm), B = b.map(cmpNorm);
+  const ia = A.map((x, i) => i).filter(i => A[i] !== ''), ib = B.map((x, i) => i).filter(i => B[i] !== '');
+  const n = ia.length, m = ib.length;
+  const t = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) t[i][j] = A[ia[i]] === B[ib[j]] ? t[i + 1][j + 1] + 1 : Math.max(t[i + 1][j], t[i][j + 1]);
+  const out = [];
+  let i = 0, j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && A[ia[i]] === B[ib[j]]) { out.push({ t: '=', l: a[ia[i]] }); i++; j++; }
+    else if (j >= m || (i < n && t[i + 1][j] >= t[i][j + 1])) { out.push({ t: '-', l: a[ia[i]] }); i++; }
+    else { out.push({ t: '+', l: b[ib[j]] }); j++; }
+  }
+  return out;
+}
+function cmpCompare(codeA, codeB) {
+  const A = cmpDecoupe(codeA), B = cmpDecoupe(codeB);
+  const noms = [...new Set([...A.fns.keys(), ...B.fns.keys()])];
+  const ordre = n => { const k = REF_ORDER.indexOf(n); return k < 0 ? 999 : k; };
+  noms.sort((x, y) => ordre(x) - ordre(y) || x.localeCompare(y));
+  const res = noms.map(nom => {
+    const a = A.fns.get(nom), b = B.fns.get(nom);
+    if (!a) return { nom, etat: 'absA' };
+    if (!b) return { nom, etat: 'absB' };
+    const d = cmpDiff(a.lignes, b.lignes);
+    return { nom, etat: d.every(x => x.t === '=') ? 'id' : 'diff', diff: d };
+  });
+  const dm = cmpDiff(A.reste, B.reste);
+  if (dm.length) res.push({ nom: 'Programme principal et constantes', etat: dm.every(x => x.t === '=') ? 'id' : 'diff', diff: dm, principal: true });
+  return res;
+}
+function pageCompare() {
+  return `<article class="page wide">
+  <p class="kicker">Outil</p>
+  <h1>Comparer avec un code</h1>
+  <p class="lead">Colle ton code à gauche et un autre code à droite (celui d'un camarade, de l'énoncé… ou la version de référence du site). La page compare fonction par fonction et montre les lignes qui diffèrent.</p>
+  ${note('convention', 'Comment lire le résultat', "<ul><li>Les commentaires, les espaces et les lignes vides sont ignorés.</li><li><span class=\"cmp-tag m\">−</span> : ligne présente seulement dans <strong>ton code</strong> · <span class=\"cmp-tag p\">+</span> : ligne présente seulement dans <strong>l'autre code</strong>.</li><li>Deux fonctions différentes ne sont pas forcément fausses : une autre écriture peut donner le même résultat. Pour le vérifier, utilise « Vérifier mon projet ».</li></ul>")}
+  <div class="cmp-edit">
+    <div><h2>Mon code</h2>${editorHTML('cmpA', '', false)}</div>
+    <div><h2>L'autre code</h2>${editorHTML('cmpB', '', false)}</div>
+  </div>
+  <div class="vp-top"><button type="button" class="btn" data-cmp="go">Comparer</button><button type="button" class="btn ghost" data-cmp="ref">Charger la référence du site à droite</button><button type="button" class="btn ghost" data-cmp="swap">Échanger</button><span class="vp-sum" role="status"></span></div>
+  <div class="cmp-res"></div>
+</article>`;
+}
+function mountCompare() {
+  const eA = $('[data-editor="cmpA"]'), eB = $('[data-editor="cmpB"]'), tA = $('.ta', eA), tB = $('.ta', eB);
+  tA.value = Store.data.code.cmpA || Store.data.code.verif || '';
+  tB.value = Store.data.code.cmpB || '';
+  initEditor(eA, { onChange: v => { Store.data.code.cmpA = v; Store.save(); } });
+  initEditor(eB, { onChange: v => { Store.data.code.cmpB = v; Store.save(); } });
+  editorUpdate(eA); editorUpdate(eB);
+  const set = (ta, v) => { ta.value = v; ta.dispatchEvent(new Event('input', { bubbles: true })); };
+  const root = $('article.page'), sum = $('.vp-sum', root), box = $('.cmp-res', root);
+  const nom = { id: 'identique', diff: 'différente', absA: 'absente de ton code', absB: "absente de l'autre code" };
+  const go = () => {
+    if (!tA.value.trim() || !tB.value.trim()) { sum.textContent = 'Colle un code des deux côtés.'; box.innerHTML = ''; return; }
+    const res = cmpCompare(tA.value, tB.value);
+    const nb = k => res.filter(r => r.etat === k).length;
+    sum.textContent = nb('id') + ' identique' + (nb('id') > 1 ? 's' : '') + ' · ' + nb('diff') + ' différente' + (nb('diff') > 1 ? 's' : '') + ' · ' + nb('absA') + ' absente' + (nb('absA') > 1 ? 's' : '') + ' chez toi · ' + nb('absB') + " absente" + (nb('absB') > 1 ? 's' : '') + " de l'autre";
+    box.innerHTML = res.map(r => `<details class="vp cmpd-${r.etat}"${r.etat === 'diff' ? ' open' : ''}><summary><span class="vp-t">${esc(r.nom)}</span><span class="vp-state">${nom[r.etat]}</span></summary>${r.diff && r.etat === 'diff' ? `<pre class="cmp-diff">${r.diff.map(x => `<span class="cmp-l ${x.t === '-' ? 'm' : x.t === '+' ? 'p' : ''}"><i>${x.t === '=' ? ' ' : x.t === '-' ? '−' : '+'}</i>${esc(x.l)}</span>`).join('')}</pre>` : ''}</details>`).join('');
+  };
+  root.addEventListener('click', e => {
+    const b = e.target.closest('[data-cmp]');
+    if (!b) return;
+    if (b.dataset.cmp === 'go') go();
+    else if (b.dataset.cmp === 'ref') { set(tB, fullExalgoProgram()); go(); }
+    else if (b.dataset.cmp === 'swap') { const x = tA.value; set(tA, tB.value); set(tB, x); if (box.innerHTML) go(); }
+  });
+}
+
 /* ---------- Routeur ---------- */
 function route() {
   let id = (location.hash || '').replace('#', '');
@@ -6797,13 +6883,15 @@ function route() {
   else if (id === 'atelier') html = pageAtelier();
   else if (id === 'memo') html = pageMemo();
   else if (id === 'verif') html = pageVerif();
+  else if (id === 'compare') html = pageCompare();
   else html = pageLesson(PROJECT.find(p => p.id === id));
   m.innerHTML = html;
   $$('.nav a').forEach(a => a.setAttribute('aria-current', a.dataset.id === id ? 'page' : 'false'));
-  document.title = (id === 'accueil' ? 'ExAlgo Cycle 3' : ((LESSONS.find(l => l.id === id) || PROJECT.find(p => p.id === id) || { title: id === 'atelier' ? 'Atelier' : id === 'verif' ? 'Vérifier mon projet' : 'Mémo' }).title + ' · ExAlgo Cycle 3'));
+  document.title = (id === 'accueil' ? 'ExAlgo Cycle 3' : ((LESSONS.find(l => l.id === id) || PROJECT.find(p => p.id === id) || { title: id === 'atelier' ? 'Atelier' : id === 'verif' ? 'Vérifier mon projet' : id === 'compare' ? 'Comparer avec un code' : 'Mémo' }).title + ' · ExAlgo Cycle 3'));
   mountExercises(m);
   if (id === 'atelier') mountAtelier();
   if (id === 'verif') mountVerif();
+  if (id === 'compare') mountCompare();
   window.updateProgress();
   closeDrawer();
   window.scrollTo(0, 0);
