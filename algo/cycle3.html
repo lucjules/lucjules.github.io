@@ -6528,6 +6528,52 @@ function pageLesson(l, idx) {
 </article>`;
 }
 
+/* Les 3 fichiers du projet Java (package gestionnotes) et leurs 3 classes de test */
+function javaFichiers(kind) {
+  if (kind === 'test') return CLASSES.map(cls => ({ chemin: 'test/gestionnotes/' + cls + 'Test.java', nom: cls + 'Test.java', code: junitOf(cls, fnsOf(cls), 'gestionnotes') }));
+  return CLASSES.map(cls => {
+    const fns = fnsOf(cls).map(n => javaIndent(REF_JAVA[n])).join('\n\n');
+    let code;
+    if (cls === 'GestionNotes') code = 'package gestionnotes;\n\n' + JAVA_BASE + '\n' + fns + '\n\n    public static void main(String[] args) {\n        gestionNotesPrincipal();\n    }\n}\n';
+    else code = 'package gestionnotes;\n\n/** ' + (cls === 'GestionNotesEtu' ? "Partie 1 : fonctionnalités pour l'étudiant." : 'Parties 2 et 3 : fonctionnalités pour la direction des études.') + ' */\npublic class ' + cls + ' {\n' + fns + '\n}\n';
+    return { chemin: 'src/gestionnotes/' + cls + '.java', nom: cls + '.java', code };
+  });
+}
+function memoJavaHTML(kind, i) {
+  const fs = javaFichiers(kind), f = fs[i];
+  return `<div class="tabs jf-tabs" role="tablist" aria-label="Fichier">${fs.map((x, k) => `<button type="button" role="tab" class="tab" aria-selected="${k === i}" data-jf="file" data-i="${k}">${esc(x.nom)}</button>`).join('')}</div>
+  <figure class="cb"><div class="cb-bar"><span class="cb-lang">${esc(f.chemin)}</span><div class="cb-actions"><button type="button" class="btn mini ghost" data-jf="copy">Copier</button><button type="button" class="btn mini ghost" data-jf="save">Télécharger</button></div></div><pre class="cb-code"><code>${hlJava(f.code)}</code></pre></figure>`;
+}
+function mountMemo() {
+  const box = $('#memo-java');
+  if (!box) return;
+  const st = { kind: 'src', i: 0 };
+  const draw = () => {
+    $$('[data-jf="kind"]', box.parentNode).forEach(b => b.setAttribute('aria-selected', String(b.dataset.kind === st.kind)));
+    box.innerHTML = memoJavaHTML(st.kind, st.i);
+  };
+  box.parentNode.addEventListener('click', async e => {
+    const b = e.target.closest('[data-jf]');
+    if (!b) return;
+    const a = b.dataset.jf;
+    if (a === 'kind') { st.kind = b.dataset.kind; st.i = 0; draw(); }
+    else if (a === 'file') { st.i = +b.dataset.i; draw(); }
+    else if (a === 'copy') {
+      const old = b.textContent;
+      try { await navigator.clipboard.writeText(javaFichiers(st.kind)[st.i].code); b.textContent = 'Copié ✓'; } catch (err) { b.textContent = 'Copie impossible'; }
+      setTimeout(() => { b.textContent = old; }, 1500);
+    } else if (a === 'save') {
+      const f = javaFichiers(st.kind)[st.i];
+      const l = document.createElement('a');
+      l.href = URL.createObjectURL(new Blob([f.code], { type: 'text/plain;charset=utf-8' }));
+      l.download = f.nom;
+      document.body.appendChild(l); l.click(); l.remove();
+      setTimeout(() => URL.revokeObjectURL(l.href), 1000);
+    }
+  });
+  draw();
+}
+
 function pageMemo() {
   return `<article class="page">
   <p class="kicker">Aide-mémoire</p>
@@ -6539,8 +6585,12 @@ function pageMemo() {
   <h2>Les pièges classiques</h2>
   <ul class="pieges">${PIEGES.map(p => `<li><strong>${p[0]}</strong><span>${p[1]}</span></li>`).join('')}</ul>
   <h2>Le programme Java complet du logiciel</h2>
-  <p>Voici le logiciel assemblé en Java, à partir des fonctions du projet, rangées dans les trois classes GestionNotes, GestionNotesEtu et GestionNotesDDE (un seul fichier GestionNotes.java). Lance la version ExAlgo pour l'essayer.</p>
-  ${cb({ ex: fullExalgoProgram(), java: fullJavaProgram(), noAtelier: false, run: true, runExtra: PROG_RUN })}
+  <p>Le logiciel assemblé en Java, en <strong>3 fichiers</strong> comme dans le projet NetBeans : <code>GestionNotes</code> (fonctions communes et <code>main</code>), <code>GestionNotesEtu</code> (partie étudiant) et <code>GestionNotesDDE</code> (partie direction des études), dans le package <code>gestionnotes</code>. Choisis d'afficher le code Java ou ses tests JUnit (un fichier de test par classe, dans <code>test/gestionnotes/</code>).</p>
+  <div class="tabs jf-kind" role="tablist" aria-label="Afficher"><button type="button" role="tab" class="tab" aria-selected="true" data-jf="kind" data-kind="src">Java</button><button type="button" role="tab" class="tab" aria-selected="false" data-jf="kind" data-kind="test">Tests JUnit</button></div>
+  <div id="memo-java"></div>
+  <h2>La version ExAlgo (à exécuter)</h2>
+  <p>Lance-la pour l'essayer : choisis 1 (étudiant) ou 2 (DDE) et réponds aux saisies.</p>
+  ${cb({ ex: fullExalgoProgram(), noAtelier: false, run: true, runExtra: PROG_RUN })}
 </article>`;
 }
 
@@ -6626,7 +6676,7 @@ function exToJava(v, type) {
   if (type.endsWith('[]')) t = 'new ' + type + t.replace(/\[/g, '{').replace(/\]/g, '}');
   return t;
 }
-function junitOf(cls, fns) {
+function junitOf(cls, fns, paquet) {
   const body = fns.map(fn => {
     const s = javaSigOf(fn), tests = (PROJECT_EX[fn].tests || []);
     const calls = [];
@@ -6643,7 +6693,7 @@ function junitOf(cls, fns) {
     if (skipped) calls.push('        // TODO : ' + skipped + ' test' + (skipped > 1 ? 's' : '') + " d'affichage ou de saisie à écrire à la main (voir l'énoncé de l'étape)");
     return '    @Test\n    public void test' + fn[0].toUpperCase() + fn.slice(1) + '() {\n' + calls.join('\n') + '\n    }';
   }).join('\n\n');
-  return 'import org.junit.Test;\nimport static org.junit.Assert.*;\n\npublic class ' + cls + 'Test {\n\n' + body + '\n}\n';
+  return (paquet ? 'package ' + paquet + ';\n\n' : '') + 'import org.junit.Test;\nimport static org.junit.Assert.*;\n\npublic class ' + cls + 'Test {\n\n' + body + '\n}\n';
 }
 // Regroupe les fonctions d'une phase par classe
 function verifByClass(ph) {
@@ -6892,6 +6942,7 @@ function route() {
   if (id === 'atelier') mountAtelier();
   if (id === 'verif') mountVerif();
   if (id === 'compare') mountCompare();
+  if (id === 'memo') mountMemo();
   window.updateProgress();
   closeDrawer();
   window.scrollTo(0, 0);
