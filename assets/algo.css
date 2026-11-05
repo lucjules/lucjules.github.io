@@ -62,3 +62,6 @@
 .cmp-l i{display:inline-block;width:1.6em;font-style:normal;font-weight:700}
 .cmpd-id>summary .vp-state{color:var(--ok)}
 .cmpd-absA>summary .vp-state,.cmpd-absB>summary .vp-state,.cmpd-diff>summary .vp-state{color:var(--ko)}
+.jf-kind,.jf-tabs{margin:.6em 0}
+.jf-kind .tab,.jf-tabs .tab{color:var(--ink2);border:2px solid var(--line);background:var(--paper)}
+.jf-kind .tab[aria-selected="true"],.jf-tabs .tab[aria-selected="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
