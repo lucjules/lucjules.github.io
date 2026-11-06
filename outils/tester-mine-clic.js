@@ -106,7 +106,7 @@ function serveur() {
   console.log('Onglet Étoiles et boutique céleste');
   await page.click('#o-etoiles');
   const et = await ev(() => ({ titre: document.getElementById('et-nb').textContent, paliers: document.querySelectorAll('#et-paliers tr').length, pouvoirs: document.querySelectorAll('#pouvoirs .pouvoir').length, barre: document.getElementById('et-prochaine').textContent }));
-  verifier('l\'onglet Étoiles explique la renaissance', et.titre == '2 étoiles du Nether' && et.paliers >= 8 && et.pouvoirs == 16 && /Étoile n° 3/.test(et.barre), et);
+  verifier('l\'onglet Étoiles explique la renaissance', et.titre == '2 étoiles du Nether' && et.paliers >= 8 && et.pouvoirs == 31 && /Étoile n° 3/.test(et.barre), et);
   verifier('seuils : 1 étoile à 100 millions, 3 à 2,7 milliards', await ev(() => MC.seuil(1) == 1e8 && MC.seuil(3) == 2.7e9));
   await page.click('#pouvoirs .pouvoir:nth-child(2) button'); // Gant de golem (2 fragments)
   egal('acheter le Gant de golem avec 2 fragments', await ev(() => [MC.etat().pouvoirs, MC.etat().fragments]), [['gant'], 0]);
@@ -139,13 +139,25 @@ function serveur() {
   verifier('3 missions ; en finir une rapporte et la remplace', mi.nb == 3 && mi.faites >= 1 && mi.gain, mi); // une autre peut finir en même temps
   await page.click('#o-progres');
   egal('missions affichées dans l\'onglet Progrès', await ev(() => document.querySelectorAll('#missions .mission').length), 3);
-  const saison = await ev(() => { window.MC_SAISON = 'halloween'; MC.apparaitre('coffre'); const img = document.querySelector('.evenement img').src; MC.finir(true); window.MC_SAISON = null; return { citrouilles: MC.etat().citrouilles, progres: MC.etat().progres.includes('halloween'), img: img.length > 100 }; });
-  egal('Halloween : une citrouille remplace le coffre', [saison.citrouilles, saison.progres, saison.img], [1, true, true]);
+  const saison = await ev(() => { window.MC_SAISON = 'noel'; MC.apparaitre('coffre'); const img = document.querySelector('.evenement img').src; MC.finir(true); window.MC_SAISON = null; return { cadeaux: MC.etat().cadeaux, progres: MC.etat().progres.includes('noel'), img: img.length > 100 }; });
+  egal('Noël : un cadeau remplace le coffre', [saison.cadeaux, saison.progres, saison.img], [1, true, true]);
   await page.click('#o-options');
   await page.click('#o-notation');
   egal('notation courte', await ev(() => MC.nombre(1234567)), '1,23 M');
   await page.click('#o-notation'); await page.click('#o-notation');
   egal('retour à la notation en mots', await ev(() => MC.nombre(1234567)), '1,234 million');
+
+  console.log('Monde conservé, paliers, balise, récompenses stables');
+  const copie = await ev(() => JSON.stringify(MC.etat()));
+  const monde = await ev(() => { const S = MC.etat(); S.machines.tnt = 1; S.dims.includes('nether') || S.dims.push('nether'); MC.majCapa && MC.majCapa(); MC.verifierFamiliers(); MC.acheterMachine; S.maxMachines = S.maxMachines || {}; MC.recalculer(); S.machines.tnt = 1; MC.recalculer(); S.totalAll = Math.max(S.totalAll, 1e12); MC.renaitre(); return { dims: S.dims.length, capa: S.capasOk, tnt: S.machines.tnt || 0, histo: S.historique.length }; });
+  verifier('renaître garde les dimensions et la mémoire des capacités', monde.dims >= 2 && monde.tnt == 0 && monde.histo == 0, monde);
+  const jal = await ev(() => { const S = MC.etat(); S.etoiles = 5; MC.recalculer(); const a = MC.calc().jalons; S.etoiles = 10; MC.recalculer(); return [a, MC.calc().jalons]; });
+  proche('palier de 5 étoiles ×1,375 ; de 10 ×2,0625', jal[1], 2.0625); proche('palier de 5 étoiles', jal[0], 1.375);
+  const ruee = await ev(() => { const a = MC.calc().clicRef; MC.etat().recharges = {}; return a; });
+  verifier('valeur de référence du clic définie', ruee > 0, ruee);
+  const bal = await ev(() => { const S = MC.etat(); S.machines.balise = 1; MC.recalculer(); MC.apparaitre('creeper'); const b = S.boums; const ok = MC.utiliserCapacite('balise'); const reste = !!document.querySelector('.evenement.creeper'); MC.finir(true); return { ok, reste, boums: S.boums - b }; });
+  egal('la balise ne détruit pas un creeper déjà présent', [bal.ok, bal.reste, bal.boums], [false, true, 0]);
+  await page.evaluate(c => { MC.charger(JSON.parse(c)); }, copie);
 
   console.log('Boss, familiers, collection, nuit, secrets');
   const boss = await ev(() => { const S = MC.etat(); S.totalAll = Math.max(S.totalAll, 1e6); MC.choisirDim('surface'); const b = MC.lancerBoss(); const vu = !document.getElementById('boss').hidden; const f0 = S.fragments, b0 = S.blocs; while (MC.boss()) MC.blesserBoss(5, 400, 300); return { nom: b.def.nom, vu, total: S.bossTotal, vaincus: S.bossVaincus.slice(), fragment: S.fragments - f0, gain: S.blocs > b0, cache: document.getElementById('boss').hidden }; });

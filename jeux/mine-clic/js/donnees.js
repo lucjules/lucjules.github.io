@@ -203,7 +203,6 @@
   prog('pouvoir-tous', 'Être céleste', 'Acheter tous les pouvoirs de la boutique céleste.', { s: 'etoile', m: 'fragment' }, function (S) { return S.pouvoirs.length >= POUVOIRS.length; });
   prog('etoiles-10', 'Constellation naissante', 'Posséder 10 étoiles du Nether.', { s: 'etoile' }, function (S) { return S.etoiles >= 10; });
   prog('etoiles-100', 'Une galaxie entière', 'Posséder 100 étoiles du Nether.', { s: 'etoile' }, function (S) { return S.etoiles >= 100; });
-  prog('halloween', 'Joyeux Halloween !', "Ouvrir une citrouille pendant l'événement d'Halloween.", { s: 'citrouille' }, function (S) { return S.citrouilles >= 1; });
   prog('noel', 'Joyeux Noël !', "Ouvrir un cadeau pendant l'événement de Noël.", { s: 'cadeau' }, function (S) { return S.cadeaux >= 1; });
   prog('boss-1', 'Chasseur de monstres', 'Vaincre un boss.', { s: 'zombie' }, function (S) { return S.bossTotal >= 1; });
   prog('boss-10', 'Tueur de géants', 'Vaincre 10 boss.', { s: 'araignee' }, function (S) { return S.bossTotal >= 10; });
@@ -271,8 +270,27 @@
     { id: 'guilde', nom: 'Contrat de guilde', prix: 40, icone: { s: 'parchemin' }, desc: 'Les missions rapportent 2 fois plus, et une quatrième mission s\'ajoute.' },
     { id: 'grand-marchand', nom: 'Grand marchand', prix: 60, icone: { s: 'mineur' }, desc: 'Les machines coûtent encore 10 % moins cher.' },
     { id: 'constellation', nom: 'Constellation', prix: 100, icone: { s: 'etoile', m: 'fragment' }, desc: 'Chaque étoile du Nether ajoute 3 % de production au lieu de 2 %.' },
-    { id: 'dragon', nom: 'Souffle du dragon', prix: 200, icone: { s: 'oeuf' }, desc: 'La frénésie multiplie la production par 10 au lieu de 7.' }
+    { id: 'dragon', nom: 'Souffle du dragon', prix: 200, icone: { s: 'oeuf' }, desc: 'La frénésie multiplie la production par 10 au lieu de 7.' },
+    { id: 'forge1', nom: 'Forge céleste I', prix: 30, icone: { s: 'foreuse' }, desc: 'Toute la production ×1,5.' },
+    { id: 'gant2', nom: 'Gant de netherite', prix: 35, icone: { s: 'golem', m: 'golem-diamant' }, desc: 'Tes clics rapportent encore 3 fois plus.' },
+    { id: 'geologue', nom: 'Géologue céleste', prix: 45, icone: { s: 'pierre-ic' }, desc: 'Chaque niveau de maîtrise de la collection ajoute 2 % de production au lieu de 1 %.' },
+    { id: 'depart2', nom: 'Sac de départ II', prix: 50, icone: { s: 'coffre' }, desc: 'Chaque nouvelle vie commence avec 50 pioches, 25 mineurs, 10 golems et 5 wagonnets.' },
+    { id: 'primes', nom: 'Chasseur de primes', prix: 60, icone: { s: 'epee', m: 'netherite' }, desc: 'Les boss rapportent 3 fois plus de blocs.' },
+    { id: 'forge2', nom: 'Forge céleste II', prix: 80, icone: { s: 'foreuse' }, desc: 'Toute la production ×2.' },
+    { id: 'soie2', nom: 'Toucher de soie II', prix: 120, icone: { s: 'gemme' }, desc: 'Le bonus quand un bloc casse est encore multiplié par 3.' },
+    { id: 'fantome2', nom: 'Pioche fantôme II', prix: 150, icone: { s: 'pioche', m: 'netherite' }, desc: 'La pioche fantôme frappe 5 fois par seconde au lieu de 2.' },
+    { id: 'gant3', nom: "Gant de l'End", prix: 200, icone: { s: 'golem', m: 'golem-diamant' }, desc: 'Tes clics rapportent encore 5 fois plus.' },
+    { id: 'forge3', nom: 'Forge céleste III', prix: 200, icone: { s: 'foreuse' }, desc: 'Toute la production ×3.' },
+    { id: 'maitre-marchand', nom: 'Maître marchand', prix: 250, icone: { s: 'mineur' }, desc: 'Les machines coûtent encore 10 % moins cher.' },
+    { id: 'bibliothecaire2', nom: 'Grande bibliothèque', prix: 250, icone: { s: 'livre' }, desc: 'Les améliorations coûtent encore 10 % moins cher.' },
+    { id: 'constellation2', nom: 'Voie lactée', prix: 400, icone: { s: 'etoile', m: 'fragment' }, desc: 'Chaque étoile du Nether ajoute 5 % de production (au lieu de 2 ou 3 %).' },
+    { id: 'forge4', nom: 'Forge céleste IV', prix: 500, icone: { s: 'foreuse' }, desc: 'Toute la production ×5.' },
+    { id: 'forge5', nom: 'Forge céleste V', prix: 1000, icone: { s: 'foreuse' }, desc: 'Toute la production ×10.' }
   ];
+  POUVOIRS.sort(function (x, y) { return x.prix - y.prix; });
+
+  /* ---------- Paliers d'étoiles : à chaque palier atteint, toute la production est multipliée ---------- */
+  var JALONS = [[1, 1.1], [5, 1.25], [10, 1.5], [25, 2], [50, 3], [100, 5], [250, 10], [500, 25], [1000, 100]];
 
   /* ---------- Capacités : boutons à recharge sous le bloc ---------- */
   var CAPACITES = [
@@ -380,6 +398,6 @@
   window.MC_DONNEES = {
     BLOCS: BLOCS, DIMENSIONS: DIMENSIONS, MACHINES: MACHINES, AMELIORATIONS: AMELIORATIONS, PROGRES: PROGRES,
     PALETTE: PALETTE, MATIERES: MATIERES, SPRITES: SPRITES, COULEURS_PALIERS: COULEURS_PALIERS, EFFETS: EFFETS, PALIERS: PALIERS,
-    POUVOIRS: POUVOIRS, CAPACITES: CAPACITES, MISSIONS: MISSIONS, BOSS: BOSS, FAMILIERS: FAMILIERS, MAITRISE: MAITRISE, PHRASES: PHRASES
+    POUVOIRS: POUVOIRS, JALONS: JALONS, CAPACITES: CAPACITES, MISSIONS: MISSIONS, BOSS: BOSS, FAMILIERS: FAMILIERS, MAITRISE: MAITRISE, PHRASES: PHRASES
   };
 })();

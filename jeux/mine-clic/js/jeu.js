@@ -46,14 +46,14 @@
   function rond(n) { if (n < 100) return Math.ceil(n); var p = Math.pow(10, Math.floor(Math.log10(n)) - 1); return Math.ceil(n / p) * p; }
 
   /* ================= État de la partie ================= */
-  var COMPTEURS = ['clics', 'casses', 'etoiles', 'fragments', 'renaissances', 'coffres', 'creepers', 'boums', 'coups', 'missionsFaites', 'brillants', 'capacites', 'comboMax', 'achats', 'amelsAchetees', 'maxAchat', 'citrouilles', 'cadeaux', 'bossTotal', 'creepersNuit'];
+  var COMPTEURS = ['clics', 'casses', 'etoiles', 'fragments', 'renaissances', 'coffres', 'creepers', 'boums', 'coups', 'missionsFaites', 'brillants', 'capacites', 'comboMax', 'achats', 'amelsAchetees', 'maxAchat', 'cadeaux', 'bossTotal', 'creepersNuit'];
   function neuf() {
     var t = Date.now();
     return {
       v: 2, blocs: 0, total: 0, totalAll: 0, machines: {}, amels: [], progres: [], pouvoirs: [], recharges: {}, missions: [],
       clics: 0, casses: 0, etoiles: 0, fragments: 0, renaissances: 0, coffres: 0, creepers: 0, boums: 0, coups: 0,
-      missionsFaites: 0, brillants: 0, capacites: 0, comboMax: 0, achats: 0, amelsAchetees: 0, maxAchat: 0, citrouilles: 0, cadeaux: 0,
-      bossTotal: 0, creepersNuit: 0, bossVaincus: [], familiers: [], familier: null, collection: {}, secrets: [], historique: [],
+      missionsFaites: 0, brillants: 0, capacites: 0, comboMax: 0, achats: 0, amelsAchetees: 0, maxAchat: 0, cadeaux: 0,
+      bossTotal: 0, creepersNuit: 0, maxMachines: {}, capasOk: [], bossVaincus: [], familiers: [], familier: null, collection: {}, secrets: [], historique: [],
       dims: ['surface'], vues: ['surface'], dim: 'surface', bloc: 'herbe', brillant: false,
       debut: t, debutVie: t, derniere: t, tempsJeu: 0, son: true, musique: true, particules: true, notation: 'mots', qte: 1
     };
@@ -74,6 +74,8 @@
     S.bossVaincus = garder(d.bossVaincus, DIM); S.familiers = garder(d.familiers, FAMILIER);
     if (S.familiers.indexOf(d.familier) >= 0) S.familier = d.familier;
     if (d.collection && typeof d.collection == 'object') Object.keys(D.BLOCS).forEach(function (b) { if (nb(d.collection[b])) S.collection[b] = Math.floor(d.collection[b]); });
+    if (d.maxMachines && typeof d.maxMachines == 'object') D.MACHINES.forEach(function (m) { if (nb(d.maxMachines[m.id])) S.maxMachines[m.id] = Math.floor(d.maxMachines[m.id]); });
+    S.capasOk = garder(d.capasOk, CAPA);
     S.secrets = garder(d.secrets, { titre: 1, minuit: 1 });
     if (Array.isArray(d.historique)) S.historique = d.historique.filter(nb).slice(-60);
     S.dims = garder(d.dims, DIM); if (S.dims.indexOf('surface') < 0) S.dims.unshift('surface');
@@ -81,7 +83,7 @@
     if (S.dims.indexOf(d.dim) >= 0) S.dim = d.dim;
     if (d.recharges && typeof d.recharges == 'object') D.CAPACITES.forEach(function (c) { if (nb(d.recharges[c.id])) S.recharges[c.id] = Math.min(d.recharges[c.id], Date.now() + 3600e3); });
     if (Array.isArray(d.missions)) S.missions = d.missions.filter(function (m) { return m && MISSION[m.id] && nb(m.but) && m.but > 0 && nb(m.depart); })
-      .slice(0, 4).map(function (m) { return { id: m.id, but: m.but, depart: m.depart, max: nb(m.max) ? m.max : 0 }; });
+      .slice(0, 4).map(function (m) { return { id: m.id, but: m.but, depart: m.depart, max: nb(m.max) ? m.max : 0, poids: nb(m.poids) && m.poids > 0 ? Math.min(5, m.poids) : 1 }; });
     ['son', 'musique', 'particules', 'brillant'].forEach(function (k) { if (typeof d[k] == 'boolean') S[k] = d[k]; });
     if (['mots', 'court', 'sci'].indexOf(d.notation) >= 0) S.notation = d.notation;
     if ([1, 10, 100, 'max'].indexOf(d.qte) >= 0) S.qte = d.qte;
@@ -108,14 +110,17 @@
       else m[u.effet]++;
     });
     J.mods = m;
-    J.pctEtoile = a('constellation') ? 3 : 2;
+    J.pctEtoile = a('constellation2') ? 5 : a('constellation') ? 3 : 2;
     J.multProgres = S.progres.length; J.multEtoiles = S.etoiles * J.pctEtoile;
-    J.mult = (1 + m.global / 100) * (1 + S.progres.length / 100) * (1 + J.multEtoiles / 100);
+    J.jalons = multJalons(S.etoiles);
+    J.forge = (a('forge1') ? 1.5 : 1) * (a('forge2') ? 2 : 1) * (a('forge3') ? 3 : 1) * (a('forge4') ? 5 : 1) * (a('forge5') ? 10 : 1);
+    J.mult = (1 + m.global / 100) * (1 + S.progres.length / 100) * (1 + J.multEtoiles / 100) * J.jalons * J.forge;
     J.maitrise = 0; J.blocsMaitrises = 0;
     Object.keys(D.BLOCS).forEach(function (b) { var n = niveauMaitrise(S.collection[b] || 0); J.maitrise += n; if (n) J.blocsMaitrises++; });
-    J.mult *= (1 + J.maitrise / 100) * (f('abeille') ? 1.1 : 1);
-    J.remise = (a('marchand') ? 0.9 : 1) * (a('grand-marchand') ? 0.9 : 1);
-    J.remiseAmel = a('bibliothecaire') ? 0.9 : 1;
+    J.multMaitrise = J.maitrise * (a('geologue') ? 2 : 1);
+    J.mult *= (1 + J.multMaitrise / 100) * (f('abeille') ? 1.1 : 1);
+    J.remise = (a('marchand') ? 0.9 : 1) * (a('grand-marchand') ? 0.9 : 1) * (a('maitre-marchand') ? 0.9 : 1);
+    J.remiseAmel = (a('bibliothecaire') ? 0.9 : 1) * (a('bibliothecaire2') ? 0.9 : 1);
     J.parMachine = {}; J.cpsBase = 0;
     D.MACHINES.forEach(function (x) {
       J.parMachine[x.id] = x.cps * Math.pow(2, m.machine[x.id] || 0) * J.mult;
@@ -124,16 +129,19 @@
     J.frenesie = actif('frenesie'); J.ruee = actif('ruee'); J.eclair = actif('eclair'); J.hate = actif('hate'); J.cloche = actif('cloche'); J.pluie = actif('pluie');
     J.multFrenesie = a('dragon') ? 10 : 7;
     J.cps = J.cpsBase * (J.frenesie ? J.multFrenesie : 1) * (J.cloche ? 3 : 1);
-    J.clicBase = (Math.pow(2, m.clic) * (a('gant') ? 2 : 1) * (f('loup') ? 1.5 : 1) * J.mult + J.cps * m.pct / 100) * (J.ruee ? 777 : 1) * (J.hate ? 10 : 1);
+    var clicFixe = Math.pow(2, m.clic) * (a('gant') ? 2 : 1) * (a('gant2') ? 3 : 1) * (a('gant3') ? 5 : 1) * (f('loup') ? 1.5 : 1) * J.mult;
+    J.clicBase = (clicFixe + J.cps * m.pct / 100) * (J.ruee ? 777 : 1) * (J.hate ? 10 : 1);
+    J.clicRef = clicFixe + J.cpsBase * m.pct / 100; // sans effets temporaires : sert aux récompenses (boss, missions, coffres)
     J.pctCombo = 2 + m.combo;
     J.clic = J.clicBase * multCombo();
-    J.fortune = Math.pow(2, m.fortune) * (a('soie') ? 3 : 1) * (f('axolotl') ? 2 : 1);
+    J.fortune = Math.pow(2, m.fortune) * (a('soie') ? 3 : 1) * (a('soie2') ? 3 : 1) * (f('axolotl') ? 2 : 1);
     J.degats = Math.pow(2, m.epee) * (f('dragonnet') ? 2 : 1);
     J.fenetreCombo = f('perroquet') ? 1000 : 650; J.comboMaxi = f('perroquet') ? 75 : 50;
     J.multBrillant = 10 * Math.pow(2, m.brillance);
     J.multRecharge = (a('recharge') ? 0.5 : 1) * Math.pow(0.75, m.recharge);
     J.multDuree = a('sablier') ? 1.5 : 1;
   }
+  function multJalons(n) { var x = 1; D.JALONS.forEach(function (j) { if (n >= j[0]) x *= j[1]; }); return x; }
   function multCombo() { return 1 + Math.max(0, combo.n - 1) * (J.pctCombo || 2) / 100; }
   function gagner(n) { if (!(n > 0)) return; S.blocs += n; S.total += n; S.totalAll += n; }
   function prixMachine(m, n, q) { return Math.ceil(m.prix * Math.pow(1.15, n) * (Math.pow(1.15, q) - 1) / 0.15 * (J.remise || 1)); }
@@ -149,12 +157,10 @@
   function saison() {
     if (window.MC_SAISON !== undefined) return window.MC_SAISON;
     var d = new Date(), mo = d.getMonth() + 1, j = d.getDate();
-    if ((mo == 10 && j >= 20) || (mo == 11 && j <= 3)) return 'halloween';
     if ((mo == 12 && j >= 15) || (mo == 1 && j <= 6)) return 'noel';
     return null;
   }
   var SAISONS = {
-    halloween: { sprite: 'citrouille', nom: 'citrouille', chip: 'Halloween', long: ' : citrouilles plus fréquentes', annonce: 'Événement Halloween : des citrouilles remplacent les coffres au trésor !' },
     noel: { sprite: 'cadeau', nom: 'cadeau', chip: 'Noël', long: ' : cadeaux plus fréquents', annonce: 'Événement de Noël : des cadeaux remplacent les coffres au trésor !' }
   };
 
@@ -296,7 +302,7 @@
     var avantN = niveauMaitrise(S.collection[S.bloc] || 0);
     S.collection[S.bloc] = (S.collection[S.bloc] || 0) + 1;
     var apresN = niveauMaitrise(S.collection[S.bloc]);
-    if (apresN > avantN) { recalculer(); toast({ plat: S.bloc }, 'Maîtrise ' + apresN + ' : ' + b.nom, '+1 % de production'); }
+    if (apresN > avantN) { recalculer(); toast({ plat: S.bloc }, 'Maîtrise ' + apresN + ' : ' + b.nom, '+' + (a('geologue') ? 2 : 1) + ' % de production'); }
     sons.casse(b.son);
     eclats(r.left + r.width / 2, r.top + r.height / 2, brille ? 60 : 34, brille ? T.texture(S.bloc).couleurs.concat(['#fff6b0', '#ffe066', '#ffffff']) : T.texture(S.bloc).couleurs, 2.2);
     flottant(x, y - 30, (brille ? 'Brillant ! ' : '') + b.nom + ' : +' + nombre(bonus), 'gros');
@@ -366,8 +372,8 @@
   function planifierBoss(premier) { prochainBoss = Date.now() + (premier ? 150 + Math.random() * 150 : 420 + Math.random() * 360) * 1000; }
   function lancerBoss() {
     var def = D.BOSS[S.dim]; if (!def || boss) return null;
-    var d = 30 * J.multDuree;
-    boss = { dim: S.dim, def: def, pv: def.pv, pvMax: def.pv, fin: Date.now() + d * 1000, duree: d, coup: 0 };
+    var d = 40 * J.multDuree, pv = Math.ceil(def.pv * Math.min(3, 1 + 0.08 * S.bossTotal));
+    boss = { dim: S.dim, def: def, pv: pv, pvMax: pv, fin: Date.now() + d * 1000, duree: d, coup: 0 };
     sons.boss();
     annonce('Un boss apparaît : ' + def.nom + ' ! Clique dessus pour le vaincre en ' + Math.round(d) + ' secondes.');
     $('boss').hidden = false; $('bloc-info').hidden = true;
@@ -383,7 +389,7 @@
   }
   function vaincreBoss() {
     var b = boss, idx = D.DIMENSIONS.map(function (x) { return x.id; }).indexOf(b.dim), premier = S.bossVaincus.indexOf(b.dim) < 0, r = cube.getBoundingClientRect();
-    var g = (Math.max(J.clicBase * 400, J.cpsBase * 1200) + 1000) * (1 + 0.5 * idx);
+    var g = (Math.max(J.clicRef * 400, J.cpsBase * 1200) + 1000) * (1 + 0.5 * idx) * (a('primes') ? 3 : 1);
     gagner(g); S.bossTotal++;
     if (premier) { S.bossVaincus.push(b.dim); S.fragments++; }
     boss = null; finBoss();
@@ -451,7 +457,7 @@
         '<img alt="" src="' + T.plat(b) + '"' + (n ? '' : ' class="cache"') + '><b>' + (n ? echappe(D.BLOCS[b].nom) : '???') + '</b><small>' + nombre(n) + (suiv ? ' / ' + nombre(suiv) : '') + '</small><span class="etoiles-m">' + '★★★'.slice(0, niv) + '<i>' + '★★★'.slice(niv) + '</i></span></div>';
     }).join('');
     if ($('collection')._html != html) { $('collection')._html = html; $('collection').innerHTML = html; }
-    $('collection-txt').textContent = 'Maîtrise totale : ' + J.maitrise + ' / ' + Object.keys(D.BLOCS).length * 3 + ' (+' + J.maitrise + ' % de production). Niveaux à ' + D.MAITRISE.map(nombre).join(', ') + ' blocs cassés.';
+    $('collection-txt').textContent = 'Maîtrise totale : ' + J.maitrise + ' / ' + Object.keys(D.BLOCS).length * 3 + ' (+' + J.multMaitrise + ' % de production). Niveaux à ' + D.MAITRISE.map(nombre).join(', ') + ' blocs cassés.';
   }
 
   /* ================= Jour, nuit et ambiance ================= */
@@ -596,11 +602,18 @@
   }
 
   /* ================= Capacités ================= */
-  function capaDebloquee(c) { return c.cond.machine ? (S.machines[c.cond.machine] || 0) >= c.cond.n : S.clics >= c.cond.clics; }
+  function capaCondition(c) { return c.cond.machine ? Math.max(S.machines[c.cond.machine] || 0, S.maxMachines[c.cond.machine] || 0) >= c.cond.n : S.clics >= c.cond.clics; }
+  function capaDebloquee(c) { return S.capasOk.indexOf(c.id) >= 0 || capaCondition(c); }
+  // le monde ne se réinitialise pas quand on renaît : machines découvertes et capacités restent acquises
+  function retenir() {
+    D.MACHINES.forEach(function (m) { if ((S.machines[m.id] || 0) > (S.maxMachines[m.id] || 0)) S.maxMachines[m.id] = S.machines[m.id]; });
+    D.CAPACITES.forEach(function (c) { if (S.capasOk.indexOf(c.id) < 0 && capaCondition(c)) S.capasOk.push(c.id); });
+  }
   function capaPrete(c) { return (S.recharges[c.id] || 0) <= Date.now(); }
   function utiliserCapacite(id) {
     var c = CAPA[id];
     if (!c || !capaDebloquee(c) || !capaPrete(c)) { sons.non(); return false; }
+    if (id == 'balise' && evenement) { sons.non(); annonce('Il y a déjà un coffre ou un creeper à l\'écran !'); return false; }
     var r = cube.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 3;
     S.capacites++;
     S.recharges[id] = Date.now() + c.recharge * J.multRecharge * 1000;
@@ -630,6 +643,7 @@
     return true;
   }
   function majCapacites(forcer) {
+    retenir();
     var el = $('capas'), t = Date.now(), visibles = D.CAPACITES.filter(capaDebloquee);
     el.hidden = !visibles.length;
     var cle = visibles.map(function (c) { return c.id; }).join();
@@ -672,7 +686,7 @@
   function acheterMachine(id) {
     var m = MACHINE[id], n = S.machines[id] || 0, q = S.qte == 'max' ? maxAchetable(m) : S.qte, p = prixMachine(m, n, q);
     if (q < 1 || S.blocs < p) { sons.non(); return false; }
-    S.blocs -= p; S.machines[id] = n + q; S.achats += q; S.maxAchat = Math.max(S.maxAchat, q);
+    S.blocs -= p; S.machines[id] = n + q; S.achats += q; retenir(); S.maxAchat = Math.max(S.maxAchat, q);
     sons.achat(); recalculer(); majDimensions(); verifierProgres(); verifierMissions(); majBoutique(); majCapacites(); marquer();
     return true;
   }
@@ -720,7 +734,7 @@
     // machines : visibles une fois approchées ; la suivante reste mystérieuse
     var mystere = false;
     D.MACHINES.forEach(function (m, i) {
-      var l = lignesMachines[m.id], n = S.machines[m.id] || 0, vue = n > 0 || i == 0 || S.total >= m.prix * 0.4, q = qteVoulue(m), p = prixMachine(m, n, q);
+      var l = lignesMachines[m.id], n = S.machines[m.id] || 0, vue = n > 0 || i == 0 || S.total >= m.prix * 0.4 || (S.maxMachines[m.id] || 0) > 0, q = qteVoulue(m), p = prixMachine(m, n, q);
       var montrer = vue || !mystere;
       if (!vue) mystere = true;
       l.el.hidden = !montrer;
@@ -831,15 +845,16 @@
     });
     var t = choix[Math.floor(Math.random() * choix.length)];
     var but = t.buts ? t.buts[Math.floor(Math.random() * t.buts.length)] : rond(Math.max(300, J.cpsBase * 300 + J.clicBase * 150));
-    S.missions.push({ id: t.id, but: but, depart: compteur(t.id), max: 0 });
+    var poids = t.buts && t.buts.length > 1 ? 0.6 + 1.4 * t.buts.indexOf(but) / (t.buts.length - 1) : 1;
+    S.missions.push({ id: t.id, but: but, depart: compteur(t.id), max: 0, poids: poids });
   }
-  function recompense() { return (Math.max(J.clicBase * 150, J.cpsBase * 600) + 50) * (a('guilde') ? 2 : 1) * (f('renard') ? 1.5 : 1); }
+  function recompense(m) { return (Math.max(J.clicRef * 50, J.cpsBase * 180) + 50) * (m ? m.poids || 1 : 1) * (a('guilde') ? 2 : 1) * (f('renard') ? 1.5 : 1); }
   function verifierMissions() {
     var fini = false;
     for (var i = S.missions.length - 1; i >= 0; i--) {
       var m = S.missions[i];
       if (avancement(m) >= m.but) {
-        var g = recompense();
+        var g = recompense(m);
         gagner(g); S.missionsFaites++;
         S.missions.splice(i, 1);
         sons.mission();
@@ -852,13 +867,13 @@
     if (!$('p-progres').hidden) afficherMissions();
   }
   function afficherMissions() {
-    var g = recompense(), html = S.missions.map(function (m) {
+    var html = S.missions.map(function (m) {
       var av = Math.min(m.but, Math.max(0, avancement(m)));
       return '<li class="mission"><img alt="" src="' + T.sprite({ s: 'parchemin' }) + '"><span class="mi-txt"><b>' + echappe(missionTxt(m)) + '</b>' +
-        '<span class="mi-barre"><i style="width:' + (100 * av / m.but) + '%"></i></span><small>' + nombre(av) + ' / ' + nombre(m.but) + '</small></span></li>';
+        '<span class="mi-barre"><i style="width:' + (100 * av / m.but) + '%"></i></span><small>' + nombre(av) + ' / ' + nombre(m.but) + ' · récompense : ' + blocs(recompense(m)) + '</small></span></li>';
     }).join('');
     if ($('missions')._html != html) { $('missions')._html = html; $('missions').innerHTML = html; }
-    $('missions-txt').textContent = 'Récompense : environ ' + blocs(g) + ' par mission · ' + pluriel(S.missionsFaites, 'mission terminée', 'missions terminées');
+    $('missions-txt').textContent = 'La récompense dépend de la difficulté · ' + pluriel(S.missionsFaites, 'mission terminée', 'missions terminées');
   }
 
   /* ================= Coffres au trésor et creepers ================= */
@@ -894,7 +909,7 @@
     planifier(false);
     if (ev.type == 'coffre' && clique) ouvrirCoffre(x, y, ev.saison);
     else if (ev.type == 'creeper' && clique) {
-      var g = (Math.max(J.clicBase * 60, Math.min(S.blocs * 0.3, J.cpsBase * 1800)) + 13) * (a('creeper') ? 2 : 1);
+      var g = (Math.max(J.clicRef * 60, Math.min(S.blocs * 0.3, J.cpsBase * 1800)) + 13) * (a('creeper') ? 2 : 1);
       gagner(g); S.creepers++; if (estNuit()) S.creepersNuit++;
       sons.coffre();
       eclats(x, y, 24, ['#3fbf4a', '#1d7a2c', '#555', '#888'], 1.5);
@@ -915,16 +930,15 @@
   }
   function ouvrirCoffre(x, y, sai) {
     S.coffres++;
-    if (sai == 'halloween') S.citrouilles++;
     if (sai == 'noel') S.cadeaux++;
     sons.coffre();
     var possibles = D.EFFETS.filter(function (e) { return !e.duree || !actif(e.id); });
     var somme = possibles.reduce(function (s, e) { return s + e.poids; }, 0), r = Math.random() * somme, choix = possibles[0];
     for (var i = 0; i < possibles.length; i++) { r -= possibles[i].poids; if (r <= 0) { choix = possibles[i]; break; } }
-    eclats(x, y, 24, sai == 'halloween' ? ['#d9822b', '#f0b45a', '#f5d042', '#1d1d1d'] : sai == 'noel' ? ['#c62828', '#3fbf4a', '#ffffff', '#f5d042'] : ['#f5d042', '#fff6b0', '#b8874a', '#3fd8e0'], 1.4);
-    var quoi = sai == 'halloween' ? 'Citrouille ! ' : sai == 'noel' ? 'Cadeau ! ' : '';
+    eclats(x, y, 24, sai == 'noel' ? ['#c62828', '#3fbf4a', '#ffffff', '#f5d042'] : ['#f5d042', '#fff6b0', '#b8874a', '#3fd8e0'], 1.4);
+    var quoi = sai == 'noel' ? 'Cadeau ! ' : '';
     if (choix.id == 'fortune') {
-      var g = Math.max(J.clicBase * 30, Math.min(S.blocs * 0.15, J.cpsBase * 900)) + 13;
+      var g = Math.max(J.clicRef * 30, Math.min(S.blocs * 0.15, J.cpsBase * 900)) + 13;
       gagner(g);
       annonce(quoi + 'Trésor ! +' + blocs(g));
       flottant(x, y, '+' + nombre(g), 'gros');
@@ -960,10 +974,11 @@
     dialogue('Renaître ?',
       '<p>Tu gagnes <b class="jaune">' + pluriel(g, 'étoile du Nether', 'étoiles du Nether') + '</b> et <b class="violet">' + pluriel(g, 'fragment d\'étoile', 'fragments d\'étoile') + '</b>.</p>' +
       '<ul class="liste-ren"><li>Production : <b>+' + S.etoiles * J.pctEtoile + ' % → +' + apres * J.pctEtoile + ' %</b>, pour toujours.</li>' +
+      (multJalons(apres) > multJalons(S.etoiles) ? '<li>Palier d\'étoiles atteint : <b>×' + nombre(multJalons(S.etoiles)) + ' → ×' + nombre(multJalons(apres)) + '</b>.</li>' : '') +
       '<li>Fragments : <b>' + S.fragments + ' → ' + (S.fragments + g) + '</b>, à dépenser dans la boutique céleste.</li></ul>' +
       '<p class="perdu"><b>Tu perds :</b> tes ' + blocs(S.blocs) + ', tes ' + pluriel(D.MACHINES.reduce(function (s, m) { return s + (S.machines[m.id] || 0); }, 0), 'machine') + ' et tes ' + pluriel(S.amels.length, 'amélioration') + '.</p>' +
       '<p class="garde"><b>Tu gardes :</b> les progrès, les dimensions, les pouvoirs, les missions et les statistiques.</p>' +
-      (a('depart') ? '<p>Ton sac de départ te redonne 10 pioches et 5 mineurs.</p>' : ''),
+      (a('depart2') ? '<p>Ton sac de départ II te redonne 50 pioches, 25 mineurs, 10 golems et 5 wagonnets.</p>' : a('depart') ? '<p>Ton sac de départ te redonne 10 pioches et 5 mineurs.</p>' : ''),
       [{ t: 'Annuler' }, { t: 'Renaître', cls: 'vert', f: renaitre }]);
   }
   function renaitre() {
@@ -971,6 +986,8 @@
     S.etoiles += g; S.fragments += g; S.renaissances++;
     S.blocs = 0; S.total = 0; S.machines = {}; S.amels = []; S.debutVie = Date.now(); S.coups = 0;
     if (a('depart')) { S.machines.pioche = 10; S.machines.mineur = 5; }
+    if (a('depart2')) { S.machines.pioche = 50; S.machines.mineur = 25; S.machines.golem = 10; S.machines.wagonnet = 5; }
+    S.historique = []; retenir();
     effets = [];
     recalculer(); appliquerCurseur(); cleAmels = null; majBoutique(); verifierProgres(); afficherProgres(); afficherEtoiles(); majCapacites(); sauver();
     eclats(innerWidth / 2, innerHeight / 2, 60, ['#ffffff', '#f5d042', '#d18cff'], 2.5);
@@ -1002,9 +1019,9 @@
     $('et-prochaine').textContent = 'Étoile n° ' + suiv + ' à ' + blocs(fin) + ' minés au total. Encore ' + blocs(reste) +
       (J.cps > 0 ? ', environ ' + duree(reste / J.cps) + ' à ta vitesse actuelle.' : '.');
     $('et-total').textContent = 'Minés au total (toutes vies) : ' + blocs(S.totalAll);
-    var paliers = [1, 2, 3, 5, 10, 25, 50, 100, 250, 1000], html = paliers.map(function (k) {
-      var ok = poss >= k;
-      return '<tr class="' + (ok ? 'ok' : '') + '"><td>' + k + ' ★</td><td>' + blocs(seuil(k)) + '</td><td>+' + k * J.pctEtoile + ' %</td><td>' + (ok ? '✓' : '') + '</td></tr>';
+    var paliers = [1, 2, 3, 5, 10, 25, 50, 100, 250, 500, 1000], html = paliers.map(function (k) {
+      var ok = poss >= k, jl = multJalons(k), nouveau = jl > multJalons(k - 1);
+      return '<tr class="' + (ok ? 'ok' : '') + '"><td>' + k + ' ★</td><td>' + blocs(seuil(k)) + '</td><td>+' + k * J.pctEtoile + ' %' + (jl > 1 ? ' · ×' + nombre(jl) + (nouveau ? ' (palier !)' : '') : '') + '</td><td>' + (ok ? '✓' : '') + '</td></tr>';
     }).join('');
     if ($('et-paliers')._html != html) { $('et-paliers')._html = html; $('et-paliers').innerHTML = html; }
     var box = $('pouvoirs'), cle = S.pouvoirs.join() + '|' + S.fragments;
@@ -1041,14 +1058,14 @@
       ['Blocs cassés', nombre(S.casses) + ' (dont ' + nombre(S.brillants) + ' brillant' + (S.brillants > 1 ? 's' : '') + ')'],
       ['Machines', nombre(D.MACHINES.reduce(function (s, m) { return s + (S.machines[m.id] || 0); }, 0)) + ' (' + nombre(S.achats) + ' achetées en tout)'],
       ['Améliorations', S.amels.length + ' / ' + D.AMELIORATIONS.length],
-      ['Coffres ouverts', nombre(S.coffres) + (S.citrouilles ? ' · ' + S.citrouilles + ' citrouille' + (S.citrouilles > 1 ? 's' : '') : '') + (S.cadeaux ? ' · ' + S.cadeaux + ' cadeau' + (S.cadeaux > 1 ? 'x' : '') : '')],
+      ['Coffres ouverts', nombre(S.coffres) + (S.cadeaux ? ' · ' + S.cadeaux + ' cadeau' + (S.cadeaux > 1 ? 'x' : '') : '')],
       ['Creepers désamorcés', nombre(S.creepers) + (S.boums ? ' (et ' + pluriel(S.boums, 'explosion') + ')' : '')],
       ['Capacités utilisées', nombre(S.capacites)],
       ['Missions terminées', nombre(S.missionsFaites)],
       ['Boss vaincus', nombre(S.bossTotal) + ' (' + S.bossVaincus.length + ' / ' + D.DIMENSIONS.length + ' différents)'],
-      ['Collection', 'maîtrise ' + J.maitrise + ' / ' + Object.keys(D.BLOCS).length * 3 + ' (+' + J.maitrise + ' %)'],
+      ['Collection', 'maîtrise ' + J.maitrise + ' / ' + Object.keys(D.BLOCS).length * 3 + ' (+' + J.multMaitrise + ' %)'],
       ['Familier', S.familier ? FAMILIER[S.familier].nom + ' (' + S.familiers.length + ' / ' + D.FAMILIERS.length + ' adoptés)' : 'aucun pour l\'instant'],
-      ['Multiplicateur de production', '×' + J.mult.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' (améliorations +' + J.mods.global + ' %, progrès +' + J.multProgres + ' %, étoiles +' + J.multEtoiles + ' %)'],
+      ['Multiplicateur de production', '×' + J.mult.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' (améliorations +' + J.mods.global + ' %, progrès +' + J.multProgres + ' %, étoiles +' + J.multEtoiles + ' %' + (J.jalons > 1 ? ', paliers ×' + nombre(J.jalons) : '') + (J.forge > 1 ? ', forge ×' + nombre(J.forge) : '') + ')'],
       ['Renaissances', nombre(S.renaissances) + ' · ' + pluriel(S.etoiles, 'étoile') + ' · ' + S.pouvoirs.length + ' pouvoir' + (S.pouvoirs.length > 1 ? 's' : '')],
       ['Temps de jeu', duree(S.tempsJeu) + ' (cette vie : ' + duree((Date.now() - S.debutVie) / 1000) + ')'],
       ['Partie commencée le', new Date(S.debut).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })]
@@ -1141,7 +1158,7 @@
     // onglet en arrière-plan longtemps : au-delà d'une minute, production à moitié (comme hors ligne)
     gagner(dt <= 60 ? J.cps * dt : J.cps * 60 + J.cpsBase * (dt - 60) * (a('absence') ? 1 : 0.5));
     S.tempsJeu += Math.min(dt, 60);
-    if (a('fantome')) { fantome += Math.min(dt, 5); while (fantome >= 0.5) { fantome -= 0.5; frapperFantome(); } }
+    if (a('fantome')) { var pas = a('fantome2') ? 0.2 : 0.5; fantome += Math.min(dt, 5); while (fantome >= pas) { fantome -= pas; frapperFantome(); } }
     if (combo.n && t - combo.dernier > J.fenetreCombo + 350) { combo.n = 0; recalculer(); majCombo(); }
     if (boss) { if (t >= boss.fin) fuiteBoss(); else if (tic % 2 == 0) majBoss(); }
     else if (bossDispo() && t >= prochainBoss && !document.hidden && !evenement) lancerBoss();
@@ -1225,7 +1242,6 @@
   });
   function phrase() {
     var l = D.PHRASES.slice(), sa = saison();
-    if (sa == 'halloween') l.push('Joyeux Halloween !', 'Bouh !', 'Des citrouilles partout !');
     if (sa == 'noel') l.push('Joyeux Noël !', 'Ho ho ho !');
     var p, e = $('splash');
     do { p = l[Math.floor(Math.random() * l.length)]; } while (l.length > 1 && p == e.textContent);
