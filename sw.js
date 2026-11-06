@@ -3,7 +3,7 @@
    essayé d'abord (pour avoir la dernière version) et le cache sert de secours.
    VERSION et FICHIERS sont générés par outils/construire.js : ne pas les modifier à la main. */
 // <généré>
-const VERSION = 'a50ffe61c7';
+const VERSION = '030fbdbd6b';
 const FICHIERS = [
   './',
   '404.html',
