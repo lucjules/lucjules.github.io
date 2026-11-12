@@ -32,7 +32,9 @@
 #   UPGRADE=0|1             mettre à jour tout le système d'abord (défaut : 1)
 #   BOB_TOOLS=0|1           installer l'extension Go et les outils Go dans le compte de bob (défaut : 1)
 #   ONLY="comptes prompt"   ne lancer que ces étapes (liste en bas du script)
-# Exemple :   sudo GO_SOURCE=apt UPGRADE=0 bash sae-alice.sh
+# Exemples :   sudo GO_SOURCE=apt UPGRADE=0 bash sae-alice.sh
+#              sudo ONLY="droits" bash sae-alice.sh      (répare les permissions de bob)
+# Le script peut être relancé autant de fois que nécessaire.
 set -euo pipefail
 
 GO_SOURCE=${GO_SOURCE:-tarball}
@@ -141,7 +143,8 @@ step_go() {
     curl -fsSL -o "$tmp/$file" "https://go.dev/dl/$file"
     echo "$sha  $tmp/$file" | sha256sum -c -         # vérifie l'intégrité du téléchargement
     rm -rf /usr/local/go
-    tar -C /usr/local -xzf "$tmp/$file"
+    tar -C /usr/local --no-same-owner -xzf "$tmp/$file"   # les fichiers appartiennent à root
+    chmod -R a+rX /usr/local/go                          # lisibles et exécutables par bob
     rm -rf "$tmp"
     ln -sf /usr/local/go/bin/go /usr/local/bin/go         # `go` visible dans tous les shells
     ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
@@ -239,18 +242,51 @@ step_bob() {
   ok "extensions de bob : $(runuser -l bob -c 'code --list-extensions' 2>/dev/null | tr '\n' ' ')"
 }
 
+step_partage() {
+  log "Scripts partagés dans /opt/butgames (lisibles par alice ET par bob)"
+  # Le dossier ~/Downloads d'alice est privé : bob ne peut pas y lire un script.
+  local src f n=0
+  src=$(cd "$(dirname "$0")" && pwd)
+  install -d -m 0755 /opt/butgames
+  if [ "$src" = /opt/butgames ]; then ok "le script est déjà dans /opt/butgames"; return 0; fi
+  for f in "$src"/sae-*.sh; do
+    [ -f "$f" ] || continue
+    install -m 0755 "$f" /opt/butgames/
+    n=$((n+1))
+  done
+  ok "$n script(s) dans /opt/butgames : bob lance « bash /opt/butgames/sae-bob.sh »"
+}
+
+step_droits() {
+  log "Droits : chacun possède son dossier, tout le monde lit ce qui est partagé"
+  local u
+  for u in alice bob; do
+    if id "$u" >/dev/null 2>&1; then
+      chown -R "$u:$(id -gn "$u")" "/home/$u"     # répare ce qu'un sudo a laissé à root
+    fi
+  done
+  [ -f "$SHARED_RC" ] && chmod 0644 "$SHARED_RC"
+  [ -d /usr/local/go ] && chmod -R a+rX /usr/local/go
+  [ -d /opt/butgames ] && chmod -R a+rX /opt/butgames
+  gpasswd -d bob sudo >/dev/null 2>&1 || true      # bob n'a PAS les droits d'administration (voulu)
+  ok "dossiers personnels rendus à leur propriétaire, fichiers partagés lisibles"
+}
+
 run() { if [ -z "$ONLY" ] || [[ " $ONLY " == *" $1 "* ]]; then "step_$1"; fi; }
-# Ordre : paquets locale clavier fuseau comptes go vscode lisezmoi prompt bob
-for s in paquets locale clavier fuseau comptes go vscode lisezmoi prompt bob; do run "$s"; done
+# Ordre : paquets locale clavier fuseau comptes go vscode lisezmoi prompt bob partage droits
+for s in paquets locale clavier fuseau comptes go vscode lisezmoi prompt bob partage droits; do run "$s"; done
 
 log "Terminé"
 echo "  1. Redémarre la machine (clavier et langue pris en compte)  :  sudo reboot"
-echo "  2. Ouvre la session de bob et lance :  bash sae-bob.sh"
+echo "  2. Ouvre la session de bob et lance :  bash /opt/butgames/sae-bob.sh"
+echo "  3. Dans la session d'alice, vérifie tout :  sudo bash /opt/butgames/sae-verif.sh"
 </script>
 <script type="text/plain" id="src-bob">
 #!/usr/bin/env bash
 # SAE 1.03 - côté bob (développeur) : cloner le dépôt de validation et lancer test.sh
-# À lancer depuis le compte de bob, SANS sudo :   bash sae-bob.sh
+#
+# À lancer depuis le compte de BOB, SANS sudo :   bash /opt/butgames/sae-bob.sh
+# (le script est dans /opt/butgames, lisible par tous : le dossier ~/Downloads d'alice est privé)
 set -uo pipefail
 
 REPO=https://gitlab-ce.iut.u-bordeaux.fr/rgiot/hello.sae4.but1.iut.git
@@ -258,25 +294,35 @@ BRANCH=langage_go
 DIR=$HOME/projets
 LOG=$HOME/preuve-test.txt
 
-[ "$(id -u)" -ne 0 ] || { echo "Ne lance pas ce script en root : utilise le compte de bob."; exit 1; }
-[ "$(id -un)" = bob ] || echo "(attention : tu es « $(id -un) », pas bob)"
-command -v git >/dev/null || { echo "git n'est pas installé : demande à alice (sudo apt install git)."; exit 1; }
+stop() { printf '\033[31mArrêt :\033[0m %s\n' "$*" >&2; exit 1; }
 
-mkdir -p "$DIR" && cd "$DIR" || exit 1
+# --- Contrôles avant de commencer ---
+[ "$(id -u)" -ne 0 ] || stop "ne lance pas ce script en root ni avec sudo : ouvre une session de bob."
+[ "$(id -un)" = bob ] || echo "(attention : tu es « $(id -un) » et non bob)"
+cd "$HOME" || stop "impossible d'entrer dans $HOME."      # évite de rester dans le dossier d'un autre compte
+[ -w "$HOME" ] || stop "$HOME n'est pas accessible en écriture. Dans la session d'alice : sudo chown -R bob:bob /home/bob"
+command -v git >/dev/null || stop "git n'est pas installé. Dans la session d'alice : sudo apt install -y git"
+command -v go  >/dev/null || stop "go n'est pas installé (ou pas dans le PATH). Dans la session d'alice : sudo bash /opt/butgames/sae-alice.sh"
+
+# --- Clone (ou mise à jour si déjà cloné) ---
+mkdir -p "$DIR" && cd "$DIR" || stop "impossible de créer $DIR."
 name=$(basename "$REPO" .git)
 if [ -d "$name/.git" ]; then
   echo "Dépôt déjà cloné : mise à jour de la branche $BRANCH"
-  git -C "$name" fetch origin "$BRANCH" && git -C "$name" checkout "$BRANCH" && git -C "$name" pull --ff-only
+  git -C "$name" fetch origin "$BRANCH" && git -C "$name" checkout "$BRANCH" && git -C "$name" pull --ff-only \
+    || stop "mise à jour impossible : voir la page Dépannage du guide."
 else
-  git clone --branch "$BRANCH" "$REPO" || { echo "Clone impossible : voir la page Dépannage (réseau, identifiants, nom de branche)."; exit 1; }
+  git clone --branch "$BRANCH" "$REPO" || stop "clone impossible (réseau ? identifiants ? nom de branche ?) : voir la page Dépannage du guide."
 fi
-cd "$name" || exit 1
+cd "$name" || stop "dossier $name introuvable."
 
 echo; echo "Branche : $(git branch --show-current)"
+[ -f test.sh ] || stop "test.sh est absent de ce dépôt : vérifie la branche ($BRANCH)."
 echo "---- début de test.sh (lis-le avant de le lancer) ----"
 head -n 40 test.sh
 echo "-------------------------------------------------------"
 
+# --- Test, avec trace pour le rapport ---
 {
   date
   echo "machine : $(hostname) | utilisateur : $(id -un) | $(go version 2>&1)"
@@ -289,61 +335,91 @@ exit "$code"
 </script>
 <script type="text/plain" id="src-verif">
 #!/usr/bin/env bash
-# SAE 1.03 - vérifie chaque exigence du sujet et affiche [ OK ] / [FAIL]
-# À lancer dans la VM, depuis le compte d'alice :   sudo bash sae-verif.sh
-# Pour lancer aussi test.sh dans le compte de bob :  sudo RUN_TEST=1 bash sae-verif.sh
+# SAE 1.03 - vérifie chaque exigence du sujet : [ OK ] ou [FAIL] + la commande pour corriger
+#
+# Dans la session d'ALICE :   sudo bash /opt/butgames/sae-verif.sh
+# Avec le test du projet :    sudo RUN_TEST=1 bash /opt/butgames/sae-verif.sh
 set -uo pipefail
 RUN_TEST=${RUN_TEST:-0}
 REPO_DIR=/home/bob/projets/hello.sae4.but1.iut
-[ "$(id -u)" -eq 0 ] || { echo "Lance : sudo bash $0"; exit 1; }
+[ "$(id -u)" -eq 0 ] || { echo "Lance avec sudo :  sudo bash $0"; exit 1; }
 
-ok=0; ko=0
-check() {   # check "libellé" commande [arguments...]
-  local label=$1; shift
-  if "$@" >/dev/null 2>&1; then printf '  \033[32m[ OK ]\033[0m %s\n' "$label"; ok=$((ok+1))
-  else printf '  \033[31m[FAIL]\033[0m %s\n' "$label"; ko=$((ko+1)); fi
+AL=/opt/butgames/sae-alice.sh
+[ -f "$AL" ] || AL="$(cd "$(dirname "$0")" && pwd)/sae-alice.sh"
+ok=0; ko=0; FIXES=()
+
+# check "libellé" "commande(s) pour corriger" commande [arguments...]
+check() {
+  local label=$1 fix=$2; shift 2
+  if "$@" >/dev/null 2>&1; then
+    printf '  \033[32m[ OK ]\033[0m %s\n' "$label"; ok=$((ok+1))
+  else
+    printf '  \033[31m[FAIL]\033[0m %s\n' "$label"; ko=$((ko+1))
+    printf '         \033[33mpour corriger :\033[0m %s\n' "$fix"
+    FIXES+=("$fix")
+  fi
 }
-as_bob() { runuser -l bob -c "$1"; }
+as_bob()       { runuser -l bob -c "$1"; }
 in_group()     { id -nG "$1" 2>/dev/null | tr ' ' '\n' | grep -qx "$2"; }
 not_admin()    { ! id -nG "$1" 2>/dev/null | tr ' ' '\n' | grep -Eqx 'sudo|admin|wheel'; }
-prompt_works() { local d; d=$(mktemp -d); git -C "$d" init -q -b langage_go && [ "$(bash -c '. /usr/lib/git-core/git-sh-prompt; cd "$1" && __git_ps1 "(%s)"' _ "$d")" = "(langage_go)" ]; local r=$?; rm -rf "$d"; return $r; }
+owns_home()    { [ -d "/home/$1" ] && [ -z "$(find "/home/$1" -xdev ! -user "$1" -print -quit 2>/dev/null)" ]; }
+bob_no_sudo()  { ! as_bob 'sudo -n true'; }
+prompt_works() { local d r; d=$(mktemp -d); git -C "$d" init -q -b langage_go && [ "$(bash -c '. /usr/lib/git-core/git-sh-prompt; cd "$1" && __git_ps1 "(%s)"' _ "$d")" = "(langage_go)" ]; r=$?; rm -rf "$d"; return $r; }
 bob_prompt()   { as_bob 'bash -ic "echo \$PS1" 2>/dev/null' | grep -q __git_ps1; }
 bob_ext()      { as_bob 'code --list-extensions 2>/dev/null' | grep -qix 'golang.go'; }
 bob_branch()   { [ "$(as_bob "git -C $REPO_DIR branch --show-current")" = langage_go ]; }
 bob_test()     { as_bob "cd $REPO_DIR && if [ -x test.sh ]; then ./test.sh; else bash test.sh; fi"; }
 bob_hello()    { as_bob 'd=$(mktemp -d) && cd "$d" && go mod init essai >/dev/null 2>&1 && printf "package main\nimport \"fmt\"\nfunc main(){ fmt.Println(\"ok\") }\n" > main.go && [ "$(go run .)" = ok ]'; }
+only()         { echo "sudo ONLY=\"$1\" bash $AL"; }
 
 echo; echo "SAE 1.03 - vérification ($(. /etc/os-release; echo "$PRETTY_NAME"))"
 echo; echo "Système"
-check "Bureau XFCE installé"                         command -v xfce4-session
-check "Langue du système : anglais (en_US.UTF-8)"    grep -Eq '^LANG="?en_US' /etc/default/locale
-check "Clavier : disposition française (fr)"         grep -q '^XKBLAYOUT="fr"' /etc/default/keyboard
-check "Outils VMware (presse-papiers, résolution)"   systemctl is-enabled --quiet open-vm-tools
-echo; echo "Comptes"
-check "alice existe"                                 id alice
-check "alice est administratrice (groupe sudo)"      in_group alice sudo
-check "bob existe"                                   id bob
-check "bob n'est PAS administrateur"                 not_admin bob
+check "Bureau XFCE installé"                          "sudo apt install -y xfce4"                         command -v xfce4-session
+check "Langue du système : anglais (en_US.UTF-8)"     "$(only locale)"                                    grep -Eq '^LANG="?en_US' /etc/default/locale
+check "Clavier : disposition française (fr)"          "$(only clavier)"                                   grep -q '^XKBLAYOUT="fr"' /etc/default/keyboard
+check "Outils VMware installés (copier-coller)"       "sudo apt install -y open-vm-tools open-vm-tools-desktop"  dpkg -s open-vm-tools
+echo; echo "Comptes et droits"
+check "alice existe"                                  "$(only comptes)"                                   id alice
+check "alice est administratrice (groupe sudo)"       "sudo usermod -aG sudo alice   (puis déconnexion / reconnexion)"  in_group alice sudo
+check "bob existe"                                    "$(only comptes)"                                   id bob
+check "bob n'est PAS administrateur (voulu)"          "sudo gpasswd -d bob sudo"                          not_admin bob
+check "bob se voit refuser sudo (voulu)"              "regarde /etc/sudoers.d : bob ne doit y figurer nulle part"  bob_no_sudo
+check "bob possède son dossier personnel"             "sudo chown -R bob:bob /home/bob"                   owns_home bob
+check "alice possède son dossier personnel"           "sudo chown -R alice:alice /home/alice"             owns_home alice
+check "bob peut écrire dans son dossier"              "sudo chown -R bob:bob /home/bob"                   as_bob 'f=$(mktemp ~/.essai.XXXXXX) && rm -f "$f"'
+check "bob peut lire /etc/butgames.bashrc"            "sudo chmod 644 /etc/butgames.bashrc"               as_bob 'test -r /etc/butgames.bashrc'
+check "bob peut lire les scripts de /opt/butgames"    "$(only partage)"                                   as_bob 'test -r /opt/butgames/sae-bob.sh'
 echo; echo "Logiciels"
-check "git installé"                                 command -v git
-check "Go installé (go version)"                     go version
-check "Visual Studio Code installé (code)"           command -v code
-check "Extension Go dans le compte de bob"           bob_ext
-check "gopls (outil Go) dans le home de bob"         test -x /home/bob/go/bin/gopls
-check "bob compile et lance un programme Go"         bob_hello
+check "git installé"                                  "sudo apt install -y git"                           command -v git
+check "Go installé (go version)"                      "$(only go)"                                        go version
+check "bob peut lancer Go (droits sur /usr/local/go)" "sudo chmod -R a+rX /usr/local/go"                  as_bob 'go version'
+check "Visual Studio Code installé (code)"            "$(only vscode)"                                    command -v code
+check "Extension Go dans le compte de bob"            "en bob :  code --install-extension golang.go"      bob_ext
+check "gopls (outil Go) dans le home de bob"          "en bob :  go install golang.org/x/tools/gopls@latest"  test -x /home/bob/go/bin/gopls
+check "bob compile et lance un programme Go"          "en bob :  vérifie « go version » puis relance ce contrôle"  bob_hello
 echo; echo "Prompt bash"
-check "Fichier /etc/butgames.bashrc présent"         grep -q __git_ps1 /etc/butgames.bashrc
-check "__git_ps1 affiche la branche d'un dépôt"      prompt_works
-check "Le ~/.bashrc d'alice charge ce prompt"        grep -q butgames /home/alice/.bashrc
-check "Le ~/.bashrc de bob charge ce prompt"         grep -q butgames /home/bob/.bashrc
-check "Le shell de bob utilise __git_ps1"            bob_prompt
+check "Fichier /etc/butgames.bashrc présent"          "$(only prompt)"                                    grep -q __git_ps1 /etc/butgames.bashrc
+check "__git_ps1 affiche la branche d'un dépôt"       "sudo apt install -y git"                           prompt_works
+check "Le ~/.bashrc d'alice charge ce prompt"         "$(only prompt)"                                    grep -q butgames /home/alice/.bashrc
+check "Le ~/.bashrc de bob charge ce prompt"          "$(only prompt)"                                    grep -q butgames /home/bob/.bashrc
+check "Le shell de bob utilise __git_ps1"             "$(only prompt)"                                    bob_prompt
 echo; echo "Projet de validation"
-check "Dépôt cloné dans le compte de bob"            test -d "$REPO_DIR/.git"
-check "Branche courante : langage_go"                bob_branch
-if [ "$RUN_TEST" = 1 ]; then check "test.sh se termine sans erreur (code 0)" bob_test
-else echo "  (test.sh non lancé ici : ajoute RUN_TEST=1, ou lance-le dans la session de bob)"; fi
+check "Dépôt cloné dans le compte de bob"             "en bob :  bash /opt/butgames/sae-bob.sh"           test -d "$REPO_DIR/.git"
+check "Le dépôt appartient à bob"                     "sudo chown -R bob:bob /home/bob/projets"           test "$(stat -c %U "$REPO_DIR" 2>/dev/null)" = bob
+check "Branche courante : langage_go"                 "en bob :  git -C $REPO_DIR checkout langage_go"    bob_branch
+if [ "$RUN_TEST" = 1 ]; then
+  check "test.sh se termine sans erreur (code 0)"     "en bob :  cd $REPO_DIR && ./test.sh   (lis le message d'erreur)"  bob_test
+else
+  echo "  (test.sh non lancé ici : ajoute RUN_TEST=1, ou lance-le dans la session de bob)"
+fi
 
-echo; printf 'Bilan : \033[32m%d OK\033[0m, \033[31m%d échec(s)\033[0m\n' "$ok" "$ko"
+echo
+printf 'Bilan : \033[32m%d OK\033[0m, \033[31m%d échec(s)\033[0m\n' "$ok" "$ko"
+if [ "$ko" -gt 0 ]; then
+  echo; echo "Commandes à lancer pour corriger (dans cet ordre, une fois chacune) :"
+  printf '%s\n' "${FIXES[@]}" | awk '!vu[$0]++ { print "  " $0 }'
+  echo; echo "Relance ensuite ce script pour contrôler."
+fi
 [ "$ko" -eq 0 ]
 </script>
 
@@ -388,24 +464,52 @@ function colorLine(l) {
   if (k > 0 && !/['"][^'"]*$/.test(e.slice(0, k))) return e.slice(0, k) + '<span class="c-com">' + e.slice(k) + '</span>';
   return e;
 }
+/* Pastilles : comment utiliser la commande */
+function badges(o) {
+  let h = '';
+  if (o.mode === 'bloc') h += '<span class="bdg bdg-bloc" title="Copie tout le bloc avec le bouton, colle-le dans le terminal, puis Entrée">▣ Colle tout le bloc d\'un coup</span>';
+  if (o.mode === 'un') h += '<span class="bdg bdg-un">① Une commande à la fois</span>';
+  if (o.once === true) h += '<span class="bdg bdg-once" title="La relancer provoquerait une erreur ou un doublon">⚠ À faire une seule fois</span>';
+  if (o.once === false) h += '<span class="bdg bdg-again" title="Sans danger si tu le refais">↻ Tu peux le refaire</span>';
+  return h;
+}
+/* mode : 'bloc' (défaut : tout coller d'un coup), 'none' (fichier ou exemple, pas à taper). once : true / false / absent */
 function code(text, o) {
-  o = o || {};
+  o = Object.assign({ mode: 'bloc', lang: 'bash' }, o || {});
   const t = text.replace(/^\n+|\s+$/g, '');
   const html = t.split('\n').map(colorLine).join('\n');
   const name = o.name ? `<figcaption class="cb-name">${esc(o.name)}</figcaption>` : '';
-  return `<figure class="cb">${name}<pre class="cb-code"><code>${html}</code></pre><div class="cb-bar"><span class="cb-lang">${esc(o.lang || 'bash')}</span><div class="cb-actions"><button type="button" class="btn mini" data-act="copy">Copier</button></div></div></figure>`;
+  const left = (o.mode === 'none' ? `<span class="cb-lang">${esc(o.lang)}</span>` : '') + `<span class="cb-bdgs">${badges(o)}</span>`;
+  return `<figure class="cb">${name}<pre class="cb-code"><code>${html}</code></pre><div class="cb-bar"><div class="cb-left">${left}</div><div class="cb-actions"><button type="button" class="btn mini" data-act="copy">Copier</button></div></div></figure>`;
 }
-const sh = text => code(text, { lang: 'bash' });
-const file = (name, text) => code(text, { lang: 'fichier', name });
-/* Transcription : les lignes « $ commande » sont des commandes (seules copiées), les autres sont la réponse du système */
+const sh = (text, o) => code(text, o);
+const file = (name, text) => code(text, { lang: 'fichier', name, mode: 'none' });
+/* Suite de commandes à taper UNE PAR UNE : chacune a son bouton Copier et le résultat attendu.
+   items : texte, ou { c: commande, ok: résultat attendu, w: 'alice' | 'bob', once: true | false } */
+function steps(items, o) {
+  o = o || {};
+  const rows = items.map((it, i) => {
+    if (typeof it === 'string') it = { c: it };
+    const b = (it.once !== undefined ? it.once : o.once);
+    return `<li><span class="stp-n">${i + 1}</span><div class="stp-b">${it.w ? `<div class="stp-w">${who(it.w)}</div>` : ''}<figure class="cb stp-cb" data-copy="${esc(it.c)}"><pre class="cb-code"><code>${it.c.split('\n').map(colorLine).join('\n')}</code></pre><div class="cb-bar"><div class="cb-left"><span class="cb-bdgs">${badges({ once: b })}</span></div><div class="cb-actions"><button type="button" class="btn mini" data-act="copy">Copier</button></div></div></figure>${it.ok ? `<p class="stp-ok"><b>Attendu :</b> ${it.ok}</p>` : ''}</div></li>`;
+  }).join('');
+  return `<div class="steps"><div class="steps-h"><span class="bdg bdg-un">① Une commande à la fois</span><span class="steps-t">Copie la commande 1, colle-la dans le terminal, appuie sur Entrée, lis le résultat, puis passe à la 2.</span></div><ol class="stp">${rows}</ol></div>`;
+}
+/* Terminal d'exemple : les lignes « $ commande » sont des commandes (seules copiées), les autres sont la réponse du système */
 function term(block) {
   const lines = block.replace(/^\n+|\s+$/g, '').split('\n');
   const cmds = lines.filter(l => l.startsWith('$ ')).map(l => l.slice(2));
   const html = lines.map(l => l.startsWith('$ ')
     ? `<span class="sh-p">$</span> <span class="sh-c">${esc(l.slice(2))}</span>`
     : `<span class="sh-o">${esc(l)}</span>`).join('\n');
-  return `<figure class="cb" data-copy="${esc(cmds.join('\n'))}"><pre class="cb-code"><code>${html}</code></pre><div class="cb-bar"><span class="cb-lang">terminal</span><div class="cb-actions"><button type="button" class="btn mini" data-act="copy">Copier les commandes</button></div></div></figure>`;
+  return `<figure class="cb" data-copy="${esc(cmds.join('\n'))}"><pre class="cb-code"><code>${html}</code></pre><div class="cb-bar"><div class="cb-left"><span class="cb-lang">exemple de résultat</span></div>${cmds.length ? '<div class="cb-actions"><button type="button" class="btn mini" data-act="copy">Copier les commandes</button></div>' : ''}</div></figure>`;
 }
+/* Deux chemins qui ne se mélangent jamais : A = à la main, B = script */
+function chemin(l, titre, sous, html) {
+  return `<section class="chemin chemin-${l.toLowerCase()}"><header class="chemin-h"><span class="chemin-l">${l}</span><div><b>${titre}</b><span>${sous}</span></div></header><div class="chemin-body">${html}</div></section>`;
+}
+const AIDE_LIEN = id => `<p class="aide-lien"><button type="button" class="btn ghost" data-act="help-open" data-id="${id}">🆘 Ça ne marche pas ? Ouvre l'aide de cette étape</button></p>`;
+
 /* Script complet (texte dans un <script type="text/plain">), affiché replié, copiable et téléchargeable */
 function scriptBlock(srcId, fname, summary) {
   const t = $('#' + srcId).textContent.replace(/^\n+/, '');
@@ -593,7 +697,7 @@ ${D(
 ${sh(R`# Linux / macOS
 sha256sum nom-de-l-iso.iso
 # Windows (PowerShell)
-Get-FileHash .\nom-de-l-iso.iso -Algorithm SHA256`)}
+Get-FileHash .\nom-de-l-iso.iso -Algorithm SHA256`, { mode: 'none', lang: 'au choix selon ton système' })}
 
 <h2>L'assistant, étape par étape</h2>
 <ol class="flow">
@@ -628,7 +732,8 @@ ${tbl(['Réglage', 'Valeur', 'Où le trouver dans le fichier .vmx'], [
   <li>Le copier-coller et le redimensionnement automatique ne marchent qu'avec les outils VMware dans l'invité (paquets <code>open-vm-tools</code>, installés plus tard).</li>
   <li>Message « VT-x is disabled » ou « virtualization » ? La virtualisation est désactivée dans le BIOS de l'hôte : sur une machine de l'IUT, demande à l'enseignant.</li>
 </ul>
-${note('attention', 'À savoir', '<p>Selon ta version, <strong>VMware Workstation Player</strong> n\'offre ni instantanés (snapshots) ni clonage : pense à copier le dossier de la VM (VM éteinte) à des moments clés, par exemple après l\'installation du système avant les scripts.</p>')}`,
+${note('attention', 'À savoir', '<p>Selon ta version, <strong>VMware Workstation Player</strong> n\'offre ni instantanés (snapshots) ni clonage : pense à copier le dossier de la VM (VM éteinte) à des moments clés, par exemple après l\'installation du système avant les scripts.</p>')}
+${AIDE_LIEN('vmware')}`,
   check: [
     ['vmware-1', "La VM est créée avec « install the operating system later »."],
     ['vmware-2', "4096 Mo de RAM, 2 cœurs, disque de 40 Go dynamique, réseau NAT."],
@@ -683,7 +788,8 @@ ${note('convention', 'Selon la version', '<p>Les libellés et l\'ordre des écra
   <li>Le bureau Xfce apparaît. Si le clavier tape en QWERTY, pas de panique : l'étape suivante règle ça.</li>
   <li>Ouvre un terminal : ${Di('menu <em>Applications → Terminal Emulator</em>', kbd('Ctrl+Alt+T') + ' ou menu <em>Applications → Terminal Emulator</em>')}.</li>
   <li>Vérifie le réseau : ${c('ping -c 2 deb.debian.org')} ${Di('', '(ou ' + c('ping -c 2 archive.ubuntu.com') + ')')}.</li>
-</ol>`,
+</ol>
+${AIDE_LIEN('install')}`,
   check: [
     ['install-1', "Le système est installé et démarre sur le bureau Xfce."],
     ['install-2', "J'ai installé en anglais, avec le clavier français."],
@@ -693,68 +799,74 @@ ${note('convention', 'Selon la version', '<p>Les libellés et l\'ordre des écra
   ]
 });
 
+/* Rappel affiché en tête des étapes d'installation */
+const ONLY_NOTE = ids => `<p class="muted-s">Chemin B (script) : <code>sudo ONLY="${ids}" bash /opt/butgames/sae-alice.sh</code> fait la même chose. Ne fais <strong>pas</strong> les deux chemins.</p>`;
+const LEGENDE = `<div class="legende"><b>Comment lire les commandes de ce guide</b>
+<ul><li><span class="bdg bdg-bloc">▣ Colle tout le bloc d'un coup</span> : un seul copier-coller, puis Entrée.</li>
+<li><span class="bdg bdg-un">① Une commande à la fois</span> : chaque commande a son bouton ; colle-la, Entrée, lis le résultat, puis la suivante.</li>
+<li><span class="bdg bdg-once">⚠ À faire une seule fois</span> : la refaire donne une erreur ou un doublon. <span class="bdg bdg-again">↻ Tu peux le refaire</span> : sans danger.</li>
+<li>Le mot de passe que tu tapes après <code>sudo</code> ou <code>su</code> <strong>ne s'affiche pas</strong> : c'est normal, tape-le et appuie sur Entrée.</li></ul></div>`;
+
 /* ---------- 5. Régler le système ---------- */
 addSec({
   id: 'systeme', group: 'Installer', title: 'Régler le système',
   lead: "Mises à jour, outils VMware, langue anglaise, clavier français, fuseau horaire : tout se fait avec le compte d'alice.",
   body: () => R`
-<p>${who('alice')} Toutes les commandes de cette étape se tapent dans un terminal, connecté en alice. <code>sudo</code> demande son mot de passe (<code>alice@but</code>), les lettres ne s'affichent pas quand tu tapes : c'est normal.</p>
-${note('convention', 'Raccourci', '<p>Tout cela est fait par le <a href="#scripts">script tout-en-un</a>. Lis quand même cette étape : le rapport doit expliquer ce que chaque commande change.</p>')}
-
-<h2>1. Mettre à jour</h2>
+<p>${who('alice')} Ouvre un terminal connecté en <strong>alice</strong>. Les commandes avec <code>sudo</code> demandent le mot de passe d'alice : <code>alice@but</code>.</p>
+${LEGENDE}
+${chemin('A', 'À la main', 'pour comprendre ce que chaque commande change', R`
+<h3>A1. Mettre à jour</h3>
 ${sh(R`sudo apt update
-sudo apt full-upgrade -y`)}
+sudo apt full-upgrade -y`, { once: false })}
+<p><strong>Attendu :</strong> beaucoup de lignes défilent, puis le prompt revient sans <code>E:</code> (erreur) en rouge.</p>
 ${D(
-  R`<p>Si <code>apt update</code> se plaint d'un dépôt <code>cdrom:</code>, l'installateur a laissé le CD dans la liste des sources : ouvre <code>/etc/apt/sources.list</code> (<code>sudo nano /etc/apt/sources.list</code>) et mets un <code>#</code> devant la ligne qui commence par <code>deb cdrom:</code>.</p>`,
-  R`<p>Si on te répond « Could not get lock », une mise à jour automatique est en cours : attends une ou deux minutes et recommence.</p>`
+  R`<p class="muted-s">Si <code>apt update</code> se plaint d'un dépôt <code>cdrom:</code> : <code>sudo sed -i 's/^deb cdrom:/# deb cdrom:/' /etc/apt/sources.list</code>, puis recommence.</p>`,
+  R`<p class="muted-s">Si on te répond « Could not get lock », une mise à jour automatique est en cours : attends deux minutes et recommence.</p>`
 )}
 
-<h2>2. Les outils VMware</h2>
-<p>Ils activent le copier-coller entre l'hôte et la VM, le redimensionnement automatique de l'écran et l'arrêt propre depuis VMware.</p>
-${sh(R`sudo apt install -y open-vm-tools open-vm-tools-desktop
-sudo reboot`)}
-${term(R`$ systemctl is-active open-vm-tools
-active`)}
+<h3>A2. Les outils VMware, puis redémarrer</h3>
+<p>Ils activent le copier-coller entre l'hôte et la VM et le redimensionnement automatique de l'écran.</p>
+${steps([
+  { c: 'sudo apt install -y open-vm-tools open-vm-tools-desktop', ok: "le prompt revient sans erreur.", once: false },
+  { c: 'sudo reboot', ok: "la VM redémarre. Reconnecte-toi en <code>alice</code>, ouvre un terminal et passe à A3.", once: false }
+])}
 
-<h2>3. La langue du système : anglais</h2>
-<p>La langue est la variable <code>LANG</code>. Les messages, les menus et les noms de dossiers (<code>Desktop</code>, <code>Documents</code>) sont en anglais.</p>
-${term(R`$ locale | head -3
-LANG=en_US.UTF-8
-LANGUAGE=
-LC_CTYPE="en_US.UTF-8"`)}
-<p>Si ce n'est pas le cas, génère la langue et fais-en la langue par défaut :</p>
+<h3>A3. La langue du système : anglais</h3>
+<p>La langue est la variable <code>LANG</code> : menus, messages et noms de dossiers (<code>Desktop</code>, <code>Documents</code>) en anglais.</p>
 ${D(
   sh(R`sudo sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
 sudo locale-gen
-sudo update-locale LANG=en_US.UTF-8`),
+sudo update-locale LANG=en_US.UTF-8`, { once: false }),
   sh(R`sudo apt install -y language-pack-en
 sudo locale-gen en_US.UTF-8
-sudo update-locale LANG=en_US.UTF-8`)
+sudo update-locale LANG=en_US.UTF-8`, { once: false })
 )}
-<p>Le réglage est écrit dans <code>/etc/default/locale</code> et pris en compte à la prochaine connexion.</p>
+<p>Contrôle (il prend effet à la prochaine connexion ; déjà vrai si tu as installé en anglais) :</p>
+${term(R`$ cat /etc/default/locale
+LANG=en_US.UTF-8`)}
 
-<h2>4. Le clavier : français</h2>
-<p>Le clavier est un réglage <strong>distinct</strong> de la langue : <code>XKBLAYOUT</code>. Il est lu par la console et par l'interface graphique.</p>
+<h3>A4. Le clavier : français</h3>
+<p>Le clavier est un réglage <strong>distinct</strong> de la langue : <code>XKBLAYOUT</code>. La console et l'interface graphique le lisent dans <code>/etc/default/keyboard</code>.</p>
 ${sh(R`sudo localectl set-x11-keymap fr pc105
-setxkbmap fr                   # applique tout de suite dans la session graphique`)}
-${term(R`$ cat /etc/default/keyboard
-XKBMODEL="pc105"
+setxkbmap fr`, { once: false })}
+<p>La 2<sup>e</sup> ligne applique le clavier tout de suite dans la session ouverte. Contrôle :</p>
+${term(R`$ grep XKBLAYOUT /etc/default/keyboard
 XKBLAYOUT="fr"
-XKBVARIANT=""
-XKBOPTIONS=""
 $ setxkbmap -query | grep layout
 layout:     fr`)}
-<p>Si <code>localectl</code> n'est pas disponible, écris le fichier <code>/etc/default/keyboard</code> à la main (voir ci-dessus) et reconnecte-toi.</p>
-${note('attention', 'Dans la session de bob aussi', '<p>Une préférence enregistrée dans le compte (<em>Paramètres → Clavier → Disposition</em>, case « Utiliser les paramètres par défaut du système ») peut garder un clavier différent. Vérifie dans la session de bob, plus tard.</p>')}
+<p>Si <code>localectl</code> répond une erreur, édite le fichier à la main : <code>sudo nano /etc/default/keyboard</code>, mets <code>XKBLAYOUT="fr"</code>, enregistre (${kbd('Ctrl+O')}, Entrée, ${kbd('Ctrl+X')}) et reconnecte-toi.</p>
+${note('attention', 'Dans la session de bob aussi', '<p>Une préférence enregistrée dans le compte (<em>Paramètres → Clavier → Disposition</em>, case « Utiliser les paramètres par défaut du système ») peut garder un autre clavier. Vérifie dans la session de bob, plus tard.</p>')}
 
-<h2>5. Fuseau horaire et nom de machine</h2>
+<h3>A5. Fuseau horaire et nom de machine</h3>
 ${sh(R`sudo timedatectl set-timezone Europe/Paris
-sudo hostnamectl set-hostname butgames-dev`)}
-<p>Une heure fausse provoque des erreurs de certificats HTTPS (clone git, téléchargements) : vérifie avec <code>date</code>.</p>`,
+sudo hostnamectl set-hostname butgames-dev`, { once: false })}
+<p>Une heure fausse provoque des erreurs de certificats HTTPS (clone git, téléchargements) : contrôle avec <code>date</code>.</p>`)}
+${chemin('B', 'Avec le script', 'pour aller vite', ONLY_NOTE('paquets locale clavier fuseau') + '<p>Le script doit déjà être dans la VM : voir l\'étape « Scripts tout-en-un ».</p>')}
+${AIDE_LIEN('systeme')}`,
   check: [
     ['systeme-1', "Le système est à jour (apt full-upgrade) et redémarré."],
-    ['systeme-2', "open-vm-tools est actif : copier-coller et redimensionnement fonctionnent."],
-    ['systeme-3', "<code>locale</code> affiche LANG=en_US.UTF-8."],
+    ['systeme-2', "open-vm-tools est installé : copier-coller et redimensionnement fonctionnent."],
+    ['systeme-3', "<code>cat /etc/default/locale</code> affiche LANG=en_US.UTF-8."],
     ['systeme-4', "Le clavier est français : <code>setxkbmap -query</code> affiche layout: fr."],
     ['systeme-5', "L'heure et le fuseau horaire sont corrects (<code>date</code>)."]
   ]
@@ -763,46 +875,57 @@ sudo hostnamectl set-hostname butgames-dev`)}
 /* ---------- 6. Comptes ---------- */
 addSec({
   id: 'comptes', group: 'Installer', title: 'Les comptes alice et bob',
-  lead: "Deux utilisateurs, deux rôles : alice administre (sudo), bob développe (sans sudo).",
+  lead: "Deux utilisateurs, deux rôles : alice administre (sudo), bob développe (sans sudo, et c'est voulu).",
   body: () => R`
-<p>${who('alice')} Les commandes se tapent avec <code>sudo</code> depuis le compte d'alice.</p>
+<p>${who('alice')} Toutes les commandes se tapent en <strong>alice</strong>.</p>
 <h2>Pourquoi deux comptes ?</h2>
-<p>C'est le principe du <strong>moindre privilège</strong> : on ne travaille pas avec plus de droits que nécessaire. <strong>alice</strong> installe et met à jour (via <code>sudo</code>) ; <strong>bob</strong> écrit, compile et lance du code, mais ne peut pas modifier le système. S'il lui manque un logiciel, il le demande à alice. Si bob se trompe, il ne casse que son compte.</p>
+<p>C'est le principe du <strong>moindre privilège</strong> : on ne travaille pas avec plus de droits que nécessaire. <strong>alice</strong> installe et met à jour (avec <code>sudo</code>) ; <strong>bob</strong> écrit, compile et lance du code, mais <strong>ne peut pas modifier le système</strong>. S'il lui manque un logiciel, il le demande à alice.</p>
 ${tbl(['', 'alice', 'bob'], [
   ['Rôle', 'Administration du poste', 'Développement en Go'],
   ['Mot de passe', c('alice@but'), c('bob@but')],
-  ['Groupe sudo', '<strong>Oui</strong>', '<strong>Non</strong>'],
+  ['Groupe sudo', '<strong>Oui</strong>', '<strong>Non</strong> : « bob is not in the sudoers file » est normal'],
   ['Installe des logiciels pour tous', 'Oui (apt, archive Go)', 'Non'],
-  ['Installe dans son compte', 'Possible', 'Oui : extension VS Code, outils Go dans ~/go/bin']
+  ['Installe dans son compte', 'Possible', 'Oui : extension VS Code, outils Go dans ~/go/bin'],
+  ['Peut lire le dossier personnel de l\'autre', 'Non (privé)', 'Non (privé)']
 ])}
+${note('attention', 'Les dossiers personnels sont privés', '<p>bob ne peut <strong>pas</strong> lire <code>/home/alice</code> (ni l\'inverse). Un fichier que bob doit utiliser (un script, un test) ne doit donc <strong>pas</strong> être dans le dossier d\'alice : on le met dans un dossier partagé (<code>/opt/butgames</code>, voir l\'étape « Scripts »). Et un dossier appartient à celui qui l\'a créé : bob ne peut pas écrire dans un dossier créé par alice.</p>')}
 
-<h2>Créer les comptes</h2>
-<p>alice existe déjà (créée par l'installateur). On crée bob, on fixe les mots de passe, et on règle les groupes :</p>
-${sh(R`# bob : compte avec dossier personnel et shell bash
-sudo useradd -m -s /bin/bash -c "Bob" bob
-# mots de passe imposés par le sujet
-echo 'alice:alice@but' | sudo chpasswd
-echo 'bob:bob@but'     | sudo chpasswd
-# alice administre : groupe sudo (bob n'y est pas)
-sudo usermod -aG sudo alice`)}
-<p>Variante interactive : <code>sudo adduser bob</code> pose des questions (mot de passe, nom) au lieu de tout prendre en arguments.</p>
-${note('retenir', 'Pourquoi des apostrophes autour du mot de passe', '<p>Dans <code>\'alice:alice@but\'</code>, les apostrophes empêchent le shell d\'interpréter les caractères spéciaux. Ici <code>@</code> serait sans danger, mais c\'est le bon réflexe pour tout mot de passe (un <code>$</code> ou un <code>!</code> serait interprété).</p>')}
-
-<h2>Vérifier</h2>
-${term(R`$ id alice
-uid=1000(alice) gid=1000(alice) groups=1000(alice),27(sudo),...
-$ id bob
-uid=1001(bob) gid=1001(bob) groups=1001(bob)
-$ sudo -l -U bob
-User bob is not allowed to run sudo on butgames-dev.
-$ getent passwd alice bob`)}
-<p>Teste aussi les mots de passe pour de vrai en changeant d'utilisateur : <code>su - bob</code> (mot de passe <code>bob@but</code>), puis <code>whoami</code>, puis <code>exit</code>. Et dans la session de bob, <code>sudo ls</code> doit être refusé.</p>
-${note('attention', 'Pas de connexion automatique', '<p>N\'active la connexion automatique pour aucun des deux comptes : l\'équipe doit pouvoir choisir son utilisateur à l\'écran de connexion. Si la liste des utilisateurs n\'apparaît pas, tape simplement le nom.</p>')}`,
+${chemin('A', 'À la main', 'commande par commande', R`
+<h3>A1. Créer bob</h3>
+${steps([
+  { c: 'sudo useradd -m -s /bin/bash -c "Bob" bob', ok: "aucun message. Si tu vois <code>user 'bob' already exists</code>, bob existe déjà : passe à A2.", once: true }
+])}
+<p><code>-m</code> crée le dossier personnel <code>/home/bob</code>, <code>-s /bin/bash</code> lui donne le shell bash.</p>
+<h3>A2. Les mots de passe imposés, et le groupe sudo d'alice</h3>
+${sh(R`echo 'alice:alice@but' | sudo chpasswd
+echo 'bob:bob@but' | sudo chpasswd
+sudo usermod -aG sudo alice`, { once: false })}
+<p><strong>Attendu :</strong> aucun message. Les apostrophes empêchent le shell d'interpréter les caractères spéciaux du mot de passe : garde-les. Alice reste administratrice : <code>-aG sudo</code> l'ajoute au groupe <code>sudo</code> sans la retirer des autres.</p>
+<h3>A3. Vérifier les comptes</h3>
+${steps([
+  { c: 'id alice', ok: "la liste des groupes contient <code>sudo</code>, par exemple <code>uid=1000(alice) … 27(sudo)…</code>", once: false },
+  { c: 'id bob', ok: "<strong>sans</strong> <code>sudo</code> : seulement <code>bob</code>, par exemple <code>uid=1001(bob) gid=1001(bob) groups=1001(bob)</code>", once: false },
+  { c: 'getent passwd alice bob', ok: "deux lignes, une par compte.", once: false }
+])}
+<h3>A4. Tester la connexion de bob, en terminal</h3>
+<p>Ces commandes se tapent <strong>une par une</strong>, parce que la première ouvre un <em>nouveau shell</em> : ce que tu tapes ensuite s'adresse à bob, pas à alice.</p>
+${steps([
+  { c: 'su - bob', ok: "mot de passe : <code>bob@but</code> (invisible). Le prompt devient <code>bob@butgames-dev:~$</code>.", once: false },
+  { w: 'bob', c: 'whoami', ok: "<code>bob</code>.", once: false },
+  { w: 'bob', c: 'pwd', ok: "<code>/home/bob</code>.", once: false },
+  { w: 'bob', c: 'sudo ls', ok: "<strong>un refus</strong> : « bob is not in the sudoers file. This incident will be reported. » C'est <strong>normal et voulu</strong> : bob n'est pas administrateur.", once: false },
+  { w: 'bob', c: 'exit', ok: "tu reviens dans le terminal d'alice (le prompt dit <code>alice@…</code>).", once: false }
+])}
+${note('retenir', 'Faire une tâche d\'administrateur quand on est bob', '<p>Ne tape <strong>jamais</strong> <code>sudo</code> en bob. Pour installer un paquet : <code>su - alice</code> (mot de passe <code>alice@but</code>), puis <code>sudo apt install -y le-paquet</code>, puis <code>exit</code> pour revenir à bob.</p>')}
+`)}
+${chemin('B', 'Avec le script', 'pour aller vite', ONLY_NOTE('comptes droits'))}
+${note('attention', 'Pas de connexion automatique', '<p>N\'active la connexion automatique pour aucun des deux comptes : l\'équipe choisit son utilisateur à l\'écran de connexion. Si la liste n\'apparaît pas, tape simplement le nom.</p>')}
+${AIDE_LIEN('comptes')}`,
   check: [
-    ['comptes-1', "bob existe, avec le mot de passe bob@but."],
+    ['comptes-1', "bob existe (<code>id bob</code> répond)."],
     ['comptes-2', "alice est dans le groupe sudo (<code>id alice</code>)."],
-    ['comptes-3', "bob n'est pas dans sudo (<code>sudo -l -U bob</code> refuse)."],
-    ['comptes-4', "Je me suis connecté en bob dans l'interface graphique."]
+    ['comptes-3', "bob n'est pas dans sudo : <code>sudo ls</code> en bob est refusé."],
+    ['comptes-4', "<code>su - bob</code> marche avec bob@but, et je sais revenir avec <code>exit</code>."]
   ]
 });
 
@@ -811,45 +934,38 @@ addSec({
   id: 'logiciels', group: 'Installer', title: 'git, Go et VS Code',
   lead: "Les logiciels installés pour tout le monde par alice, avec sudo.",
   body: () => R`
-<p>${who('alice')} Installation système : le dossier d'installation et les droits en écriture restent à root, donc bob peut les <em>utiliser</em> sans pouvoir les <em>modifier</em>.</p>
-<h2>1. git</h2>
-${sh(R`sudo apt install -y git curl wget ca-certificates gpg apt-transport-https bash-completion`)}
-${term(R`$ git --version
-git version 2.xx.x`)}
+<p>${who('alice')} Installation système : le dossier d'installation reste à root. bob peut donc <em>utiliser</em> ces logiciels sans pouvoir les <em>modifier</em>.</p>
+${chemin('A', 'À la main', 'commande par commande', R`
+<h3>A1. git</h3>
+${sh(R`sudo apt install -y git curl wget ca-certificates gpg apt-transport-https bash-completion`, { once: false })}
+${steps([{ c: 'git --version', ok: "<code>git version 2.xx.x</code>.", once: false }])}
 
-<h2>2. Go</h2>
-<p>Deux méthodes (voir le comparatif de l'étape « Choix »). La version officielle est conseillée.</p>
-<h3>Méthode A : l'archive officielle de go.dev (conseillée)</h3>
-${sh(R`# 1. Trouver la dernière version stable et l'archive de ta machine (amd64 ou arm64)
+<h3>A2. Go : méthode 1, l'archive officielle (conseillée)</h3>
+<p>Ce bloc utilise des <strong>variables</strong> (<code>ARCH</code>, <code>VER</code>, <code>SHA</code>) : colle-le <strong>en une seule fois, dans le même terminal</strong>. Si tu le coupes, garde le même terminal du début à la fin.</p>
+${sh(R`# 1. Version stable la plus récente et architecture de ta machine
 ARCH=$(dpkg --print-architecture)
 VER=$(curl -fsSL 'https://go.dev/dl/?mode=json' | grep -m1 -o '"version": *"go[0-9.]*"' | grep -o 'go[0-9.]*')
-echo "$VER pour $ARCH"
-# 2. Télécharger
-curl -fLO "https://go.dev/dl/$VER.linux-$ARCH.tar.gz"
-# 3. Vérifier l'intégrité : comparer avec l'empreinte SHA-256 affichée sur https://go.dev/dl/
-sha256sum "$VER.linux-$ARCH.tar.gz"
-# 4. Installer dans /usr/local/go (en remplaçant une éventuelle ancienne version)
+FILE="$VER.linux-$ARCH.tar.gz"
+echo "Go : $VER pour $ARCH"
+# 2. Télécharger l'archive et son empreinte officielle, puis vérifier l'intégrité
+cd /tmp && curl -fLO "https://go.dev/dl/$FILE"
+SHA=$(curl -fsSL 'https://go.dev/dl/?mode=json' | grep -A6 -F "\"filename\": \"$FILE\"" | grep -m1 -o '"sha256": *"[0-9a-f]*"' | grep -o '[0-9a-f]\{64\}')
+echo "$SHA  $FILE" | sha256sum -c -
+# 3. Installer dans /usr/local/go (propriétaire root, lisible par bob)
 sudo rm -rf /usr/local/go
-sudo tar -C /usr/local -xzf "$VER.linux-$ARCH.tar.gz"
-# 5. Rendre la commande visible pour tout le monde
+sudo tar -C /usr/local --no-same-owner -xzf "$FILE"
+sudo chmod -R a+rX /usr/local/go
+# 4. Rendre la commande visible dans tous les shells
 sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
-sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt`)}
-<p>Le <strong>script</strong> du guide fait exactement cela, et compare lui-même l'empreinte SHA-256 avant d'installer. Les deux liens dans <code>/usr/local/bin</code> rendent <code>go</code> disponible dans tous les shells ; le fichier <code>/etc/butgames.bashrc</code> (étape suivante) ajoute aussi <code>/usr/local/go/bin</code> et <code>~/go/bin</code> au PATH.</p>
-<h3>Méthode B : le paquet de la distribution</h3>
-${sh(R`apt policy golang-go    # voir la version proposée
-sudo apt install -y golang-go`)}
-<h3>Vérifier</h3>
-${term(R`$ go version
-go version go1.xx.x linux/amd64
-$ go env GOROOT GOPATH
-/usr/local/go
-/home/alice/go`)}
+sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt`, { once: false })}
+<p><strong>Attendu :</strong> une ligne <code>Go : go1.xx.x pour amd64</code>, puis <code>go1.xx.x.linux-amd64.tar.gz: OK</code>. Si tu lis <code>FAILED</code> ou <code>OK</code> absent, ne continue pas : l'archive est incomplète.</p>
+<h3>A2 bis. Go : méthode 2, le paquet de la distribution (plus simple, version plus ancienne)</h3>
+${sh(R`sudo apt install -y golang-go`, { once: false })}
+<p class="muted-s">Choisis <strong>une seule</strong> des deux méthodes.</p>
 
-<h2>3. Visual Studio Code</h2>
-<p>On ajoute le <strong>dépôt apt officiel de Microsoft</strong> : VS Code se met ensuite à jour avec le système.</p>
-${sh(R`# clé de signature du dépôt
-curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor --yes -o /usr/share/keyrings/microsoft.gpg
-# déclaration du dépôt
+<h3>A3. Visual Studio Code (dépôt apt officiel de Microsoft)</h3>
+<p>Colle le bloc <strong>entier</strong>, de la première ligne jusqu'à <code>sudo apt install -y code</code>, en une seule fois : le morceau entre <code>&lt;&lt;EOF</code> et <code>EOF</code> est un tout.</p>
+${sh(R`curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor --yes -o /usr/share/keyrings/microsoft.gpg
 sudo tee /etc/apt/sources.list.d/vscode.sources >/dev/null <<EOF
 Types: deb
 URIs: https://packages.microsoft.com/repos/code
@@ -859,21 +975,28 @@ Architectures: $(dpkg --print-architecture)
 Signed-By: /usr/share/keyrings/microsoft.gpg
 EOF
 sudo apt update
-sudo apt install -y code`)}
-${term(R`$ code --version
-1.xx.x
-...`)}
-<p>Le logiciel apparaît dans le menu <em>Applications → Development</em> et se lance avec la commande <code>code</code>.</p>
+sudo apt install -y code`, { once: false })}
 ${D(
-  '<p class="muted-s">Sur Debian, le paquet <code>code</code> du dépôt Microsoft est la voie normale : ni snap ni flatpak nécessaires.</p>',
-  '<p class="muted-s">Sur Xubuntu, <code>sudo snap install code --classic</code> marche aussi, mais le snap est plus lourd et démarre plus lentement : le dépôt apt est préférable pour une VM distribuée.</p>'
+  '<p class="muted-s">Debian : le paquet <code>code</code> du dépôt Microsoft est la voie normale (ni snap ni flatpak).</p>',
+  '<p class="muted-s">Xubuntu : <code>sudo snap install code --classic</code> marche aussi, mais le snap est plus lourd et plus lent au démarrage : le dépôt apt est préférable pour une VM distribuée.</p>'
 )}
-${note('attention', 'L\'extension Go, ce n\'est pas ici', '<p>Ce que tu viens d\'installer est <strong>VS Code lui-même</strong>, pour tout le monde. L\'<strong>extension Go</strong> et les outils de développement (<code>gopls</code>, <code>dlv</code>) s\'installent <strong>dans le compte de bob</strong> : étape « Côté bob ».</p>')}`,
+
+<h3>A4. Vérifier : alice, puis bob</h3>
+${steps([
+  { c: 'git --version', ok: "<code>git version 2.xx.x</code>.", once: false },
+  { c: 'go version', ok: "<code>go version go1.xx.x linux/amd64</code>.", once: false },
+  { c: 'code --version', ok: "un numéro (<code>1.xx.x</code>) puis une série de lettres.", once: false },
+  { c: "su - bob -c 'go version'", ok: "mot de passe <code>bob@but</code>, puis la <strong>même</strong> ligne <code>go version go1.xx…</code>. C'est le test qui prouve que <strong>bob peut lancer Go</strong>. Si tu lis « Permission denied » : <code>sudo chmod -R a+rX /usr/local/go</code>.", once: false }
+])}
+`)}
+${chemin('B', 'Avec le script', 'pour aller vite', ONLY_NOTE('go vscode') + '<p>Pour Go via le paquet de la distribution : <code>sudo GO_SOURCE=apt ONLY="go vscode" bash /opt/butgames/sae-alice.sh</code></p>')}
+${note('attention', 'L\'extension Go, ce n\'est pas ici', '<p>Tu viens d\'installer <strong>VS Code lui-même</strong>, pour tout le monde. L\'<strong>extension Go</strong> et les outils de développement (<code>gopls</code>, <code>dlv</code>) s\'installent <strong>dans le compte de bob</strong> : étape « Côté bob ».</p>')}
+${AIDE_LIEN('logiciels')}`,
   check: [
     ['logiciels-1', "<code>git --version</code> répond."],
-    ['logiciels-2', "<code>go version</code> répond (dans le compte d'alice puis dans celui de bob)."],
-    ['logiciels-3', "<code>code --version</code> répond et VS Code s'ouvre."],
-    ['logiciels-4', "Je sais expliquer pourquoi Go est dans /usr/local et pas dans le dossier de bob."]
+    ['logiciels-2', "<code>go version</code> répond chez alice."],
+    ['logiciels-3', "<code>su - bob -c 'go version'</code> répond aussi : bob peut lancer Go."],
+    ['logiciels-4', "<code>code --version</code> répond et VS Code s'ouvre."]
   ]
 });
 
@@ -883,18 +1006,18 @@ addSec({
   lead: "Faire afficher la branche git dans le terminal. Deux chemins séparés : tout à la main, pas à pas (pour comprendre), ou le script (pour aller vite).",
   body: () => R`
 <h2>Ce qu'on veut obtenir</h2>
-<p>Le <strong>prompt</strong>, c'est le texte qui s'affiche avant chaque commande, par exemple <code>alice@butgames-dev:~$</code>. Le sujet demande qu'il indique aussi <strong>l'état du dépôt git</strong> du dossier où l'on se trouve. Résultat attendu :</p>
+<p>Le <strong>prompt</strong>, c'est le texte qui s'affiche avant chaque commande, par exemple <code>alice@butgames-dev:~$</code>. Le sujet demande qu'il indique aussi <strong>l'état du dépôt git</strong> du dossier où l'on se trouve :</p>
 ${term(R`alice@butgames-dev:~$ cd projets/hello.sae4.but1.iut
 alice@butgames-dev:~/projets/hello.sae4.but1.iut (langage_go)$ echo x >> test.sh
 alice@butgames-dev:~/projets/hello.sae4.but1.iut (langage_go *)$`)}
-<p>Hors d'un dépôt git, rien de plus n'apparaît. Dans un dépôt, on voit entre parenthèses la <strong>branche</strong> (<code>langage_go</code>) et un symbole si quelque chose a changé (<code>*</code> = fichier modifié).</p>
+<p>Hors d'un dépôt, rien de plus n'apparaît. Dans un dépôt : la <strong>branche</strong> (<code>langage_go</code>) et un symbole si quelque chose a changé (<code>*</code> = fichier modifié).</p>
 
 <h2>Comprendre en 4 idées</h2>
 <ol class="flow">
   <li><strong>Le prompt est une variable</strong> nommée <code>PS1</code>. Bash la relit avant chaque commande.</li>
-  <li><strong>git fournit une fonction</strong>, <code>__git_ps1</code>, qui écrit la branche et l'état (ou rien hors d'un dépôt). Elle est dans le fichier <code>/usr/lib/git-core/git-sh-prompt</code>, qu'il faut « charger » avant de s'en servir.</li>
-  <li><strong>Le réglage se met dans <code>~/.bashrc</code></strong> : ce fichier est lu par bash à chaque ouverture de terminal, <em>pour chaque utilisateur</em>. Il faut donc le faire pour alice, pour bob, et pour les futurs comptes (<code>/etc/skel</code>).</li>
-  <li><strong>On range le réglage dans un seul fichier commun</strong>, <code>/etc/butgames.bashrc</code>, et chaque <code>.bashrc</code> ne contient qu'une ligne qui le charge. Pour modifier le prompt plus tard : un seul fichier à changer.</li>
+  <li><strong>git fournit une fonction</strong>, <code>__git_ps1</code>, qui écrit la branche et l'état (ou rien hors d'un dépôt), dans le fichier <code>/usr/lib/git-core/git-sh-prompt</code>, qu'il faut « charger ».</li>
+  <li><strong>Le réglage se met dans <code>~/.bashrc</code></strong>, lu par bash à chaque terminal, <em>pour chaque utilisateur</em> : il faut le faire pour alice, bob et les futurs comptes (<code>/etc/skel</code>).</li>
+  <li><strong>On range le réglage dans un seul fichier commun</strong>, <code>/etc/butgames.bashrc</code>, et chaque <code>.bashrc</code> ne contient qu'une ligne qui le charge.</li>
 </ol>
 <details class="dt"><summary>Que veut dire la ligne PS1 ? (facultatif)</summary><div>
 ${tbl(['Morceau', 'Effet'], [
@@ -905,60 +1028,63 @@ ${tbl(['Morceau', 'Effet'], [
   [c('\\[\\033[01;32m\\]'), 'passe en vert gras ; ' + c('\\[\\033[00m\\]') + ' remet la couleur normale (vert = utilisateur, bleu = dossier, jaune = git)'],
   [c('\\$'), 'affiche $ (ou # pour root)']
 ], 'wrapc')}
-<p><strong>Les apostrophes sont obligatoires</strong> autour de la valeur de <code>PS1</code>. Avec des guillemets, bash calculerait <code>__git_ps1</code> une seule fois, tout de suite, et la branche ne se mettrait jamais à jour.</p></div></details>
+<p><strong>Les apostrophes sont obligatoires</strong> autour de la valeur de <code>PS1</code> : avec des guillemets, bash calculerait <code>__git_ps1</code> une seule fois, tout de suite, et la branche ne se mettrait jamais à jour.</p></div></details>
+${note('attention', 'Règle d\'or de cette étape : chacun teste chez soi', '<p>Un dossier ou un fichier <strong>appartient à celui qui l\'a créé</strong>. Si alice crée <code>/tmp/essai</code>, bob ne pourra pas y écrire : « Permission denied ». Les tests du prompt se font donc <strong>dans le dossier personnel de chacun</strong> (<code>~</code>), jamais dans un dossier créé par l\'autre.</p>')}
 
-<hr>
-<h2>CHEMIN A : à la main, pas à pas</h2>
-<p>${who('alice')} Ouvre un terminal connecté en <strong>alice</strong>. Fais les étapes <strong>dans l'ordre</strong> ; après chacune, contrôle le résultat attendu avant de continuer. Aucun script n'est utilisé ici.</p>
+${chemin('A', 'À la main', 'étapes A1 à A6, résultat attendu après chacune', R`
+<p>${who('alice')} Terminal d'<strong>alice</strong>. Fais les étapes <strong>dans l'ordre</strong>.</p>
+<h3>A1. Vérifier que git fournit la fonction</h3>
+${steps([{ c: 'ls /usr/lib/git-core/git-sh-prompt', ok: "le chemin du fichier est répété. Si « No such file or directory » : <code>sudo apt install -y git</code>.", once: false }])}
 
-<h3>Étape A1 : vérifier que git est installé et fournit la fonction</h3>
-${sh(R`ls /usr/lib/git-core/git-sh-prompt`)}
-<p><strong>Attendu :</strong> la commande répète le chemin du fichier. Si elle répond « No such file or directory », installe git :</p>
-${sh(R`sudo apt install -y git`)}
+<h3>A2. Créer le fichier commun et le rendre lisible par tous</h3>
+<p>Copie le bloc <strong>entier</strong> (de <code>sudo tee</code> jusqu'à <code>EOF</code>) en une seule fois :</p>
+${sh('sudo tee /etc/butgames.bashrc >/dev/null <<\'EOF\'\n' + bashrcTxt() + '\nEOF', { once: false })}
+<p>Puis, <strong>séparément</strong>, rends-le lisible par bob (et contrôle) :</p>
+${steps([
+  { c: 'sudo chmod 644 /etc/butgames.bashrc', ok: "aucun message.", once: false },
+  { c: 'ls -l /etc/butgames.bashrc', ok: "la ligne commence par <code>-rw-r--r--</code> : tout le monde peut lire.", once: false }
+])}
+${note('convention', 'Tu préfères un éditeur ?', '<p><code>sudo nano /etc/butgames.bashrc</code>, colle le contenu (sans les lignes <code>sudo tee</code> et <code>EOF</code>), puis ' + kbd('Ctrl+O') + ', ' + kbd('Entrée') + ', ' + kbd('Ctrl+X') + '. Termine par le <code>chmod 644</code> ci-dessus.</p>')}
 
-<h3>Étape A2 : créer le fichier commun /etc/butgames.bashrc</h3>
-<p>Cette commande crée le fichier et y écrit le contenu entre <code>&lt;&lt;'EOF'</code> et <code>EOF</code>. <strong>Copie le bloc entier d'un seul coup</strong> (bouton Copier) et colle-le dans le terminal.</p>
-${sh('sudo tee /etc/butgames.bashrc >/dev/null <<\'EOF\'\n' + bashrcTxt() + '\nEOF')}
-<p><strong>Attendu :</strong> aucun message (le terminal te rend simplement la main). Contrôle :</p>
-${sh(R`cat /etc/butgames.bashrc`)}
-<p>Tu dois voir ton contenu, avec la ligne <code>PS1='…'</code> entière sur une seule ligne.</p>
-${note('convention', 'Tu préfères un éditeur ?', '<p>Tu peux aussi faire <code>sudo nano /etc/butgames.bashrc</code>, coller le contenu (sans les lignes <code>sudo tee</code> et <code>EOF</code>), puis enregistrer avec ' + kbd('Ctrl+O') + ', ' + kbd('Entrée') + ' et quitter avec ' + kbd('Ctrl+X') + '.</p>')}
-
-<h3>Étape A3 : faire charger ce fichier par chaque compte</h3>
-<p>On ajoute <strong>une ligne</strong> à la fin du <code>.bashrc</code> d'alice, de bob et du modèle des futurs comptes :</p>
+<h3>A3. Faire charger ce fichier par chaque compte</h3>
+<p>Ce bloc ajoute <strong>une ligne</strong> à la fin du <code>.bashrc</code> d'alice, de bob et du modèle des futurs comptes. Il vérifie d'abord (avec <code>sudo grep</code>) que la ligne n'y est pas déjà : tu peux donc le relancer sans créer de doublon.</p>
 ${sh(R`for rc in /etc/skel/.bashrc /home/alice/.bashrc /home/bob/.bashrc; do
-  echo '[ -r /etc/butgames.bashrc ] && . /etc/butgames.bashrc' | sudo tee -a "$rc" >/dev/null
-done`)}
-<p><strong>Attendu :</strong> aucun message. Contrôle :</p>
-${sh(R`tail -n 2 ~/.bashrc`)}
-<p>La dernière ligne doit être <code>[ -r /etc/butgames.bashrc ] &amp;&amp; . /etc/butgames.bashrc</code>.</p>
-${note('attention', 'Ne lance cette étape qu\'une fois', '<p>Chaque exécution rajoute la ligne une fois de plus (sans danger, mais inutile). Si tu l\'as lancée deux fois, ce n\'est pas grave.</p>')}
+  sudo grep -qF 'butgames.bashrc' "$rc" || echo '[ -r /etc/butgames.bashrc ] && . /etc/butgames.bashrc' | sudo tee -a "$rc" >/dev/null
+done`, { once: false })}
+${steps([{ c: 'tail -n 2 ~/.bashrc', ok: "la dernière ligne est <code>[ -r /etc/butgames.bashrc ] &amp;&amp; . /etc/butgames.bashrc</code>.", once: false }])}
 
-<h3>Étape A4 : recharger le terminal et contrôler</h3>
-${sh(R`source ~/.bashrc
-echo "$PS1"`)}
-<p><strong>Attendu :</strong> le prompt devient vert/bleu, et <code>echo "$PS1"</code> affiche une ligne qui contient <code>__git_ps1</code>. Si tu vois <code>(master)</code> à la place, c'est que <code>PS1</code> était entre guillemets : revois l'étape A2.</p>
+<h3>A4. Recharger le terminal et contrôler</h3>
+${steps([
+  { c: 'source ~/.bashrc', ok: "le prompt devient vert et bleu.", once: false },
+  { c: 'echo "$PS1"', ok: "une ligne qui contient <code>__git_ps1</code>. Si tu vois <code>(master)</code> à la place, PS1 était entre guillemets : refais A2.", once: false }
+])}
 
-<h3>Étape A5 : tester dans un dépôt</h3>
-${sh(R`cd /tmp
-git init -q essai
-cd essai`)}
-<p><strong>Attendu :</strong> le prompt se termine par <code>(master #)</code> ou <code>(main #)</code>. Le <code>#</code> signifie « dépôt sans aucun commit ». Continue :</p>
-${sh(R`touch a.txt           # prompt : (master #%)   % = fichier non suivi
-git add a.txt        # prompt : (master #+)   + = ajouté à l'index
-cd ..                # prompt : plus rien de git, tu n'es plus dans le dépôt`)}
+<h3>A5. Tester le prompt, chez alice (dans son dossier personnel)</h3>
+${steps([
+  { c: 'cd ~', ok: "le prompt montre <code>~</code>.", once: false },
+  { c: 'git init -q essai-prompt', ok: "aucun message.", once: false },
+  { c: 'cd essai-prompt', ok: "le prompt se termine par <code>(master #)</code> ou <code>(main #)</code>. Le <code>#</code> veut dire « dépôt sans aucun commit ».", once: false },
+  { c: 'touch a.txt', ok: "le prompt devient <code>(master #%)</code> : <code>%</code> = fichier non suivi.", once: false },
+  { c: 'git add a.txt', ok: "le prompt devient <code>(master +)</code> : <code>+</code> = ajouté à l'index (le <code>#</code> disparaît dès qu'un fichier est indexé).", once: false },
+  { c: 'cd ..', ok: "plus aucune parenthèse : tu as quitté le dépôt.", once: false },
+  { c: 'rm -r ~/essai-prompt', ok: "nettoyage ; aucun message.", once: false }
+])}
 
-<h3>Étape A6 : vérifier chez bob</h3>
-<p>Le <code>.bashrc</code> de bob a reçu la même ligne à l'étape A3. Contrôle sans te déconnecter :</p>
-${sh(R`su - bob`)}
-<p>Mot de passe <code>bob@but</code>. Le prompt doit être coloré. Teste comme à l'étape A5, puis tape <code>exit</code> pour revenir à alice.</p>
-
-<hr>
-<h2>CHEMIN B : avec le script (au choix, à la place du chemin A)</h2>
-<p>${who('alice')} Si tu as déjà téléchargé <code>sae-alice.sh</code> (étape « Scripts tout-en-un »), une seule commande fait les étapes A2 et A3 :</p>
-${sh(R`cd ~/Downloads
-sudo ONLY="prompt" bash sae-alice.sh`)}
-<p>Puis ouvre un <strong>nouveau terminal</strong> (ou <code>source ~/.bashrc</code>) et fais le test de l'étape A5. Le script ne rajoute la ligne qu'une fois par <code>.bashrc</code>, donc tu peux le relancer sans souci.</p>
+<h3>A6. Tester chez bob (dans SON dossier personnel)</h3>
+<p>${who('bob')} Une commande à la fois : la première ouvre le shell de bob.</p>
+${steps([
+  { c: 'su - bob', ok: "mot de passe <code>bob@but</code> ; le prompt devient <code>bob@butgames-dev:~$</code>, <strong>coloré</strong>.", once: false },
+  { w: 'bob', c: 'git init -q essai-prompt', ok: "aucun message (tu es dans <code>/home/bob</code>, à toi).", once: false },
+  { w: 'bob', c: 'cd essai-prompt', ok: "le prompt se termine par <code>(master #)</code> ou <code>(main #)</code>.", once: false },
+  { w: 'bob', c: 'touch a.txt', ok: "<code>(master #%)</code>. Aucun « Permission denied » : tu travailles dans ton dossier.", once: false },
+  { w: 'bob', c: 'cd ~ && rm -r essai-prompt', ok: "nettoyage ; aucun message.", once: false },
+  { w: 'bob', c: 'exit', ok: "retour au terminal d'alice.", once: false }
+])}
+`)}
+${chemin('B', 'Avec le script', 'à la place du chemin A (jamais les deux)', R`
+<p>${who('alice')} Si le script est dans <code>/opt/butgames</code> (étape « Scripts tout-en-un »), une commande fait A2 et A3 :</p>
+${steps([{ c: 'sudo ONLY="prompt" bash /opt/butgames/sae-alice.sh', ok: "le script affiche <code>✔ prompt et PATH définis…</code>. Ouvre un <strong>nouveau terminal</strong>, puis fais le test A5.", once: false }])}
+`)}
 
 <h2>Les symboles du prompt</h2>
 ${tbl(['Symbole', 'Signification'], [
@@ -970,21 +1096,12 @@ ${tbl(['Symbole', 'Signification'], [
   [c('#'), 'dépôt neuf, <strong>sans aucun commit</strong>'],
   [c('<  >  <>  ='), 'en retard / en avance / divergent / à jour par rapport au dépôt distant']
 ])}
-
-<h2>Ça ne marche pas ?</h2>
-${tbl(['Ce que tu vois', 'Cause', 'Solution'], [
-  ['Le prompt n\'a pas changé', 'Le terminal ouvert garde l\'ancien prompt', 'Ouvre un nouveau terminal, ou ' + c('source ~/.bashrc')],
-  ['Le prompt affiche le texte ' + c('$(__git_ps1 " (%s)")') + ' tel quel', 'PS1 est entre guillemets, ou la fonction n\'est pas chargée', 'Refais A2 (apostrophes) ; vérifie A1'],
-  ['Le prompt affiche ' + c('(master)') + ' et ne change jamais de branche', 'PS1 entre guillemets', 'Refais A2 : tout le bloc, tel quel'],
-  [c('tee: /etc/butgames.bashrc: Permission denied'), 'Tu as oublié sudo', 'Relance la commande avec ' + c('sudo')],
-  ['Après A2, le terminal attend (">" à l\'écran)', 'La ligne ' + c('EOF') + ' finale n\'a pas été collée', 'Tape ' + c('EOF') + ' seul sur une ligne, puis Entrée (ou ' + kbd('Ctrl+C') + ' et recommence)'],
-  ['Pas de couleurs / prompt basique chez bob', 'Le .bashrc de bob n\'a pas la ligne', 'Refais A3, puis ' + c('su - bob')]
-], 'wrapc')}`,
+${AIDE_LIEN('prompt')}`,
   check: [
-    ['prompt-1', "Le fichier /etc/butgames.bashrc existe et contient __git_ps1."],
-    ['prompt-2', "Le ~/.bashrc d'alice et celui de bob chargent ce fichier."],
-    ['prompt-3', "Dans un dépôt de test, le prompt affiche la branche et change avec % et +."],
-    ['prompt-4', "Je sais expliquer pourquoi PS1 est entre apostrophes."]
+    ['prompt-1', "Le fichier /etc/butgames.bashrc existe, contient __git_ps1 et est lisible par tous (644)."],
+    ['prompt-2', "Le ~/.bashrc d'alice et celui de bob chargent ce fichier (une seule fois)."],
+    ['prompt-3', "Chez alice, dans ~/essai-prompt, le prompt affiche la branche et change avec % et +."],
+    ['prompt-4', "Chez bob aussi (dans son dossier personnel), sans « Permission denied »."]
   ]
 });
 
@@ -993,124 +1110,171 @@ addSec({
   id: 'bob', group: 'Installer', title: 'Côté bob : extension, clone et test',
   lead: "Ce que fait le développeur dans son propre compte : extension Go, outils Go, clone de la branche langage_go, lancement de test.sh.",
   body: () => R`
-<p>${who('bob')} Ouvre une session en bob : menu <em>Applications → Log Out → Switch User</em> (ou déconnecte alice), puis connexion avec <code>bob</code> / <code>bob@but</code>. Vérifie que le clavier tape bien en français.</p>
+<h2>D'abord : comment « être bob » ?</h2>
+${tbl(['Méthode', 'Comment', 'Pour quoi faire'], [
+  ['<strong>Session graphique</strong>', 'Menu <em>Applications → Log Out → Switch User</em> (ou déconnecte alice), puis connexion <code>bob</code> / <code>bob@but</code>.', 'Tout ce qui ouvre une fenêtre : <strong>VS Code</strong>, l\'extension, le clavier à vérifier.'],
+  ['<strong>Terminal depuis alice</strong>', 'Dans un terminal d\'alice : <code>su - bob</code> (mot de passe <code>bob@but</code>). On en sort avec <code>exit</code>.', 'Les commandes sans fenêtre : git, go, clone, test.sh.']
+], 'wrapc')}
+${note('attention', 'Trois règles pour éviter « Permission denied »', '<ol><li><strong>Ne tape jamais <code>sudo</code> en bob.</strong> Le refus (« not in the sudoers file ») est voulu. Pour une tâche d\'administrateur : <code>su - alice</code>, <code>sudo …</code>, <code>exit</code>.</li><li><strong>Travaille dans <code>/home/bob</code></strong> (le <code>~</code> de bob), jamais dans le dossier d\'alice ni dans un dossier créé par alice.</li><li><strong>Utilise <code>su -</code> (avec le tiret)</strong> : sans tiret, tu restes dans le dossier d\'alice, que bob ne peut pas lire.</li></ol>')}
+<p>Vérifie d'abord que tu es bien chez bob :</p>
+${steps([
+  { w: 'bob', c: 'whoami', ok: "<code>bob</code>.", once: false },
+  { w: 'bob', c: 'pwd', ok: "<code>/home/bob</code> (sinon : <code>cd ~</code>).", once: false },
+  { w: 'bob', c: 'go version', ok: "<code>go version go1.xx.x linux/amd64</code>. Sinon : l'étape « git, Go et VS Code » n'est pas finie.", once: false }
+])}
 
-<h2>1. Identité git</h2>
-<p>git étiquette chaque commit avec un nom et un email, à régler une fois par utilisateur.</p>
+${chemin('A', 'À la main', 'étapes B1 à B7', R`
+<h3>B1. Identité git</h3>
+<p>git signe chaque commit avec un nom et un email, à régler une fois par utilisateur.</p>
 ${sh(R`git config --global user.name "Bob"
 git config --global user.email "bob@butgames.local"
-git config --global init.defaultBranch main`)}
+git config --global init.defaultBranch main`, { once: false })}
 
-<h2>2. L'extension Go de VS Code</h2>
-${sh(R`code --install-extension golang.go`)}
-<p>ou, dans VS Code : <em>Extensions</em> (${kbd('Ctrl+Shift+X')}) → chercher « Go » → l'extension de <strong>Go Team at Google</strong> (identifiant <code>golang.go</code>) → Install. Vérifie :</p>
-${term(R`$ code --list-extensions
-golang.go`)}
-<p>Les extensions vont dans <code>~/.vscode/extensions</code>, <strong>dans le compte de bob</strong> : elles n'existent pas pour alice tant qu'elle ne les installe pas elle aussi.</p>
+<h3>B2. L'extension Go de VS Code</h3>
+<p>${who('bob')} Dans la <strong>session graphique de bob</strong> (une fenêtre doit pouvoir s'ouvrir) :</p>
+${steps([
+  { c: 'code --install-extension golang.go', ok: "« Extension 'golang.go' v… was successfully installed. »", once: false },
+  { c: 'code --list-extensions', ok: "<code>golang.go</code>.", once: false }
+])}
+<p>Autre méthode : dans VS Code, <em>Extensions</em> (${kbd('Ctrl+Shift+X')}), chercher « Go », choisir celle de <strong>Go Team at Google</strong>, Install. Elle se range dans <code>~/.vscode/extensions</code> : <strong>chez bob uniquement</strong>.</p>
 
-<h2>3. Les outils Go (gopls, dlv…)</h2>
-<p>L'extension s'appuie sur des programmes Go : <code>gopls</code> (complétion, navigation, erreurs), <code>dlv</code> (débogueur), <code>staticcheck</code>. Ils s'installent <strong>sans sudo</strong> dans <code>~/go/bin</code>.</p>
-${sh(R`go install golang.org/x/tools/gopls@latest
-go install github.com/go-delve/delve/cmd/dlv@latest
-go install honnef.co/go/tools/cmd/staticcheck@latest
-ls ~/go/bin`)}
-<p>Autre méthode : ouvre un fichier <code>.go</code> dans VS Code, accepte « Install All » dans la fenêtre qui apparaît, ou lance la palette de commandes (${kbd('Ctrl+Shift+P')}) → <em>Go: Install/Update Tools</em>.</p>
-${note('retenir', 'Pourquoi ça se passe chez bob', '<p><code>go install</code> écrit dans <code>$GOPATH/bin</code>, soit <code>~/go/bin</code> : le dossier personnel de celui qui lance la commande. C\'est exactement le « il est possible que ce soit lui qui installe certains composants localement sur son compte » du sujet. Et <code>/etc/butgames.bashrc</code> met ce dossier dans le PATH.</p>')}
+<h3>B3. Les outils Go (gopls, dlv, staticcheck)</h3>
+<p>L'extension s'appuie sur des programmes Go. Ils s'installent <strong>sans sudo</strong> dans <code>~/go/bin</code>. Chaque commande télécharge : compte une minute ou deux. Lance-les une par une.</p>
+${steps([
+  { c: 'go install golang.org/x/tools/gopls@latest', ok: "aucun message après un moment (c'est bon signe).", once: false },
+  { c: 'go install github.com/go-delve/delve/cmd/dlv@latest', ok: "aucun message.", once: false },
+  { c: 'go install honnef.co/go/tools/cmd/staticcheck@latest', ok: "aucun message.", once: false },
+  { c: 'ls ~/go/bin', ok: "<code>dlv  gopls  staticcheck</code>.", once: false }
+])}
 
-<h2>4. Cloner le projet de validation</h2>
-${sh(R`mkdir -p ~/projets && cd ~/projets
-git clone --branch langage_go ${GIT_URL}
-cd hello.sae4.but1.iut`)}
-<p>Le dossier créé prend le nom du dépôt sans <code>.git</code>. Le prompt affiche maintenant <code>(langage_go)</code>. <code>--branch langage_go</code> récupère et place directement sur la bonne branche.</p>
-${term(R`$ git branch
-* langage_go
-$ ls -l
-...`)}
+<h3>B4. Cloner le projet de validation</h3>
+${steps([
+  { c: 'mkdir -p ~/projets', ok: "aucun message.", once: false },
+  { c: 'cd ~/projets', ok: "le prompt montre <code>~/projets</code>.", once: false },
+  { c: 'git clone --branch langage_go ' + GIT_URL, ok: "« Cloning into 'hello.sae4.but1.iut'… done. » Une erreur ? ouvre l'aide de cette étape.", once: true },
+  { c: 'cd hello.sae4.but1.iut', ok: "le prompt affiche <code>(langage_go)</code>.", once: false },
+  { c: 'git branch', ok: "<code>* langage_go</code>.", once: false }
+])}
+<p>Le dossier prend le nom du dépôt sans <code>.git</code>. <code>--branch langage_go</code> te place directement sur la bonne branche.</p>
 
-<h2>5. Lire puis lancer test.sh</h2>
-<p>Lis toujours un script avant de l'exécuter, ne serait-ce que pour savoir ce qu'il vérifie :</p>
-${sh(R`cat test.sh`)}
-<p>Puis lance-le, en gardant une <strong>trace</strong> pour le rapport (la preuve que le test passe) :</p>
+<h3>B5. Lire test.sh</h3>
+<p>Lis toujours un script avant de l'exécuter, ne serait-ce que pour savoir ce qu'il vérifie.</p>
+${steps([{ c: 'cat test.sh', ok: "le texte du script (utile pour le rapport).", once: false }])}
+
+<h3>B6. Lancer test.sh et garder la preuve</h3>
+<p>Ces <strong>deux lignes se tapent de suite</strong> (rien entre les deux) : la seconde lit le résultat de la première.</p>
 ${sh(R`./test.sh 2>&1 | tee ~/preuve-test.txt
-echo "code retour : ${'$'}{PIPESTATUS[0]}"`)}
-<p>Un code retour de <code>0</code> signifie « aucune erreur ». Si le fichier n'est pas exécutable (« Permission denied ») : <code>bash test.sh</code>, ou <code>chmod +x test.sh</code> (git verra alors une modification : le prompt affichera <code>*</code>).</p>
-${note('attention', 'Si test.sh réclame un logiciel absent', '<p>Message du type « command not found » ? bob ne peut pas installer lui-même (pas de sudo) : <strong>alice</strong> installe le paquet manquant (<code>sudo apt install …</code>) et bob relance le test. C\'est le fonctionnement voulu des deux rôles. Note ce cas dans le rapport, c\'est une difficulté rencontrée.</p>')}
+echo "code retour : ${'$'}{PIPESTATUS[0]}"`, { once: false })}
+<p><strong>Attendu :</strong> la sortie du test, puis <code>code retour : 0</code> (0 = aucune erreur). Le fichier <code>~/preuve-test.txt</code> garde la trace pour le rapport.</p>
+<ul>
+  <li><strong>« Permission denied »</strong> sur <code>./test.sh</code> : <code>bash test.sh</code> à la place, ou <code>chmod +x test.sh</code> (git verra une modification : le prompt affichera <code>*</code>).</li>
+  <li><strong>« command not found »</strong> sur un outil : bob ne peut pas l'installer. Voir l'encadré ci-dessous.</li>
+</ul>
+${note('attention', 'Un logiciel manque ? alice l\'installe, depuis la session de bob', '<p>Trois commandes, <strong>une par une</strong> : <code>su - alice</code> (mot de passe <code>alice@but</code>), puis <code>sudo apt install -y le-paquet</code>, puis <code>exit</code> pour revenir à bob. Relance ensuite le test. Note ce cas dans le rapport : c\'est une difficulté rencontrée.</p>')}
 
-<h2>6. Vérifier avec un vrai projet Go</h2>
-<p>Comme le test n'est pas exhaustif, vérifie toi-même qu'on peut créer, compiler et lancer un programme (détails dans la <a href="#notice">notice</a>) :</p>
-${sh(R`mkdir -p ~/projets/bonjour && cd ~/projets/bonjour
-go mod init bonjour
-cat > main.go <<'EOF'
-package main
-
-import "fmt"
-
-func main() { fmt.Println("Bonjour BUTGAMES !") }
-EOF
-go run .
-code .`)}`,
+<h3>B7. Vérifier avec un vrai projet Go</h3>
+<p>Comme <code>test.sh</code> n'est pas exhaustif, vérifie toi-même qu'on peut créer, compiler et lancer un programme :</p>
+${steps([
+  { c: 'mkdir -p ~/projets/bonjour && cd ~/projets/bonjour', ok: "le prompt montre <code>~/projets/bonjour</code>.", once: false },
+  { c: 'go mod init bonjour', ok: "« go: creating new go.mod: module bonjour ».", once: true },
+  { c: 'printf \'package main\\n\\nimport "fmt"\\n\\nfunc main() { fmt.Println("Bonjour BUTGAMES !") }\\n\' > main.go', ok: "aucun message ; le fichier <code>main.go</code> est créé.", once: false },
+  { c: 'go run .', ok: "<code>Bonjour BUTGAMES !</code>", once: false },
+  { c: 'code .', ok: "VS Code s'ouvre sur le dossier ; ouvre <code>main.go</code> : coloration et complétion fonctionnent (session graphique de bob).", once: false }
+])}
+`)}
+${chemin('B', 'Avec le script', 'à la place du chemin A (jamais les deux)', R`
+<p>${who('bob')} Dans la session de bob, <strong>sans sudo</strong>. Le script est dans <code>/opt/butgames</code>, lisible par tous (pas dans le dossier d'alice) :</p>
+${steps([{ c: 'bash /opt/butgames/sae-bob.sh', ok: "il clone, affiche <code>test.sh</code>, le lance et termine par <code>code retour de test.sh : 0</code>.", once: false }])}
+<p class="muted-s">Il ne fait pas B1 à B3 : l'extension et les outils Go sont préparés par <code>sae-alice.sh</code> (étape <code>bob</code>). Sinon, fais B1 à B3 à la main.</p>
+`)}
+${AIDE_LIEN('bob')}`,
   check: [
-    ['bob-1', "L'extension golang.go est installée chez bob (<code>code --list-extensions</code>)."],
-    ['bob-2', "gopls et dlv sont dans ~/go/bin et VS Code ne signale aucun outil manquant."],
-    ['bob-3', "Le dépôt est cloné sur la branche langage_go et le prompt affiche (langage_go)."],
-    ['bob-4', "<code>./test.sh</code> se termine avec le code retour 0, et j'ai gardé la trace."],
-    ['bob-5', "Je compile et lance un mini-programme Go depuis le terminal et depuis VS Code."]
+    ['bob-1', "En bob, <code>whoami</code> répond bob et <code>go version</code> répond."],
+    ['bob-2', "L'extension golang.go est installée chez bob (<code>code --list-extensions</code>)."],
+    ['bob-3', "gopls et dlv sont dans ~/go/bin et VS Code ne signale aucun outil manquant."],
+    ['bob-4', "Le dépôt est cloné sur la branche langage_go et le prompt affiche (langage_go)."],
+    ['bob-5', "<code>./test.sh</code> se termine avec le code retour 0, et j'ai gardé la trace (preuve-test.txt)."],
+    ['bob-6', "Je compile et lance un mini-programme Go depuis le terminal et depuis VS Code."]
   ]
 });
 
 /* ---------- 10. Scripts ---------- */
 addSec({
   id: 'scripts', group: 'Automatiser', title: 'Scripts tout-en-un',
-  lead: "Trois scripts bash : préparer la machine (alice), cloner et tester (bob), tout vérifier. Reproductible en quelques minutes, idéal pour la soutenance.",
+  lead: "Trois scripts bash : préparer la machine (alice), cloner et tester (bob), tout vérifier. Ils remplacent les étapes 5 à 9 : c'est le chemin B.",
   body: () => R`
 <h2>Pourquoi un script ?</h2>
 <p>Le sujet demande de « répliquer l'environnement » et de pouvoir « le reproduire » à partir du rapport. Un script <strong>idempotent</strong> (on peut le relancer sans dégât) est la meilleure preuve : il <em>est</em> la liste des commandes. Il détecte lui-même Debian ou Ubuntu/Xubuntu.</p>
 ${tbl(['Script', 'Qui le lance', 'Ce qu\'il fait'], [
-  [c('sae-alice.sh'), who('alice') + ' avec <code>sudo</code>', 'Paquets, langue anglaise, clavier français, fuseau, comptes, Go, VS Code, LISEZMOI, prompt git, et prépare bob (extension Go, outils Go, identité git).'],
+  [c('sae-alice.sh'), who('alice') + ' avec <code>sudo</code>', 'Paquets, langue anglaise, clavier français, fuseau, comptes, Go, VS Code, LISEZMOI, prompt git, extension et outils Go de bob, <strong>copie des scripts dans /opt/butgames</strong>, <strong>réparation des droits</strong>.'],
   [c('sae-bob.sh'), who('bob') + ' sans sudo', 'Clone la branche <code>langage_go</code>, affiche et lance <code>test.sh</code>, enregistre la preuve dans <code>~/preuve-test.txt</code>.'],
-  [c('sae-verif.sh'), who('alice') + ' avec <code>sudo</code>', 'Vérifie chaque exigence du sujet et affiche [ OK ] ou [FAIL].']
+  [c('sae-verif.sh'), who('alice') + ' avec <code>sudo</code>', 'Vérifie chaque exigence du sujet : [ OK ] ou [FAIL] <strong>avec la commande pour corriger</strong>.']
 ], 'wrapc')}
+${note('attention', 'Pourquoi /opt/butgames et pas ~/Downloads ?', '<p>Le dossier <code>Downloads</code> d\'alice est <strong>privé</strong> : bob ne peut pas y lire un fichier (« Permission denied »). On range donc les trois scripts dans <code>/opt/butgames</code>, un dossier lisible par tout le monde. C\'est aussi un bon exemple de gestion des droits à expliquer en soutenance.</p>')}
+${LEGENDE}
 
-<h2>Mettre les scripts dans la VM</h2>
+<h2>Les étapes, dans l'ordre</h2>
+<h3>S1. Récupérer les trois scripts dans la VM</h3>
 <ol class="flow">
-  <li>Dans la VM, ouvre Firefox sur cette page : <code>https://lucjules.github.io/systeme/sae-103.html</code>.</li>
-  <li>Clique sur <strong>Télécharger</strong> sous chaque script (ils vont dans <code>~/Downloads</code>).</li>
-  <li>Autre possibilité : copier-coller depuis l'hôte (marche avec <code>open-vm-tools</code>), un dossier partagé VMware, ou une clé USB.</li>
+  <li>${who('alice')} Dans la VM, ouvre Firefox sur <code>https://lucjules.github.io/systeme/sae-103.html</code>, étape « Scripts tout-en-un ».</li>
+  <li>Clique sur <strong>Télécharger</strong> sous <strong>chacun des trois</strong> scripts (ils vont dans <code>~/Downloads</code> d'alice).</li>
+  <li>Autre possibilité : copier-coller depuis l'hôte (marche avec <code>open-vm-tools</code>), dossier partagé VMware, ou clé USB.</li>
 </ol>
+<h3>S2. Les mettre dans le dossier partagé</h3>
+<p>${who('alice')} Une commande à la fois :</p>
+${steps([
+  { c: 'sudo mkdir -p /opt/butgames', ok: "aucun message.", once: false },
+  { c: 'sudo cp ~/Downloads/sae-*.sh /opt/butgames/', ok: "aucun message. Si « cannot stat » : les scripts ne sont pas dans <code>~/Downloads</code> (relis S1).", once: false },
+  { c: 'sudo chmod -R a+rX /opt/butgames', ok: "aucun message : tout le monde peut lire.", once: false },
+  { c: 'ls -l /opt/butgames', ok: "trois lignes : <code>sae-alice.sh</code>, <code>sae-bob.sh</code>, <code>sae-verif.sh</code>, chacune avec <code>r</code> pour tous (<code>-rw-r--r--</code>).", once: false }
+])}
+<h3>S3. Préparer la machine</h3>
+${steps([
+  { w: 'alice', c: 'sudo bash /opt/butgames/sae-alice.sh', ok: "chaque étape s'affiche en bleu, avec un ✔. Quelques minutes selon le réseau. Se termine par « Terminé ». Une étape en erreur ? Le script s'arrête : corrige, relance-le (il est relançable).", once: false }
+])}
+<h3>S4. Redémarrer</h3>
+${steps([{ w: 'alice', c: 'sudo reboot', ok: "la langue et le clavier sont pris en compte à la reconnexion.", once: false }])}
+<h3>S5. Côté bob</h3>
+<p>${who('bob')} Ouvre une session de bob (Switch User) ou un terminal <code>su - bob</code> :</p>
+${steps([{ w: 'bob', c: 'bash /opt/butgames/sae-bob.sh', ok: "le dépôt est cloné, <code>test.sh</code> tourne, et la dernière ligne est <code>code retour de test.sh : 0</code>.", once: false }])}
+<h3>S6. Tout vérifier</h3>
+<p>${who('alice')} Retour dans la session d'alice :</p>
+${steps([
+  { c: 'sudo bash /opt/butgames/sae-verif.sh', ok: "une liste de [ OK ] ; <strong>pour chaque [FAIL], la commande qui corrige</strong> est affichée juste dessous, et rappelée en fin de liste.", once: false },
+  { c: 'sudo RUN_TEST=1 bash /opt/butgames/sae-verif.sh', ok: "idem, et relance aussi <code>test.sh</code> dans le compte de bob.", once: false }
+])}
 
-<h2>1. Préparer la machine</h2>
-${sh(R`cd ~/Downloads
-sudo bash sae-alice.sh`)}
-<p>Durée : quelques minutes selon le réseau (mises à jour comprises). Le script affiche chaque étape en bleu et un ✔ à chaque réussite. Si une étape échoue, il s'arrête ; corrige, puis relance : rien n'est refait inutilement de façon dangereuse.</p>
-<p>À la fin, <strong>redémarre</strong> : <code>sudo reboot</code> (la langue et le clavier sont pris en compte à la reconnexion).</p>
+<h2>Options du script d'alice</h2>
+<p>Elles se placent entre <code>sudo</code> et <code>bash</code>.</p>
 ${tbl(['Option', 'Effet', 'Exemple'], [
-  [c('GO_SOURCE=apt'), 'Go via le paquet de la distribution (défaut : archive officielle)', c('sudo GO_SOURCE=apt bash sae-alice.sh')],
-  [c('UPGRADE=0'), 'saute la mise à jour complète : bien plus rapide (soutenance)', c('sudo UPGRADE=0 bash sae-alice.sh')],
-  [c('BOB_TOOLS=0'), 'ne touche pas au compte de bob (extension, outils Go)', c('sudo BOB_TOOLS=0 bash sae-alice.sh')],
-  [c('ONLY="…"'), 'ne lance que certaines étapes', c('sudo ONLY="comptes prompt" bash sae-alice.sh')]
+  [c('GO_SOURCE=apt'), 'Go via le paquet de la distribution (défaut : archive officielle)', c('sudo GO_SOURCE=apt bash /opt/butgames/sae-alice.sh')],
+  [c('UPGRADE=0'), 'saute la mise à jour complète : bien plus rapide (soutenance)', c('sudo UPGRADE=0 bash /opt/butgames/sae-alice.sh')],
+  [c('BOB_TOOLS=0'), 'ne touche pas au compte de bob (extension, outils Go)', c('sudo BOB_TOOLS=0 bash /opt/butgames/sae-alice.sh')],
+  [c('ONLY="…"'), 'ne lance que certaines étapes', c('sudo ONLY="comptes droits" bash /opt/butgames/sae-alice.sh')]
 ], 'wrapc')}
-<p>Étapes disponibles pour <code>ONLY</code> : <code>paquets locale clavier fuseau comptes go vscode lisezmoi prompt bob</code>.</p>
-
-<h2>2. Côté bob</h2>
-<p>${who('bob')} Dans la session de bob (<code>~/Downloads</code> de bob : copie-y le script ou récupère-le dans Firefox), <strong>sans sudo</strong> :</p>
-${sh(R`bash sae-bob.sh`)}
-
-<h2>3. Tout vérifier</h2>
-<p>${who('alice')}</p>
-${sh(R`cd ~/Downloads
-sudo bash sae-verif.sh              # vérifie tout
-sudo RUN_TEST=1 bash sae-verif.sh   # relance aussi test.sh dans le compte de bob`)}
+<p>Étapes disponibles pour <code>ONLY</code> : <code>paquets locale clavier fuseau comptes go vscode lisezmoi prompt bob partage droits</code>.</p>
+${tbl(['Étape du script', 'Équivalent à la main', 'Ce qu\'elle fait'], [
+  [c('paquets'), 'étape « Régler le système » A1-A2', 'mises à jour, git, curl, outils VMware'],
+  [c('locale  clavier  fuseau'), 'étape « Régler le système » A3-A5', 'anglais, clavier français, Europe/Paris'],
+  [c('comptes'), 'étape « Les comptes »', 'bob, mots de passe, alice dans sudo, bob hors sudo'],
+  [c('go  vscode'), 'étape « git, Go et VS Code »', 'Go (archive vérifiée) et VS Code (dépôt Microsoft)'],
+  [c('lisezmoi  prompt'), 'étape « Le prompt »', 'LISEZMOI et /etc/butgames.bashrc chargé par chaque .bashrc'],
+  [c('bob'), 'étape « Côté bob » B1-B3', 'identité git, extension Go, gopls, dlv, staticcheck'],
+  [c('partage'), 'étape « Scripts » S2', 'copie les scripts dans /opt/butgames'],
+  [c('droits'), '-', 'chaque compte possède son dossier ; fichiers partagés lisibles ; bob hors sudo']
+], 'wrapc')}
 
 <h2>Le code des scripts</h2>
 <p>Lis-les : tu devras en expliquer chaque bloc. Chaque commande y est commentée.</p>
 ${scriptBlock('src-alice', 'sae-alice.sh', 'sae-alice.sh : préparer la machine')}
 ${scriptBlock('src-bob', 'sae-bob.sh', 'sae-bob.sh : cloner et tester')}
 ${scriptBlock('src-verif', 'sae-verif.sh', 'sae-verif.sh : vérifier toutes les exigences')}
-${note('attention', 'Un script n\'est pas magique', '<ul><li>Il télécharge des fichiers sur Internet : il ne marchera pas sans réseau.</li><li>Les mots de passe imposés par le sujet y sont écrits en clair : acceptable ici, <strong>jamais</strong> dans un vrai projet.</li><li>Si tu le présentes, sois capable de dire ce que fait chaque fonction (<code>step_…</code>). Le jury interroge.</li></ul>')}`,
+${note('attention', 'Un script n\'est pas magique', '<ul><li>Il télécharge des fichiers sur Internet : il ne marchera pas sans réseau.</li><li>Les mots de passe imposés par le sujet y sont écrits en clair : acceptable ici, <strong>jamais</strong> dans un vrai projet.</li><li>Sois capable de dire ce que fait chaque fonction (<code>step_…</code>) : le jury interroge.</li></ul>')}
+${AIDE_LIEN('scripts')}`,
   check: [
-    ['scripts-1', "J'ai lancé sae-alice.sh jusqu'au bout, sans erreur."],
-    ['scripts-2', "J'ai redémarré la VM après le script."],
-    ['scripts-3', "J'ai lancé sae-bob.sh dans la session de bob."],
+    ['scripts-1', "Les trois scripts sont dans /opt/butgames, lisibles par tous (<code>ls -l /opt/butgames</code>)."],
+    ['scripts-2', "sae-alice.sh s'est terminé par « Terminé » et j'ai redémarré la VM."],
+    ['scripts-3', "<code>bash /opt/butgames/sae-bob.sh</code> a fonctionné dans la session de bob."],
     ['scripts-4', "Je sais expliquer les étapes du script avec mes mots."]
   ]
 });
@@ -1118,51 +1282,78 @@ ${note('attention', 'Un script n\'est pas magique', '<ul><li>Il télécharge des
 /* ---------- 11. Vérifier ---------- */
 addSec({
   id: 'verif', group: 'Automatiser', title: 'Vérifier toutes les exigences',
-  lead: "Un script qui teste chaque exigence du sujet, et la liste de ce qu'un script ne peut pas voir.",
+  lead: "Contrôler chaque exigence du sujet : à la main (commande par commande) ou avec le script, qui affiche la correction de chaque échec.",
   body: () => R`
-<h2>Le contrôle automatique</h2>
-<p>${who('alice')} Après le redémarrage :</p>
-${sh(R`sudo bash sae-verif.sh`)}
+<p>Fais cette étape <strong>à la fin</strong>, et refais-la après chaque correction. Elle vaut aussi comme répétition de la soutenance.</p>
+${chemin('A', 'À la main', 'une commande par exigence, avec le résultat attendu', R`
+<h3>A1. Le système (en alice)</h3>
+${steps([
+  { c: 'echo $XDG_CURRENT_DESKTOP', ok: "<code>XFCE</code>.", once: false },
+  { c: 'cat /etc/default/locale', ok: "<code>LANG=en_US.UTF-8</code>.", once: false },
+  { c: 'grep XKBLAYOUT /etc/default/keyboard', ok: "<code>XKBLAYOUT=\"fr\"</code>.", once: false },
+  { c: 'git --version && go version && code --version', ok: "trois réponses, sans « command not found ».", once: false }
+])}
+<h3>A2. Les comptes et les droits</h3>
+${steps([
+  { c: 'id alice', ok: "contient <code>sudo</code>.", once: false },
+  { c: 'id bob', ok: "ne contient <strong>pas</strong> <code>sudo</code>.", once: false },
+  { c: "su - bob -c 'whoami; pwd; go version'", ok: "mot de passe <code>bob@but</code>, puis : <code>bob</code>, <code>/home/bob</code>, <code>go version go1.xx…</code>.", once: false },
+  { c: "su - bob -c 'sudo -n true'", ok: "un <strong>refus</strong> (« bob is not in the sudoers file » ou « a password is required ») : c'est voulu.", once: false },
+  { c: 'ls -ld /home/bob /opt/butgames', ok: "<code>/home/bob</code> appartient à <code>bob bob</code> ; <code>/opt/butgames</code> à <code>root root</code>, lisible par tous.", once: false },
+  { c: 'sudo find /home/bob ! -user bob', ok: "<strong>aucune ligne</strong> : rien dans le dossier de bob n'appartient à un autre compte. Des lignes ? <code>sudo chown -R bob:bob /home/bob</code>.", once: false }
+])}
+<h3>A3. Chez bob (terminal <code>su - bob</code>)</h3>
+${steps([
+  { w: 'bob', c: 'su - bob', ok: "mot de passe <code>bob@but</code>.", once: false },
+  { w: 'bob', c: 'code --list-extensions', ok: "<code>golang.go</code>.", once: false },
+  { w: 'bob', c: 'ls ~/go/bin', ok: "<code>dlv  gopls  staticcheck</code>.", once: false },
+  { w: 'bob', c: 'echo "$PS1"', ok: "contient <code>__git_ps1</code>.", once: false },
+  { w: 'bob', c: 'git -C ~/projets/hello.sae4.but1.iut branch --show-current', ok: "<code>langage_go</code>.", once: false },
+  { w: 'bob', c: 'cd ~/projets/hello.sae4.but1.iut && ./test.sh; echo "code retour : $?"', ok: "<code>code retour : 0</code>.", once: false },
+  { w: 'bob', c: 'exit', ok: "retour à alice.", once: false }
+])}
+`)}
+${chemin('B', 'Avec le script', 'tout est testé d\'un coup, et les corrections sont affichées', R`
+<p>${who('alice')}</p>
+${steps([{ c: 'sudo bash /opt/butgames/sae-verif.sh', ok: "voir l'exemple ci-dessous.", once: false }])}
 ${term(R`SAE 1.03 - vérification (Debian GNU/Linux 13 (trixie))
 
 Système
   [ OK ] Bureau XFCE installé
   [ OK ] Langue du système : anglais (en_US.UTF-8)
   [ OK ] Clavier : disposition française (fr)
-  [ OK ] Outils VMware (presse-papiers, résolution)
-
-Comptes
-  [ OK ] alice existe
-  [ OK ] alice est administratrice (groupe sudo)
-  [ OK ] bob existe
-  [ OK ] bob n'est PAS administrateur
 ...
-Bilan : 21 OK, 0 échec(s)`)}
-<p>Le script rend un code de sortie non nul s'il y a au moins un échec, ce qui permet de l'enchaîner dans d'autres scripts.</p>
+Comptes et droits
+  [ OK ] alice est administratrice (groupe sudo)
+  [ OK ] bob n'est PAS administrateur (voulu)
+  [FAIL] bob peut lire /etc/butgames.bashrc
+         pour corriger : sudo chmod 644 /etc/butgames.bashrc
+...
+Bilan : 26 OK, 1 échec(s)
 
-<h2>Ce qu'un script ne voit pas : la vérification à la main</h2>
-<p>Déconnecte-toi puis refais ces contrôles <strong>comme un utilisateur de l'équipe</strong>, dans l'interface graphique :</p>
+Commandes à lancer pour corriger (dans cet ordre, une fois chacune) :
+  sudo chmod 644 /etc/butgames.bashrc
+
+Relance ensuite ce script pour contrôler.`)}
+<p>Chaque [FAIL] est suivi de <strong>la commande qui le corrige</strong>, rappelée en fin de liste : copie-la, lance-la, puis relance le script. Le script rend un code de sortie non nul s'il y a au moins un échec.</p>
+<p>Pour lancer aussi <code>test.sh</code> : <code>sudo RUN_TEST=1 bash /opt/butgames/sae-verif.sh</code>.</p>
+`)}
+
+<h2>Ce qu'un script ne voit pas : la vérification dans l'interface</h2>
+<p>Déconnecte-toi puis refais ces contrôles <strong>comme un utilisateur de l'équipe</strong> :</p>
 <ul class="pieges">
-  <li><strong>Mots de passe.</strong> Connexion à l'écran de login avec <code>alice</code> / <code>alice@but</code>, puis <code>bob</code> / <code>bob@but</code>.</li>
+  <li><strong>Connexion.</strong> À l'écran de login : <code>alice</code> / <code>alice@but</code>, puis <code>bob</code> / <code>bob@but</code>.</li>
   <li><strong>Clavier réellement français.</strong> Tape <code>azerty 1234 é è à ç</code> dans un terminal, <em>dans la session de bob aussi</em>.</li>
   <li><strong>Interface en anglais.</strong> Menus Xfce, dossiers <code>Desktop</code> et <code>Documents</code>, messages d'erreur en anglais.</li>
-  <li><strong>Terminal de bob.</strong> Le prompt est vert, bleu, et jaune dans un dépôt ; <code>go version</code> répond ; <code>sudo ls</code> est refusé.</li>
-  <li><strong>VS Code de bob.</strong> Ouvre le dépôt cloné (<code>code ~/projets/hello.sae4.but1.iut</code>), ouvre un fichier <code>.go</code> : coloration, complétion et survol d'une fonction fonctionnent, aucune fenêtre « tools missing ».</li>
+  <li><strong>Terminal de bob.</strong> Prompt vert, bleu, et jaune dans un dépôt ; <code>go version</code> répond ; <code>sudo ls</code> est refusé.</li>
+  <li><strong>VS Code de bob.</strong> Ouvre le dépôt cloné, puis un fichier <code>.go</code> : coloration, complétion et survol d'une fonction marchent, aucune fenêtre « tools missing ».</li>
   <li><strong>Exécuter et déboguer.</strong> Dans le projet « bonjour », ${kbd('F5')} lance le débogueur (<code>dlv</code>).</li>
   <li><strong>Copier-coller et redimensionnement.</strong> Redimensionne la fenêtre de VMware : le bureau s'adapte.</li>
-  <li><strong>test.sh.</strong> <code>./test.sh; echo $?</code> affiche <code>0</code> chez bob.</li>
-  <li><strong>Premier démarrage « à froid ».</strong> Éteins puis rallume la VM : tout marche sans rien refaire.</li>
+  <li><strong>Démarrage à froid.</strong> Éteins puis rallume la VM : tout marche sans rien refaire.</li>
 </ul>
-${tbl(['Si le test échoue', 'Où regarder'], [
-  ['Langue', 'étape « Régler le système » §3, fichier ' + c('/etc/default/locale')],
-  ['Clavier', 'étape « Régler le système » §4, fichier ' + c('/etc/default/keyboard') + ', paramètres Xfce'],
-  ['Comptes, sudo', 'étape « Comptes » et ' + c('id alice')],
-  ['Prompt', 'étape « Prompt » : ' + c('echo "$PS1"')],
-  ['Extension, outils Go', 'étape « Côté bob » (installation faite chez alice par erreur ?)'],
-  ['Clone, test.sh', 'étape « Dépannage » : réseau, identifiants, droits']
-], 'wrapc')}`,
+${AIDE_LIEN('verif')}`,
   check: [
-    ['verif-1', "sae-verif.sh affiche 0 échec."],
+    ['verif-1', "sae-verif.sh affiche 0 échec (ou j'ai fait tous les contrôles à la main)."],
     ['verif-2', "Je me suis connecté en alice puis en bob avec les bons mots de passe."],
     ['verif-3', "Le clavier est français dans la session de bob (accents compris)."],
     ['verif-4', "VS Code de bob ouvre un fichier Go sans message d'outils manquants."],
@@ -1176,18 +1367,24 @@ addSec({
   lead: "Nettoyer la machine, l'éteindre proprement et la livrer à l'équipe (« la distribuer à l'équipe », dit le sujet).",
   body: () => R`
 <h2>1. Nettoyer</h2>
-<p>${who('alice')} Avant de figer la VM : on enlève ce qui ne sert à personne et ce qui est propre à ta session de travail.</p>
-${sh(R`sudo apt autoremove --purge -y
-sudo apt clean
-history -c                  # efface l'historique de ce terminal
-rm -f ~/Downloads/sae-*.sh  # facultatif : retire les scripts de travail (ou garde-les, ils documentent)
-rm -f ~/.bash_history`)}
-<p>Fais de même côté bob si tu as laissé des traces (<code>~/.bash_history</code>, essais dans <code>~/projets</code>), tout en gardant le clone du dépôt si tu veux que l'équipe le trouve prêt.</p>
+<p>Avant de figer la VM : on enlève ce qui ne sert à personne et ce qui est propre à ta session de travail. Une commande à la fois.</p>
+${steps([
+  { w: 'alice', c: 'sudo apt autoremove --purge -y', ok: "des paquets inutiles sont retirés (ou « 0 supprimés »).", once: false },
+  { w: 'alice', c: 'sudo apt clean', ok: "aucun message : le cache des paquets est vidé.", once: false },
+  { w: 'alice', c: 'history -c && rm -f ~/.bash_history', ok: "l'historique des commandes d'alice est effacé (garde-le jusqu'au rapport si tu en as besoin).", once: false }
+])}
+<p>${who('bob')} Fais de même dans la session de bob (<code>su - bob</code>) : <code>history -c &amp;&amp; rm -f ~/.bash_history</code>, puis <code>exit</code>. <strong>Garde</strong> son dossier <code>~/projets</code> si tu veux que l'équipe trouve le clone prêt.</p>
 
-<h2>2. Éteindre complètement</h2>
-<p>Arrête la VM avec <strong>Power off / Shut down</strong> depuis le système (<code>sudo poweroff</code>). Pas de <em>Suspend</em> : une VM suspendue contient l'état de la mémoire et ne se copie pas proprement. Dans <em>VM → Settings</em>, déconnecte l'ISO du lecteur CD/DVD.</p>
+<h2>2. Un dernier contrôle des droits</h2>
+${steps([
+  { w: 'alice', c: 'sudo bash /opt/butgames/sae-verif.sh', ok: "<strong>0 échec</strong> : aucun fichier de bob n'appartient à root, les scripts sont lisibles, bob n'est pas administrateur.", once: false }
+])}
 
-<h2>3. Livrer</h2>
+<h2>3. Éteindre complètement</h2>
+${steps([{ w: 'alice', c: 'sudo poweroff', ok: "la VM s'éteint. Pas de <em>Suspend</em> : une VM suspendue contient l'état de la mémoire et ne se copie pas proprement.", once: false }])}
+<p>Dans VMware : <em>VM → Settings</em>, lecteur CD/DVD : déconnecte l'ISO.</p>
+
+<h2>4. Livrer</h2>
 ${tbl(['Méthode', 'Comment', 'Pour qui'], [
   ['Dossier de la VM compressé', 'VM éteinte, compresse le dossier <code>BUTGAMES-DEV</code> (fichiers <code>.vmx</code>, <code>.vmdk</code>, <code>.nvram</code>…) en .zip ou .7z, puis donne l\'archive avec son empreinte (<code>sha256sum</code>).', 'Marche avec Workstation Player et Pro'],
   ['Export OVF / OVA', 'Menu <em>File → Export to OVF…</em> (Workstation Pro, ou l\'outil en ligne de commande <code>ovftool</code>) : un fichier unique, importable dans VMware et VirtualBox.', 'Si ta version le propose'],
@@ -1195,15 +1392,16 @@ ${tbl(['Méthode', 'Comment', 'Pour qui'], [
 ], 'wrapc')}
 <p>Quand l'équipe ouvre la VM copiée, VMware demande si elle a été <em>déplacée</em> ou <em>copiée</em> : répondre <strong>I copied it</strong> évite les conflits d'identifiant réseau.</p>
 ${note('retenir', 'Joins un mode d\'emploi à la VM', '<p>L\'équipe ne peut pas te joindre : le fichier <code>LISEZMOI.txt</code> sur le bureau (créé par le script) contient les comptes, les mots de passe et les premiers pas. Mets aussi dans le livrable : les ressources recommandées (2 vCPU, 4 Go de RAM) et la version de VMware.</p>')}
-<h2>4. Quand on a un doute</h2>
+<h2>5. Quand on a un doute</h2>
 <ul>
   <li>Ouvre la copie livrée comme si tu étais l'équipe : tout démarre, tout marche.</li>
   <li>Garde une copie du dossier de la VM de côté jusqu'à la fin de la SAE.</li>
   <li>Pour la soutenance, prépare <strong>deux</strong> VM : une « finie », et une installée seulement jusqu'au système (avant le script), pour montrer l'automatisation en direct.</li>
-</ul>`,
+</ul>
+${AIDE_LIEN('distribuer')}`,
   check: [
-    ['distribuer-1', "J'ai nettoyé (apt clean, historique) et éteint la VM complètement."],
-    ['distribuer-2', "L'ISO n'est plus branché dans le lecteur CD/DVD."],
+    ['distribuer-1', "J'ai nettoyé (apt clean, historique) et sae-verif.sh affiche 0 échec."],
+    ['distribuer-2', "J'ai éteint la VM complètement et débranché l'ISO."],
     ['distribuer-3', "J'ai produit l'archive du dossier de la VM (ou l'export OVF)."],
     ['distribuer-4', "J'ai ouvert la copie pour vérifier qu'elle démarre."]
   ]
@@ -1211,6 +1409,15 @@ ${note('retenir', 'Joins un mode d\'emploi à la VM', '<p>L\'équipe ne peut pas
 
 /* ---------- 13. Dépannage ---------- */
 const DEPANNAGE = [
+  ['<strong>Permissions de bob</strong> : <code>bob is not in the sudoers file</code>', 'Bob a tapé <code>sudo</code>. Ce refus est <strong>voulu</strong> : bob n\'est pas administrateur.', 'Pour une tâche d\'admin depuis bob : <code>su - alice</code> (<code>alice@but</code>), <code>sudo …</code>, <code>exit</code>. Ou fais-la directement dans un terminal d\'alice.'],
+  ['<strong>Permissions de bob</strong> : <code>Permission denied</code> en lisant un script dans <code>/home/alice/…</code> ou <code>~/Downloads</code>', 'Le dossier personnel d\'alice est privé : bob ne peut pas le lire.', 'Dans la session d\'alice : <code>sudo mkdir -p /opt/butgames && sudo cp ~/Downloads/sae-*.sh /opt/butgames/ && sudo chmod -R a+rX /opt/butgames</code>. Bob lance <code>bash /opt/butgames/sae-bob.sh</code>.'],
+  ['<strong>Permissions de bob</strong> : <code>Permission denied</code> / <code>touch: cannot touch</code> dans <code>/tmp/essai</code> (ou un autre dossier)', 'Le dossier a été créé par alice : il appartient à alice. Bob ne peut pas y écrire.', 'Bob travaille dans son dossier : <code>cd ~</code>, puis <code>git init -q essai-prompt</code>. Supprime l\'ancien dossier côté alice : <code>rm -r /tmp/essai</code>.'],
+  ['<strong>Permissions de bob</strong> : <code>fatal: detected dubious ownership in repository</code>', 'git refuse un dépôt dont le propriétaire est un autre compte.', 'Ne travaille pas dans le dépôt d\'un autre. Si le dépôt de bob appartient à root ou alice : <code>sudo chown -R bob:bob /home/bob/projets</code> (en alice).'],
+  ['<strong>Permissions de bob</strong> : <code>Permission denied</code> en écrivant dans son propre dossier (<code>~/.bashrc</code>, <code>~/go</code>, <code>~/projets</code>)', 'Des fichiers de bob appartiennent à root (à cause d\'un <code>sudo</code> : <code>sudo git clone</code>, <code>sudo code</code>, <code>sudo go install</code>).', 'En alice : <code>sudo chown -R bob:bob /home/bob</code>, ou <code>sudo ONLY="droits" bash /opt/butgames/sae-alice.sh</code>. Ensuite : plus jamais de <code>sudo</code> pour ces commandes.'],
+  ['<strong>Permissions de bob</strong> : <code>go: command not found</code> ou <code>Permission denied</code> sur <code>/usr/local/go</code>', 'Go n\'est pas dans le PATH de bob, ou ses fichiers ne sont pas lisibles par tous.', 'En alice : <code>sudo chmod -R a+rX /usr/local/go</code> et <code>sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go</code>. Puis en bob : nouveau terminal, <code>go version</code>.'],
+  ['<strong>Permissions de bob</strong> : <code>su: Authentication failure</code>', 'Mauvais mot de passe de bob, ou compte créé sans mot de passe.', 'En alice : <code>echo \'bob:bob@but\' | sudo chpasswd</code>, puis <code>su - bob</code>.'],
+  ['<strong>Permissions de bob</strong> : <code>cannot open display</code> / <code>Authorization required</code> en lançant <code>code</code> avec <code>su - bob</code>', 'Une fenêtre ne peut pas s\'ouvrir depuis le terminal d\'un autre compte.', 'Ouvre une vraie session de bob : <em>Applications → Log Out → Switch User</em>, puis connexion <code>bob</code> / <code>bob@but</code>.'],
+  ['Les commandes de bob s\'exécutent dans <code>/home/alice</code> et échouent', 'Tu as tapé <code>su bob</code> (sans tiret) : le dossier courant reste celui d\'alice.', 'Tape <code>exit</code>, puis <code>su - bob</code> <strong>avec le tiret</strong>, et vérifie avec <code>pwd</code> : <code>/home/bob</code>.'],
   ['Le clavier tape en QWERTY', 'Le réglage de disposition n\'est pas appliqué à la session.', 'Dans la session : <code>setxkbmap fr</code>. Puis <code>sudo localectl set-x11-keymap fr pc105</code>, et vérifie <code>/etc/default/keyboard</code> (XKBLAYOUT="fr"). Dans Xfce : <em>Settings → Keyboard → Layout</em>, décoche « Use system defaults » et ajoute French.'],
   ['<code>alice is not in the sudoers file</code>', 'Debian : un mot de passe root a été donné à l\'installation, alice n\'est pas dans sudo.', '<code>su -</code> (mot de passe root), <code>usermod -aG sudo alice</code>, puis déconnexion/reconnexion d\'alice.'],
   ['<code>sudo: command not found</code>', 'Debian installée avec un mot de passe root : sudo n\'est pas installé.', '<code>su -</code> puis <code>apt install sudo</code>, puis <code>usermod -aG sudo alice</code>.'],
@@ -1218,7 +1425,6 @@ const DEPANNAGE = [
   ['<code>Could not get lock /var/lib/dpkg/lock</code>', 'Une mise à jour automatique tourne en arrière-plan.', 'Attends quelques minutes puis recommence. Ne supprime pas le fichier de verrou.'],
   ['Pas de copier-coller / écran qui ne se redimensionne pas', 'Les outils VMware ne sont pas installés ou pas démarrés.', '<code>sudo apt install open-vm-tools open-vm-tools-desktop</code>, puis redémarre. Contrôle : <code>systemctl status open-vm-tools</code>.'],
   ['VMware : « VT-x is disabled »', 'La virtualisation matérielle est coupée dans le BIOS de l\'hôte.', 'Active VT-x / AMD-V dans le BIOS, ou change de poste.'],
-  ['<code>go: command not found</code> chez bob', 'Go n\'est pas dans le PATH de son shell.', '<code>ls /usr/local/go/bin</code> ; <code>which go</code>. Vérifie le lien <code>/usr/local/bin/go</code> et que le <code>~/.bashrc</code> de bob charge <code>/etc/butgames.bashrc</code>. Ouvre un nouveau terminal.'],
   ['<code>code: command not found</code>', 'VS Code n\'est pas installé (dépôt Microsoft ajouté mais <code>apt install code</code> échoué).', '<code>apt policy code</code> pour voir ; relance <code>sudo apt update</code> puis <code>sudo apt install code</code>.'],
   ['VS Code : fenêtre blanche ou noire, scintillements', 'Problème d\'accélération graphique dans la VM.', '<code>code --disable-gpu</code>. Dans VMware, désactive « Accelerate 3D graphics » (VM éteinte).'],
   ['L\'extension Go se plaint : « gopls / dlv not found »', 'Les outils Go ne sont pas dans le compte de bob (ou pas dans le PATH).', 'En bob : <code>go install golang.org/x/tools/gopls@latest</code> (idem <code>dlv</code>), ou palette → <em>Go: Install/Update Tools</em>. Vérifie <code>ls ~/go/bin</code>.'],
@@ -1226,22 +1432,25 @@ const DEPANNAGE = [
   ['<code>git clone</code> : « Could not resolve host »', 'Pas de réseau, DNS, ou GitLab de l\'IUT non joignable de chez toi.', 'Teste <code>ping 1.1.1.1</code> puis <code>ping gitlab-ce.iut.u-bordeaux.fr</code>. Réseau en NAT ? VPN de l\'IUT ? Proxy à renseigner (<code>git config --global http.proxy</code>) ?'],
   ['<code>git clone</code> : « SSL certificate problem »', 'Certificats absents ou heure de la VM fausse.', '<code>sudo apt install ca-certificates</code> ; contrôle <code>date</code> (fuseau, synchronisation).'],
   ['<code>git clone</code> : « Authentication failed » / « HTTP Basic: Access denied »', 'Le dépôt demande une authentification.', 'Utilise tes identifiants du GitLab de l\'IUT. Si le dépôt devait être public, signale-le à l\'enseignant.'],
+  ['<code>git clone</code> : « destination path … already exists »', 'Le clone a déjà été fait.', 'Entre dans le dossier : <code>cd ~/projets/hello.sae4.but1.iut</code>, puis <code>git pull</code>.'],
   ['<code>Remote branch langage_go not found</code>', 'Nom de branche mal écrit, ou autre dépôt.', '<code>git ls-remote --heads ' + GIT_URL + '</code> liste les branches existantes.'],
   ['<code>./test.sh: Permission denied</code>', 'Le fichier n\'est pas exécutable.', '<code>bash test.sh</code> ou <code>chmod +x test.sh</code>.'],
   ['<code>/bin/bash^M: bad interpreter</code>', 'Fins de ligne Windows (CRLF) dans le script.', '<code>sed -i \'s/\\r$//\' test.sh</code> (ou <code>dos2unix test.sh</code>).'],
-  ['<code>test.sh</code> : « command not found » sur un outil', 'Un logiciel manque, et bob ne peut pas l\'installer.', 'alice installe : <code>sudo apt install le-paquet</code>, bob relance le test.'],
+  ['<code>test.sh</code> : « command not found » sur un outil', 'Un logiciel manque, et bob ne peut pas l\'installer.', 'alice installe : <code>su - alice</code>, <code>sudo apt install le-paquet</code>, <code>exit</code> ; bob relance le test.'],
   ['Le prompt affiche littéralement <code>$(__git_ps1 …)</code>', 'PS1 est entre guillemets, ou git-sh-prompt n\'est pas chargé.', 'Mets <code>PS1</code> entre <strong>apostrophes</strong> ; vérifie que <code>/usr/lib/git-core/git-sh-prompt</code> existe (paquet git).'],
-  ['Le prompt ne change pas dans un nouveau terminal', 'Le <code>.bashrc</code> ne charge pas le fichier commun.', '<code>tail ~/.bashrc</code> doit montrer la ligne <code>. /etc/butgames.bashrc</code>. Sinon relance l\'étape : <code>sudo ONLY="prompt" bash sae-alice.sh</code>.'],
-  ['<code>Setting locale failed</code> / <code>Cannot set LC_ALL</code>', 'La langue demandée n\'est pas générée.', '<code>sudo locale-gen en_US.UTF-8</code> (Debian : décommente la ligne dans <code>/etc/locale.gen</code> avant <code>sudo locale-gen</code>), puis <code>sudo update-locale LANG=en_US.UTF-8</code>.'],
+  ['Le prompt ne change pas dans un nouveau terminal', 'Le <code>.bashrc</code> ne charge pas le fichier commun.', '<code>tail ~/.bashrc</code> doit montrer la ligne <code>. /etc/butgames.bashrc</code>. Sinon : <code>sudo ONLY="prompt" bash /opt/butgames/sae-alice.sh</code>.'],
+  ['<code>Setting locale failed</code> / <code>Cannot set LC_ALL</code>', 'La langue demandée n\'est pas générée.', '<code>sudo ONLY="locale" bash /opt/butgames/sae-alice.sh</code>, ou à la main (étape « Régler le système » A3).'],
   ['La VM est lente', 'Pas assez de RAM, ou trop de ressources prises à l\'hôte.', 'Regarde <code>free -h</code> et <code>top</code>. Augmente la RAM (VM éteinte) sans dépasser la moitié de l\'hôte.'],
   ['« No space left on device »', 'Disque virtuel plein.', '<code>df -h /</code> ; <code>sudo apt clean</code> ; supprime les téléchargements. Sinon agrandis le disque dans VMware puis la partition.'],
-  ['Le script s\'arrête avec « version ou empreinte de Go introuvable »', 'go.dev injoignable ou format de réponse modifié.', 'Réessaie plus tard, ou <code>sudo GO_SOURCE=apt bash sae-alice.sh</code>.']
+  ['Le script s\'arrête avec « version ou empreinte de Go introuvable »', 'go.dev injoignable ou format de réponse modifié.', 'Réessaie plus tard, ou <code>sudo GO_SOURCE=apt bash /opt/butgames/sae-alice.sh</code>.']
 ];
 addSec({
   id: 'depannage', group: 'Automatiser', title: 'Dépannage',
-  lead: "Les erreurs classiques de cette SAE, avec la cause et le remède. Tape un mot pour filtrer.",
+  lead: "Les erreurs classiques de cette SAE, avec la cause et le remède. Tape un mot pour filtrer, ou ouvre l'aide guidée.",
   body: () => R`
-<div class="dep-search"><label for="dep-q" class="sr-only">Filtrer le dépannage</label><input id="dep-q" class="tool-in" type="search" placeholder="Filtrer : clavier, sudo, clone, prompt, code…" autocomplete="off" spellcheck="false" aria-controls="dep-t"></div>
+<p>Pour un problème de <strong>permissions de bob</strong>, tape <code>permissions</code> dans le filtre, ou ouvre l'aide guidée :</p>
+<p class="aide-lien"><button type="button" class="btn" data-act="help-goto" data-id="permissions">🆘 Bob n'a pas les permissions : l'aide pas à pas</button> <a class="btn ghost" href="#aide">Toute l'aide guidée</a></p>
+<div class="dep-search"><label for="dep-q" class="sr-only">Filtrer le dépannage</label><input id="dep-q" class="tool-in" type="search" placeholder="Filtrer : permissions, clavier, sudo, clone, prompt, code…" autocomplete="off" spellcheck="false" aria-controls="dep-t"></div>
 <p id="dep-n" class="dep-n" role="status"></p>
 <div class="tbl-wrap" id="dep-t"><table class="tbl wrapc"><thead><tr><th scope="col">Symptôme</th><th scope="col">Cause probable</th><th scope="col">Que faire</th></tr></thead>
 <tbody>${DEPANNAGE.map(r => `<tr data-t="${esc(r.join(' ').replace(/<[^>]+>/g, ' ').toLowerCase())}">${r.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
@@ -1288,13 +1497,13 @@ ${T(64, 396, 'a-t', '• groupe sudo (droits admin)')}
 ${T(64, 418, 'a-t', '• installe et met à jour :')}${T(78, 436, 'a-m', 'apt · archive Go · dépôt VS Code')}
 ${T(64, 462, 'a-t', '• prépare les comptes et le prompt')}
 ${T(64, 484, 'a-t', '• LISEZMOI.txt sur le bureau')}
-${T(64, 510, 'a-s', 'scripts : sae-alice.sh · sae-verif.sh')}
+${T(64, 510, 'a-s', 'scripts partagés : /opt/butgames')}
 <rect class="a-bob" x="370" y="326" width="300" height="236" rx="10"/>
 ${T(384, 350, 'a-b', 'bob · développeur (sans sudo)')}${T(384, 368, 'a-s', 'mot de passe bob@but')}
 ${T(384, 396, 'a-t', '• extension VS Code golang.go')}${T(398, 414, 'a-m', '~/.vscode/extensions')}
 ${T(384, 438, 'a-t', '• outils Go : gopls, dlv')}${T(398, 456, 'a-m', '~/go/bin')}
 ${T(384, 480, 'a-t', '• projets : clone de la branche')}${T(398, 498, 'a-m', 'langage_go → test.sh')}
-${T(384, 522, 'a-t', '• prompt : (langage_go *)')}${T(384, 546, 'a-s', 'script : sae-bob.sh')}
+${T(384, 522, 'a-t', '• prompt : (langage_go *)')}${T(384, 546, 'a-s', 'lance /opt/butgames/sae-bob.sh')}
 <path class="a-line" d="M200 326V298" marker-end="url(#ar)"/>${T(210, 316, 'a-s', 'installe')}
 <path class="a-line" d="M520 298V324" marker-end="url(#ar)"/>${T(530, 316, 'a-s', 'utilise')}
 <rect class="a-ext" x="790" y="100" width="220" height="112" rx="8"/>
@@ -1318,7 +1527,8 @@ const GO_CMDS = R`ARCH=$(dpkg --print-architecture)
 VER=$(curl -fsSL 'https://go.dev/dl/?mode=json' | grep -m1 -o '"version": *"go[0-9.]*"' | grep -o 'go[0-9.]*')
 curl -fLO "https://go.dev/dl/$VER.linux-$ARCH.tar.gz"
 sha256sum "$VER.linux-$ARCH.tar.gz"      # comparer avec l'empreinte de https://go.dev/dl/
-sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf "$VER.linux-$ARCH.tar.gz"
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local --no-same-owner -xzf "$VER.linux-$ARCH.tar.gz"
+sudo chmod -R a+rX /usr/local/go
 sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
 sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt`;
 const CODE_CMDS = R`curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor --yes -o /usr/share/keyrings/microsoft.gpg
@@ -1360,7 +1570,10 @@ const MEMO = (distro, goSrc) => [
     : { x: 'Archive officielle go.dev :', c: GO_CMDS } ] },
   { who: 'alice', t: 'Visual Studio Code', steps: [ { x: 'Dépôt apt officiel de Microsoft :', c: CODE_CMDS } ] },
   { who: 'alice', t: 'Prompt git et PATH (un fichier commun)', steps: [
-    { x: 'Créer /etc/butgames.bashrc (contenu : voir l\'étape « Prompt ») puis le charger depuis chaque .bashrc :', c: 'for rc in /etc/skel/.bashrc /home/alice/.bashrc /home/bob/.bashrc; do\n  echo \'[ -r /etc/butgames.bashrc ] && . /etc/butgames.bashrc\' | sudo tee -a "$rc" >/dev/null\ndone' }
+    { x: 'Créer /etc/butgames.bashrc (contenu : voir l\'étape « Prompt »), le rendre lisible, puis le charger depuis chaque .bashrc :', c: 'sudo chmod 644 /etc/butgames.bashrc\nfor rc in /etc/skel/.bashrc /home/alice/.bashrc /home/bob/.bashrc; do\n  sudo grep -qF \'butgames.bashrc\' "$rc" || echo \'[ -r /etc/butgames.bashrc ] && . /etc/butgames.bashrc\' | sudo tee -a "$rc" >/dev/null\ndone' }
+  ] },
+  { who: 'alice', t: 'Dossier partagé pour les scripts et contrôle des droits', steps: [
+    { x: 'Les scripts doivent être lisibles par bob (le dossier d\'alice est privé) :', c: 'sudo mkdir -p /opt/butgames\nsudo cp ~/Downloads/sae-*.sh /opt/butgames/\nsudo chmod -R a+rX /opt/butgames\nsudo chown -R bob:bob /home/bob' }
   ] },
   { who: 'bob', t: 'Environnement de développement (dans le compte de bob)', steps: [
     { c: 'git config --global user.name "Bob"\ngit config --global user.email "bob@butgames.local"' },
@@ -1392,8 +1605,8 @@ addSec({
     return R`
 <p>Le sujet demande « la liste <strong>minimale</strong> des actions/commandes réalisées pour créer la machine », que le lecteur peut rejouer. La voici dans l'ordre, pour ${Di('<strong>Debian</strong>', '<strong>Xubuntu</strong>')}. Elle suit exactement ce que fait le script.</p>
 <div class="gen-bar"><button type="button" class="btn" data-act="copy-memo">Copier toute la liste</button><button type="button" class="btn ghost" data-act="dl-memo">Télécharger (.txt)</button></div>
-${note('retenir', 'Version courte avec les scripts', '<p>Avec les trois scripts de l\'étape « Scripts », la liste se réduit à : (1) créer la VM et installer le système (actions graphiques ci-dessous), (2) <code>sudo bash sae-alice.sh</code>, (3) redémarrer, puis <code>bash sae-bob.sh</code> en bob. Dans le rapport, donne <strong>les deux versions</strong> : la liste détaillée (ce qui est fait) et la version script (comment le refaire vite).</p>')}
-${g.map((blk, i) => `<h2>${i + 1}. ${esc(blk.t)}${who(blk.who)}</h2>${blk.steps.map(s => (s.x ? `<p>${esc(s.x)}</p>` : '') + (s.c ? sh(s.c) : '')).join('')}`).join('')}
+${note('retenir', 'Version courte avec les scripts', '<p>Avec les trois scripts de l\'étape « Scripts », la liste se réduit à : (1) créer la VM et installer le système (actions graphiques ci-dessous), (2) <code>sudo bash /opt/butgames/sae-alice.sh</code>, (3) redémarrer, puis <code>bash /opt/butgames/sae-bob.sh</code> en bob. Dans le rapport, donne <strong>les deux versions</strong> : la liste détaillée (ce qui est fait) et la version script (comment le refaire vite).</p>')}
+${g.map((blk, i) => `<h2>${i + 1}. ${esc(blk.t)}${who(blk.who)}</h2>${blk.steps.map(s => (s.x ? `<p>${esc(s.x)}</p>` : '') + (s.c ? sh(s.c, { mode: 'none' }) : '')).join('')}`).join('')}
 <h2>Annexe : /etc/butgames.bashrc</h2>
 ${file('/etc/butgames.bashrc', bashrcTxt())}`;
   },
@@ -1401,6 +1614,303 @@ ${file('/etc/butgames.bashrc', bashrcTxt())}`;
     ['memo-1', "Ma liste de commandes est dans le rapport, dans l'ordre, et chaque ligne est expliquée."],
     ['memo-2', "Un camarade pourrait refaire l'installation en suivant seulement ma liste."]
   ]
+});
+
+/* ===== Aide : « ça ne marche pas » =====
+   Pour chaque étape : 1) où en es-tu (contrôles sans risque), 2) les commandes à avoir faites pour arriver à l'état attendu,
+   3) les erreurs fréquentes. Ne règle pas tous les cas, mais beaucoup. */
+const ALL_ONLY = 'paquets locale clavier fuseau comptes go vscode lisezmoi prompt bob partage droits';
+const SCRIPT_HINT = `<p class="muted-s">Le script est dans <code>/opt/butgames</code> (étape « Scripts », S1 et S2). Pas encore ? Lance-le depuis son dossier de téléchargement : <code>cd ~/Downloads &amp;&amp; sudo ONLY="…" bash sae-alice.sh</code> : il se copie tout seul dans <code>/opt/butgames</code>.</p>`;
+const onlyCmd = ids => steps([{ w: 'alice', c: `sudo ONLY="${ids}" bash /opt/butgames/sae-alice.sh`, ok: "chaque étape affiche un ✔.", once: false }]);
+const err = rows => tbl(['Message ou symptôme', 'Cause', 'Solution'], rows, 'wrapc');
+
+const BASHRC_FIX = () => sh("sudo tee /etc/butgames.bashrc >/dev/null <<'EOF'\n" + bashrcTxt() + R`
+EOF
+sudo chmod 644 /etc/butgames.bashrc
+for rc in /etc/skel/.bashrc /home/alice/.bashrc /home/bob/.bashrc; do
+  sudo grep -qF 'butgames.bashrc' "$rc" || echo '[ -r /etc/butgames.bashrc ] && . /etc/butgames.bashrc' | sudo tee -a "$rc" >/dev/null
+done
+source ~/.bashrc`, { once: false });
+
+const HELP = {
+  permissions: () => ({
+    title: "Bob n'a pas les permissions",
+    intro: "Presque toujours, l'une de ces 4 causes : (1) bob a tapé <code>sudo</code> (refus <strong>voulu</strong>), (2) il utilise un fichier ou un dossier d'alice (privé), (3) des fichiers de son dossier appartiennent à root, (4) Go ou un fichier partagé n'est pas lisible par tous. Le contrôle ci-dessous dit laquelle.",
+    diag: steps([
+      { w: 'alice', c: 'su - bob', ok: "mot de passe <code>bob@but</code> ; prompt <code>bob@…</code>. (Avec le <strong>tiret</strong>.)", once: false },
+      { w: 'bob', c: 'whoami && pwd', ok: "<code>bob</code> puis <code>/home/bob</code>. Si <code>/home/alice</code> : tu as tapé <code>su bob</code> sans tiret → <code>exit</code> puis <code>su - bob</code>.", once: false },
+      { w: 'bob', c: 'id', ok: "<strong>pas</strong> de <code>sudo</code> dans la liste (voulu).", once: false },
+      { w: 'bob', c: 'touch ~/test-ecriture && rm ~/test-ecriture && echo "écriture OK"', ok: "<code>écriture OK</code>. Si « Permission denied » : cause 3 (fichiers à root).", once: false },
+      { w: 'bob', c: 'find ~ ! -user bob | head', ok: "<strong>aucune ligne</strong>. Des lignes = fichiers qui n'appartiennent pas à bob : cause 3.", once: false },
+      { w: 'bob', c: 'ls -l /etc/butgames.bashrc /opt/butgames', ok: "tout est affiché avec <code>r</code> pour tous (<code>-rw-r--r--</code>). Sinon : cause 4.", once: false },
+      { w: 'bob', c: 'go version', ok: "<code>go version go1.xx…</code>. Sinon : cause 4.", once: false },
+      { w: 'bob', c: 'exit', ok: "retour à alice.", once: false }
+    ]),
+    fixIntro: "Dans la session d'<strong>alice</strong>, ce bloc remet tout d'aplomb (il ne détruit rien et peut être relancé) :",
+    fix: sh(R`sudo chown -R bob:bob /home/bob          # les fichiers de bob appartiennent à bob
+sudo chmod 644 /etc/butgames.bashrc        # le prompt est lisible par tous
+sudo chmod -R a+rX /usr/local/go /opt/butgames   # Go et les scripts sont lisibles par tous
+sudo gpasswd -d bob sudo                   # bob reste non administrateur (un message « not a member » est normal)
+echo 'bob:bob@but' | sudo chpasswd         # remet le mot de passe imposé`, { once: false }),
+    only: 'comptes droits',
+    errors: [
+      ['<code>bob is not in the sudoers file</code>', 'Bob a tapé <code>sudo</code> : <strong>voulu</strong>.', 'Fais la tâche en alice, ou depuis bob : <code>su - alice</code>, <code>sudo …</code>, <code>exit</code>.'],
+      ['<code>Permission denied</code> en lisant <code>/home/alice/…</code>', 'Le dossier d\'alice est privé.', 'Mets le fichier dans <code>/opt/butgames</code> : <code>sudo cp fichier /opt/butgames/ &amp;&amp; sudo chmod -R a+rX /opt/butgames</code>.'],
+      ['<code>Permission denied</code> dans <code>/tmp/essai</code> ou un dossier créé par alice', 'Un dossier appartient à celui qui l\'a créé.', 'Bob travaille dans <code>~</code> : <code>cd ~</code> puis crée son propre dossier.'],
+      ['<code>detected dubious ownership in repository</code>', 'Le dépôt appartient à un autre compte.', 'Ne travaille pas dans le dépôt d\'un autre ; ou <code>sudo chown -R bob:bob /home/bob/projets</code>.'],
+      ['<code>cannot open display</code> avec <code>code</code>', 'Pas de fenêtre possible depuis <code>su - bob</code>.', 'Ouvre une vraie session de bob (Switch User).'],
+      ['<code>su: Authentication failure</code>', 'Mauvais mot de passe.', 'Bloc ci-dessus (dernière ligne), puis <code>su - bob</code>.']
+    ]
+  }),
+  vmware: () => ({
+    title: 'Aide : créer la VM',
+    intro: "Ici il n'y a pas de commandes Linux : tout se passe dans VMware sur l'hôte.",
+    errors: [
+      ['« VT-x is disabled »', 'Virtualisation coupée dans le BIOS de l\'hôte.', 'Active VT-x / AMD-V dans le BIOS, ou change de poste.'],
+      ['La VM démarre mais ne trouve pas l\'ISO', 'ISO non branché ou chemin changé.', 'VM éteinte : <em>Settings → CD/DVD → Use ISO image file</em>, case « Connect at power on » cochée.'],
+      ['Easy Install a créé un utilisateur à ta place', 'Tu as donné l\'ISO dans l\'assistant.', 'Supprime la VM et refais-la avec « I will install the operating system later ».'],
+      ['La VM est très lente', 'RAM ou cœurs trop faibles, ou 3D activée.', 'VM éteinte : 4096 Mo, 2 cœurs, décoche « Accelerate 3D graphics ».']
+    ]
+  }),
+  install: () => ({
+    title: 'Aide : installer le système',
+    intro: "L'installateur se passe avant toute ligne de commande. Si quelque chose est déjà faux, le plus simple est parfois de recommencer l'installation : c'est rapide.",
+    errors: [
+      ['Pas de réseau pendant l\'installation (Debian netinst)', 'La VM n\'a pas de réseau ou le miroir est injoignable.', 'Vérifie que la carte réseau est en <strong>NAT</strong> et connectée ; choisis le miroir <code>deb.debian.org</code>.'],
+      ['Clavier QWERTY au premier démarrage', 'Mauvais choix de clavier, ou de pays.', 'Pas grave : l\'étape « Régler le système » (A4) le corrige sans réinstaller.'],
+      ['alice n\'a pas sudo (Debian)', 'Un mot de passe root a été donné.', '<code>su -</code> puis <code>apt install sudo</code> et <code>usermod -aG sudo alice</code>, puis reconnexion.'],
+      ['Écran noir au redémarrage', 'ISO toujours branché ou mauvais disque de démarrage.', 'Éteins la VM, déconnecte l\'ISO, rallume.']
+    ]
+  }),
+  systeme: () => ({
+    title: 'Aide : régler le système',
+    intro: "Cette étape prépare la langue, le clavier, l'heure et les outils VMware.",
+    diag: steps([
+      { w: 'alice', c: 'cat /etc/default/locale', ok: "<code>LANG=en_US.UTF-8</code>.", once: false },
+      { w: 'alice', c: 'grep XKBLAYOUT /etc/default/keyboard', ok: "<code>XKBLAYOUT=\"fr\"</code>.", once: false },
+      { w: 'alice', c: 'setxkbmap -query | grep layout', ok: "<code>layout:     fr</code>.", once: false },
+      { w: 'alice', c: 'date', ok: "la bonne heure, fuseau <code>CET</code>/<code>CEST</code>.", once: false },
+      { w: 'alice', c: 'dpkg -s open-vm-tools | grep Status', ok: "<code>Status: install ok installed</code>.", once: false }
+    ]),
+    fixIntro: "Ce bloc, en <strong>alice</strong>, fait tout ce que l'étape demande (relançable sans risque) :",
+    fix: D(
+      sh(R`sudo apt update && sudo apt full-upgrade -y
+sudo apt install -y open-vm-tools open-vm-tools-desktop locales
+sudo sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
+sudo locale-gen
+sudo update-locale LANG=en_US.UTF-8
+sudo localectl set-x11-keymap fr pc105
+setxkbmap fr
+sudo timedatectl set-timezone Europe/Paris`, { once: false }),
+      sh(R`sudo apt update && sudo apt full-upgrade -y
+sudo apt install -y open-vm-tools open-vm-tools-desktop language-pack-en
+sudo locale-gen en_US.UTF-8
+sudo update-locale LANG=en_US.UTF-8
+sudo localectl set-x11-keymap fr pc105
+setxkbmap fr
+sudo timedatectl set-timezone Europe/Paris`, { once: false })
+    ),
+    only: 'paquets locale clavier fuseau',
+    errors: [
+      ['Clavier en QWERTY', 'Réglage non appliqué à la session.', '<code>setxkbmap fr</code> ; Xfce : <em>Settings → Keyboard → Layout</em>, décoche « Use system defaults », ajoute French.'],
+      ['<code>apt update</code> : dépôt <code>cdrom:</code>', 'Debian a gardé le CD comme source.', "<code>sudo sed -i 's/^deb cdrom:/# deb cdrom:/' /etc/apt/sources.list</code>"],
+      ['<code>Could not get lock</code>', 'Mise à jour automatique en cours.', 'Attends 2 minutes, recommence.'],
+      ['<code>localectl</code> : erreur', 'Service indisponible.', 'Écris <code>XKBLAYOUT="fr"</code> dans <code>/etc/default/keyboard</code> avec <code>sudo nano</code>, puis reconnecte-toi.']
+    ]
+  }),
+  comptes: () => ({
+    title: 'Aide : les comptes alice et bob',
+    intro: "Objectif : alice dans <code>sudo</code>, bob créé avec son mot de passe et <strong>sans</strong> sudo.",
+    diag: steps([
+      { w: 'alice', c: 'id alice', ok: "contient <code>sudo</code>.", once: false },
+      { w: 'alice', c: 'id bob', ok: "existe, sans <code>sudo</code>. « no such user » : bob n'est pas créé.", once: false },
+      { w: 'alice', c: 'ls -ld /home/bob', ok: "<code>drwx------ … bob bob</code> : le dossier appartient à bob.", once: false }
+    ]),
+    fixIntro: "Ce bloc, en <strong>alice</strong>, amène les comptes à l'état voulu (relançable ; un message « not a member of group sudo » est normal) :",
+    fix: sh(R`id bob >/dev/null 2>&1 || sudo useradd -m -s /bin/bash -c "Bob" bob
+echo 'alice:alice@but' | sudo chpasswd
+echo 'bob:bob@but' | sudo chpasswd
+sudo usermod -aG sudo alice
+sudo gpasswd -d bob sudo
+sudo chown -R bob:bob /home/bob`, { once: false }),
+    only: 'comptes droits',
+    errors: [
+      ['<code>user \'bob\' already exists</code>', 'bob est déjà créé.', 'Parfait : passe aux mots de passe.'],
+      ['<code>alice is not in the sudoers file</code>', 'Debian installée avec un mot de passe root.', '<code>su -</code> (mot de passe root), <code>usermod -aG sudo alice</code>, reconnexion.'],
+      ['<code>sudo: command not found</code>', 'sudo non installé.', '<code>su -</code> puis <code>apt install sudo</code>.'],
+      ['<code>su: Authentication failure</code>', 'Mauvais mot de passe.', 'Bloc ci-dessus : il remet <code>bob@but</code>.'],
+      ['<code>bob is not in the sudoers file</code> (en bob)', 'Voulu !', 'Rien à corriger : bob n\'est pas administrateur.']
+    ]
+  }),
+  logiciels: () => ({
+    title: 'Aide : git, Go et VS Code',
+    intro: "Objectif : <code>git</code>, <code>go</code> et <code>code</code> disponibles pour alice <strong>et</strong> pour bob.",
+    diag: steps([
+      { w: 'alice', c: 'git --version && go version && code --version | head -1', ok: "trois réponses.", once: false },
+      { w: 'alice', c: "su - bob -c 'go version'", ok: "mot de passe <code>bob@but</code>, puis une ligne <code>go version…</code>.", once: false },
+      { w: 'alice', c: 'ls -ld /usr/local/go; ls -l /usr/local/bin/go', ok: "<code>/usr/local/go</code> appartient à <code>root</code> et est lisible par tous ; <code>/usr/local/bin/go</code> est un lien vers lui.", once: false }
+    ]),
+    fixIntro: "Ce bloc, en <strong>alice</strong>, installe git, Go (paquet de la distribution, le plus simple) et VS Code. Pour la version officielle de Go, utilise le script ou l'étape « git, Go et VS Code » A2.",
+    fix: sh(R`sudo apt install -y git curl wget ca-certificates gpg apt-transport-https bash-completion golang-go
+curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor --yes -o /usr/share/keyrings/microsoft.gpg
+sudo tee /etc/apt/sources.list.d/vscode.sources >/dev/null <<EOF
+Types: deb
+URIs: https://packages.microsoft.com/repos/code
+Suites: stable
+Components: main
+Architectures: $(dpkg --print-architecture)
+Signed-By: /usr/share/keyrings/microsoft.gpg
+EOF
+sudo apt update
+sudo apt install -y code
+[ -d /usr/local/go ] && sudo chmod -R a+rX /usr/local/go`, { once: false }),
+    only: 'paquets go vscode droits',
+    errors: [
+      ['<code>go: command not found</code>', 'Go non installé, ou PATH.', '<code>sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go</code>, puis nouveau terminal.'],
+      ['<code>go1.xx.tar.gz: FAILED</code>', 'Téléchargement incomplet.', 'Ne continue pas : <code>rm /tmp/go*.tar.gz</code> et recommence le bloc.'],
+      ['<code>Unable to locate package code</code>', 'Dépôt Microsoft non pris en compte.', 'Refais le bloc de VS Code, puis <code>sudo apt update</code>.'],
+      ['Bob : <code>Permission denied</code> sur Go', 'Fichiers de Go non lisibles par tous.', '<code>sudo chmod -R a+rX /usr/local/go</code>.']
+    ]
+  }),
+  prompt: () => ({
+    title: 'Aide : le prompt avec git',
+    intro: "Objectif : un fichier <code>/etc/butgames.bashrc</code> lisible par tous, chargé par le <code>.bashrc</code> d'alice et de bob. Si tu as tout bloqué ici, ce bloc recrée l'état voulu.",
+    diag: steps([
+      { w: 'alice', c: 'ls -l /etc/butgames.bashrc', ok: "<code>-rw-r--r--</code> (lisible par tous). « No such file » : pas créé.", once: false },
+      { w: 'alice', c: 'tail -n 3 ~/.bashrc', ok: "contient <code>[ -r /etc/butgames.bashrc ] &amp;&amp; . /etc/butgames.bashrc</code>.", once: false },
+      { w: 'alice', c: 'sudo tail -n 3 /home/bob/.bashrc', ok: "idem pour bob (il faut <code>sudo</code> : le dossier de bob est privé).", once: false },
+      { w: 'alice', c: 'echo "$PS1"', ok: "contient <code>__git_ps1</code>.", once: false },
+      { w: 'alice', c: 'ls /usr/lib/git-core/git-sh-prompt', ok: "le fichier existe (sinon : <code>sudo apt install -y git</code>).", once: false }
+    ]),
+    fixIntro: "Ce bloc, en <strong>alice</strong> (<strong>tout d'un coup</strong>, relançable sans doublon) recrée le fichier, le rend lisible et le fait charger :",
+    fix: BASHRC_FIX(),
+    only: 'paquets lisezmoi prompt droits',
+    errors: [
+      ['Le prompt n\'a pas changé', 'Terminal ouvert avant la modification.', 'Nouveau terminal, ou <code>source ~/.bashrc</code>.'],
+      ['Le texte <code>$(__git_ps1 …)</code> s\'affiche tel quel', 'PS1 entre guillemets.', 'Le bloc ci-dessus remet les apostrophes.'],
+      ['<code>Permission denied</code> chez bob pendant le test', 'Test fait dans un dossier d\'alice (ex. <code>/tmp/essai</code>).', 'Bob teste dans <code>~</code> : <code>cd ~ &amp;&amp; git init -q essai-prompt</code>.'],
+      ['<code>tee: … Permission denied</code>', 'Oubli de <code>sudo</code>.', 'Relance avec <code>sudo</code>.'],
+      ['Le terminal affiche <code>&gt;</code> et attend', '<code>EOF</code> non collé.', '<kbd>Ctrl+C</kbd>, puis recolle le bloc <strong>entier</strong>.']
+    ]
+  }),
+  bob: () => ({
+    title: 'Aide : côté bob',
+    intro: "Objectif : chez bob, l'extension Go, les outils Go, le dépôt cloné sur <code>langage_go</code> et <code>test.sh</code> qui rend 0. <strong>Tout se fait en bob, sans sudo.</strong>",
+    diag: steps([
+      { w: 'bob', c: 'whoami && pwd', ok: "<code>bob</code> puis <code>/home/bob</code>.", once: false },
+      { w: 'bob', c: 'go version', ok: "une version de Go.", once: false },
+      { w: 'bob', c: 'code --list-extensions', ok: "<code>golang.go</code>.", once: false },
+      { w: 'bob', c: 'ls ~/go/bin', ok: "<code>dlv  gopls  staticcheck</code>.", once: false },
+      { w: 'bob', c: 'git -C ~/projets/hello.sae4.but1.iut branch --show-current', ok: "<code>langage_go</code>.", once: false }
+    ]),
+    fixIntro: "Ce bloc, <strong>en bob dans sa session graphique</strong> (pour l'extension), refait tout ce qui manque (relançable : le clone n'est refait que s'il manque) :",
+    fix: sh(R`git config --global user.name "Bob"
+git config --global user.email "bob@butgames.local"
+git config --global init.defaultBranch main
+code --install-extension golang.go
+go install golang.org/x/tools/gopls@latest
+go install github.com/go-delve/delve/cmd/dlv@latest
+go install honnef.co/go/tools/cmd/staticcheck@latest
+mkdir -p ~/projets && cd ~/projets
+[ -d hello.sae4.but1.iut ] || git clone --branch langage_go ${GIT_URL}
+cd hello.sae4.but1.iut && git checkout langage_go`, { once: false }),
+    after: steps([{ w: 'bob', c: './test.sh 2>&1 | tee ~/preuve-test.txt', ok: 'puis, <strong>juste après</strong>, <code>echo "code retour : ${PIPESTATUS[0]}"</code> : <code>0</code> attendu.', once: false }]),
+    only: 'bob droits',
+    errors: [
+      ['<code>Could not resolve host</code> au clone', 'Réseau, DNS ou GitLab non joignable.', '<code>ping 1.1.1.1</code>, <code>ping gitlab-ce.iut.u-bordeaux.fr</code> ; NAT ? VPN de l\'IUT ?'],
+      ['<code>Authentication failed</code>', 'Le dépôt demande des identifiants.', 'Tes identifiants du GitLab de l\'IUT.'],
+      ['<code>Remote branch langage_go not found</code>', 'Nom de branche mal écrit.', '<code>git ls-remote --heads ' + GIT_URL + '</code>'],
+      ['<code>./test.sh: Permission denied</code>', 'Pas exécutable.', '<code>bash test.sh</code> ou <code>chmod +x test.sh</code>.'],
+      ['<code>command not found</code> dans test.sh', 'Un outil manque, bob ne peut pas l\'installer.', '<code>su - alice</code>, <code>sudo apt install -y l-outil</code>, <code>exit</code>, relance le test.'],
+      ['<code>cannot open display</code>', 'Extension demandée depuis <code>su - bob</code>.', 'Fais-la dans la session graphique de bob (Switch User).'],
+      ['Permission denied partout chez bob', 'Dossiers à root ou d\'un autre compte.', 'Voir l\'aide « Bob n\'a pas les permissions ».']
+    ]
+  }),
+  scripts: () => ({
+    title: 'Aide : les scripts',
+    intro: "Objectif : les trois scripts dans <code>/opt/butgames</code>, lisibles par tous, puis <code>sae-alice.sh</code> qui se termine par « Terminé ».",
+    diag: steps([
+      { w: 'alice', c: 'ls -l /opt/butgames', ok: "trois scripts, avec <code>r</code> pour tous.", once: false },
+      { w: 'alice', c: 'bash -n /opt/butgames/sae-alice.sh && echo "syntaxe OK"', ok: "<code>syntaxe OK</code>. Un message d'erreur de syntaxe : le fichier a été abîmé en copie ; retélécharge-le.", once: false },
+      { w: 'alice', c: 'head -n 2 /opt/butgames/sae-alice.sh | cat -A | head -n 2', ok: "des <code>$</code> en fin de ligne. Si tu vois <code>^M$</code> : fins de ligne Windows → <code>sudo sed -i 's/\\r$//' /opt/butgames/sae-*.sh</code>.", once: false }
+    ]),
+    fixIntro: "En <strong>alice</strong>, depuis le dossier où tu as téléchargé les trois scripts (ici <code>~/Downloads</code>) :",
+    fix: sh(R`sudo mkdir -p /opt/butgames
+sudo cp ~/Downloads/sae-*.sh /opt/butgames/
+sudo chmod -R a+rX /opt/butgames
+ls -l /opt/butgames`, { once: false }),
+    only: 'partage droits',
+    errors: [
+      ['<code>cp: cannot stat</code>', 'Scripts pas dans <code>~/Downloads</code>.', '<code>ls ~/Downloads</code> ; retélécharge depuis cette page (Firefox).'],
+      ['Bob : <code>Permission denied</code> sur le script', 'Script laissé dans le dossier d\'alice.', 'Le bloc ci-dessus ; puis bob : <code>bash /opt/butgames/sae-bob.sh</code>.'],
+      ['<code>bad interpreter: ^M</code>', 'Fins de ligne Windows.', "<code>sudo sed -i 's/\\r$//' /opt/butgames/sae-*.sh</code>"],
+      ['Le script s\'arrête avec une erreur', 'Réseau, apt verrouillé…', 'Lis la dernière ligne rouge, corrige, <strong>relance</strong> : il reprend sans casser.'],
+      ['<code>sudo: bash: command not found</code>', 'Faute de frappe sur le chemin.', 'Tape <code>ls /opt/butgames</code> pour voir les vrais noms.']
+    ]
+  }),
+  verif: () => ({
+    title: 'Aide : la vérification',
+    intro: "Le script de vérification affiche, <strong>sous chaque [FAIL], la commande qui le corrige</strong>, et la liste complète en fin de sortie.",
+    diag: steps([{ w: 'alice', c: 'sudo bash /opt/butgames/sae-verif.sh', ok: "des [ OK] et, pour chaque [FAIL], « pour corriger : … ».", once: false }]),
+    fixIntro: "Si tu as beaucoup de [FAIL] d'un coup, remets tout à niveau avec le script complet (relançable), puis refais la vérification :",
+    fix: steps([
+      { w: 'alice', c: 'sudo bash /opt/butgames/sae-alice.sh', ok: "se termine par « Terminé ».", once: false },
+      { w: 'alice', c: 'sudo reboot', ok: "reconnexion ensuite.", once: false },
+      { w: 'bob', c: 'bash /opt/butgames/sae-bob.sh', ok: "<code>code retour de test.sh : 0</code>.", once: false },
+      { w: 'alice', c: 'sudo bash /opt/butgames/sae-verif.sh', ok: "0 échec.", once: false }
+    ]),
+    only: ALL_ONLY,
+    errors: [
+      ['[FAIL] « bob peut lire … » ou « possède son dossier »', 'Problème de droits.', 'Voir l\'aide « Bob n\'a pas les permissions ».'],
+      ['[FAIL] « Extension Go dans le compte de bob »', 'Extension non installée chez bob.', 'En bob, session graphique : <code>code --install-extension golang.go</code>.'],
+      ['[FAIL] « Dépôt cloné »', 'Clone pas fait.', 'En bob : <code>bash /opt/butgames/sae-bob.sh</code>.'],
+      ['[FAIL] « Langue » ou « Clavier »', 'Réglage non écrit.', '<code>sudo ONLY="locale clavier" bash /opt/butgames/sae-alice.sh</code>, puis redémarre.']
+    ]
+  }),
+  distribuer: () => ({
+    title: 'Aide : distribuer la VM',
+    intro: "Objectif : une VM propre, éteinte (pas suspendue), sans ISO, qui démarre sur une autre machine.",
+    diag: steps([
+      { w: 'alice', c: 'df -h /', ok: "de la place libre ; plus le disque est vide, plus l'archive est petite.", once: false },
+      { w: 'alice', c: 'sudo bash /opt/butgames/sae-verif.sh', ok: "0 échec avant de figer la VM.", once: false }
+    ]),
+    fixIntro: "Nettoyage complet en <strong>alice</strong> :",
+    fix: sh(R`sudo apt autoremove --purge -y
+sudo apt clean
+history -c && rm -f ~/.bash_history
+sudo poweroff`, { once: false }),
+    errors: [
+      ['La copie demande « moved or copied »', 'VMware détecte un nouvel emplacement.', 'Réponds <strong>I copied it</strong>.'],
+      ['La copie ne démarre pas', 'VM suspendue au lieu d\'éteinte, ou fichiers manquants.', 'Refais la copie VM <strong>éteinte</strong>, tous les fichiers du dossier.'],
+      ['Archive énorme', 'Disque jamais nettoyé.', '<code>sudo apt clean</code> avant la copie ; compresse en .7z.']
+    ]
+  })
+};
+
+function helpPanel(id) {
+  const h = HELP[id] ? HELP[id]() : null;
+  if (!h) return '';
+  const s1 = h.diag ? `<h4><span class="help-n">1</span> Où en es-tu ? <small>Contrôles sans risque : ils ne modifient rien.</small></h4>${h.diag}` : '';
+  const s2 = h.fix ? `<h4><span class="help-n">2</span> Les commandes à avoir faites pour arriver là</h4><p>${h.fixIntro || ''}</p>${h.fix}${h.after || ''}` +
+    (h.only ? `<details class="dt"><summary>Raccourci : le script le fait à ma place</summary><div>${onlyCmd(h.only)}${SCRIPT_HINT}</div></details>` : '') : '';
+  const s3 = h.errors ? `<h4><span class="help-n">${h.fix ? 3 : (h.diag ? 2 : 1)}</span> Les erreurs fréquentes</h4>${err(h.errors)}` : '';
+  return `<div class="help-in"><h3>${h.title}</h3>${h.intro ? `<p>${h.intro}</p>` : ''}${s1}${s2}${s3}
+  <p class="help-foot">Toujours bloqué ? Lance <code>sudo bash /opt/butgames/sae-verif.sh</code> : il liste ce qui manque avec la correction. Note le <strong>message d'erreur exact</strong> (copie-le) : c'est ce qui permet de trouver la cause.</p></div>`;
+}
+const HELP_ORDER = [
+  ['permissions', "Bob n'a pas les permissions (Permission denied, pas de sudo…)"], ['vmware', '3. Créer la VM'], ['install', '4. Installer le système'],
+  ['systeme', '5. Régler le système'], ['comptes', '6. Les comptes alice et bob'], ['logiciels', '7. git, Go et VS Code'], ['prompt', '8. Le prompt avec git'],
+  ['bob', '9. Côté bob'], ['scripts', '10. Les scripts'], ['verif', '11. Vérifier'], ['distribuer', '12. Distribuer la VM']
+];
+
+addSec({
+  id: 'aide', group: 'Outils', title: 'Aide : je suis bloqué',
+  lead: "Choisis où tu bloques : tu vois où tu en es, les commandes à avoir faites pour y arriver, et les erreurs fréquentes.",
+  body: () => R`
+<p>Le but : t'amener à l'état que l'étape attend, <strong>même si tu as sauté ou raté une commande</strong>. Ça règle beaucoup de cas, pas tous : quand un message d'erreur reste inexpliqué, copie-le exactement.</p>
+<div class="widget" data-widget="aide"></div>
+${note('convention', 'Remise à zéro complète', '<p>Tout est cassé et tu veux repartir ? Choisis « 11. Vérifier » : le bloc de remise à niveau relance le script complet (relançable) puis la vérification.</p>')}`,
+  check: []
 });
 
 /* ---------- 14. Rapport ---------- */
@@ -1460,7 +1970,7 @@ addSec({
 ${sh(R`mkdir -p ~/projets/mon-projet && cd ~/projets/mon-projet
 git init                       # le prompt affiche maintenant (main)
 go mod init mon-projet         # crée go.mod : le nom du module
-code .                         # ouvre le dossier dans VS Code`)}
+code .                         # ouvre le dossier dans VS Code`, { once: true })}
 <p>Crée le fichier <code>main.go</code> (dans VS Code : <em>Nouveau fichier</em>) :</p>
 ${file('main.go', R`package main
 
@@ -1471,7 +1981,7 @@ func main() {
 }`)}
 ${sh(R`go run .          # compile et lance, sans garder de fichier
 go build -o jeu    # produit l'exécutable ./jeu
-./jeu`)}
+./jeu`, { once: false })}
 <p>Un test se place dans un fichier qui finit par <code>_test.go</code> :</p>
 ${file('main_test.go', R`package main
 
@@ -1482,7 +1992,7 @@ func TestAddition(t *testing.T) {
 		t.Fatal("les maths sont cassées")
 	}
 }`)}
-${sh(R`go test ./...    # lance tous les tests du projet`)}
+${sh(R`go test ./...    # lance tous les tests du projet`, { once: false })}
 ${tbl(['Commande', 'Rôle'], [
   [c('go mod init nom'), 'crée un nouveau module (fichier go.mod)'],
   [c('go run .'), 'compile et exécute le programme du dossier'],
@@ -1496,10 +2006,10 @@ ${tbl(['Commande', 'Rôle'], [
 <p>Dans VS Code, avec l'extension Go : complétion et erreurs en direct (gopls), ${kbd('F5')} pour exécuter et déboguer, et un bouton « run test » au-dessus de chaque test.</p>
 
 <h2>2. Vérifier le test d'installation</h2>
-<p>${who('bob')} Dans le dépôt cloné :</p>
+<p>${who('bob')} Dans le dépôt cloné (<strong>les deux lignes de suite</strong>, rien entre les deux) :</p>
 ${sh(R`cd ~/projets/hello.sae4.but1.iut
 ./test.sh 2>&1 | tee ~/preuve-test.txt
-echo "code retour : ${'$'}{PIPESTATUS[0]}"`)}
+echo "code retour : ${'$'}{PIPESTATUS[0]}"`, { once: false })}
 <p>La <strong>preuve de lancement</strong> doit montrer : la commande lancée, le prompt avec <code>(langage_go)</code>, la sortie du test, et le <strong>code retour 0</strong>. Prends-la en capture d'écran du terminal, et garde le fichier <code>preuve-test.txt</code>. Rappelle que le test <strong>n'est pas exhaustif</strong> : ajoute la création et le lancement de ton projet Go comme second contrôle.</p>
 ${note('attention', 'Où mettre quoi', '<p>La <strong>trace du test</strong> va dans la <strong>notice</strong>. Le <strong>portfolio</strong>, lui, n\'accepte <strong>pas de trace d\'exécution shell</strong> : seulement du texte et au plus deux captures « propres » (par exemple le bureau avec VS Code ouvert sur un projet Go).</p>')}
 
@@ -1538,6 +2048,7 @@ const QR = [
   ['Pourquoi Xfce et pas GNOME ?', "Xfce est un bureau léger : il consomme peu de RAM et de CPU, ce qui laisse les ressources de la VM à VS Code et à la compilation. Le sujet le suggère (« bureau léger tel que XFCE »)."],
   ['Pourquoi alice est dans sudo et bob non ?', "Moindre privilège : bob développe, il n'a pas besoin de modifier le système. Alice administre. Si bob se trompe, il ne casse que son compte, pas la machine de l'équipe."],
   ['Que fait <code>sudo</code> exactement ?', "Il exécute une commande avec les droits de root, pour les utilisateurs autorisés (groupe <code>sudo</code>), après avoir demandé leur propre mot de passe."],
+  ['Bob reçoit « Permission denied » ou « not in the sudoers file » : est-ce un bogue ?', "Non, c'est le fonctionnement voulu : bob n'est pas administrateur. Les dossiers personnels sont privés (alice ne lit pas /home/bob et inversement), donc ce que les deux utilisent est dans un dossier partagé lisible par tous : <code>/opt/butgames</code>. Quand bob a besoin de droits admin, alice installe pour lui."],
   ['Pourquoi l\'extension Go est installée chez bob, pas pour tout le monde ?', "VS Code range ses extensions dans le dossier personnel de l'utilisateur (<code>~/.vscode/extensions</code>), et les outils Go dans <code>~/go/bin</code>. Chaque développeur a donc les siens, sans droits administrateur."],
   ['Pourquoi Go est dans <code>/usr/local/go</code> ?', "Convention pour un logiciel installé à la main (hors du gestionnaire de paquets). Root en reste propriétaire : tous les comptes l'utilisent, personne d'autre que l'administrateur ne le modifie."],
   ['Archive officielle ou paquet apt pour Go ?', "L'archive donne la dernière version stable, la même pour toute l'équipe, vérifiée par SHA-256. Le paquet est plus simple et se met à jour avec le système, mais souvent plus ancien. J'ai choisi selon la version demandée par les projets."],
@@ -1603,13 +2114,14 @@ ${QR.map(([q, a]) => `<details class="dt"><summary>${q}</summary><div><p>${a}</p
 });
 
 /* ===== Application : navigation, widgets, progression ===== */
-const NAV_ORDER = ['analyse', 'choix', 'vmware', 'install', 'systeme', 'comptes', 'logiciels', 'prompt', 'bob', 'scripts', 'verif', 'distribuer', 'depannage', 'rapport', 'notice', 'soutenance', 'memo'];
+const NAV_ORDER = ['analyse', 'choix', 'vmware', 'install', 'systeme', 'comptes', 'logiciels', 'prompt', 'bob', 'scripts', 'verif', 'distribuer', 'depannage', 'rapport', 'notice', 'soutenance', 'memo', 'aide'];
 const SEC = Object.fromEntries(SECTIONS.map(s => [s.id, s]));
 const LIST = NAV_ORDER.map(id => SEC[id]);
 const GROUPS = ['Comprendre', 'Installer', 'Automatiser', 'Rendre', 'Outils'];
 const ALL_IDS = ['accueil', ...NAV_ORDER];
 const CK_IDS = LIST.flatMap(s => s.check.map(x => x[0]));
-const secDone = s => s.check.every(([id]) => Store.data.chk[id]);
+const secDone = s => s.check.length > 0 && s.check.every(([id]) => Store.data.chk[id]);
+const STEPS = LIST.filter(s => s.check.length);
 const DIST_NAME = { debian: 'Debian', xubuntu: 'Xubuntu' };
 
 /* ---------- Planning et compte à rebours ---------- */
@@ -1650,11 +2162,11 @@ function mountCountdown(host) {
 /* ---------- Pages ---------- */
 function progress() {
   const done = CK_IDS.filter(id => Store.data.chk[id]).length;
-  return { done, total: CK_IDS.length, lessons: LIST.filter(secDone).length, nl: LIST.length };
+  return { done, total: CK_IDS.length, lessons: STEPS.filter(secDone).length, nl: STEPS.length };
 }
 function homeSummary() {
   const p = progress();
-  const nx = LIST.find(s => !secDone(s));
+  const nx = STEPS.find(s => !secDone(s));
   return `<p class="sum-line"><strong>${p.done}</strong> case${p.done > 1 ? 's' : ''} cochée${p.done > 1 ? 's' : ''} sur ${p.total} · <strong>${p.lessons}</strong> étape${p.lessons > 1 ? 's' : ''} terminée${p.lessons > 1 ? 's' : ''} sur ${p.nl}</p>` +
     (nx ? `<a class="btn" href="#${nx.id}">${p.done ? 'Continuer' : 'Commencer'} : ${esc(nx.title)}</a>` : '<p class="sum-line">Toutes les étapes sont terminées. Bonne soutenance !</p>');
 }
@@ -1683,7 +2195,7 @@ function pageAccueil() {
   </div>
   <h2>Les étapes</h2>
   <p>Chaque étape se termine par une liste de cases à cocher : tu vois ce qu'il reste à faire.</p>
-  <ul class="skills">${LIST.map((s, i) => `<li class="skill${secDone(s) ? ' is-done' : ''}" data-l="${s.id}"><a href="#${s.id}"><span class="sk-n">${i + 1}</span><span class="sk-t">${esc(s.title)}</span><span class="sk-l">${esc(s.group)}</span></a></li>`).join('')}</ul>
+  <ul class="skills">${STEPS.map((s, i) => `<li class="skill${secDone(s) ? ' is-done' : ''}" data-l="${s.id}"><a href="#${s.id}"><span class="sk-n">${i + 1}</span><span class="sk-t">${esc(s.title)}</span><span class="sk-l">${esc(s.group)}</span></a></li>`).join('')}</ul>
   ${note('convention', 'Un guide, pas un copier-coller', '<p>Les commandes marchent, mais le sujet te demande de <strong>justifier</strong> chaque choix et de <strong>présenter</strong> ton travail : comprends ce que fait chaque ligne. Les mots de passe de la SAE (<code>alice@but</code>, <code>bob@but</code>) sont imposés par le sujet.</p>')}
   </div>`;
 }
@@ -1691,13 +2203,14 @@ function pageSection(s) {
   const idx = NAV_ORDER.indexOf(s.id);
   const prev = SEC[NAV_ORDER[idx - 1]], next = SEC[NAV_ORDER[idx + 1]];
   return `<article class="page"><p class="kicker">${esc(s.group)} · étape ${idx + 1} sur ${NAV_ORDER.length}</p><h1>${esc(s.title)}</h1><p class="lead">${esc(s.lead)}</p>
+  ${HELP[s.id] ? `<div class="help-bar"><button type="button" class="btn" data-act="help" data-id="${s.id}" aria-expanded="false">🆘 Aide : ça ne marche pas</button><span>Où tu en es, les commandes à avoir faites, les erreurs fréquentes.</span></div><div class="help-panel" hidden></div>` : ''}
   <div class="body">${s.body()}</div>
-  ${checkBox(s.id, s.check)}
+  ${s.check.length ? checkBox(s.id, s.check) : ''}
   <nav class="pager" aria-label="Navigation">${prev ? `<a href="#${prev.id}"><span>Précédent</span>${esc(prev.title)}</a>` : '<a href="#accueil"><span>Retour</span>Accueil</a>'}${next ? `<a class="next" href="#${next.id}"><span>Suivant</span>${esc(next.title)}</a>` : '<span></span>'}</nav></article>`;
 }
 function navHTML() {
   const item = (id, n, label) => `<a href="#${id}" data-id="${id}"><span class="nav-n">${n}</span><span class="nav-t">${esc(label)}</span></a>`;
-  return `<div class="nav-g">${item('accueil', '⌂', 'Accueil')}</div>` + GROUPS.map(g => `<div class="nav-g"><div class="nav-h">${g}</div>${LIST.filter(s => s.group === g).map(s => item(s.id, NAV_ORDER.indexOf(s.id) + 1, s.title)).join('')}</div>`).join('');
+  return `<div class="nav-g">${item('accueil', '⌂', 'Accueil')}</div>` + GROUPS.map(g => `<div class="nav-g"><div class="nav-h">${g}</div>${LIST.filter(s => s.group === g).map(s => item(s.id, s.check.length ? NAV_ORDER.indexOf(s.id) + 1 : '?', s.title)).join('')}</div>`).join('');
 }
 
 /* ---------- Widgets ---------- */
@@ -1846,6 +2359,12 @@ function mountTimer(host) {
   host._cleanup = stop;
   draw();
 }
+function mountAide(host) {
+  const cur = HELP[window.__aideSel] ? window.__aideSel : 'permissions';
+  host.innerHTML = `<label class="aide-l" for="aide-sel">Où est-ce que tu bloques ?</label><select id="aide-sel" class="tool-in">${HELP_ORDER.map(([id, l]) => `<option value="${id}"${id === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select><div id="aide-out" class="help-panel"></div>`;
+  const draw = () => { window.__aideSel = $('#aide-sel', host).value; $('#aide-out', host).innerHTML = helpPanel(window.__aideSel); };
+  $('#aide-sel', host).addEventListener('change', draw); draw();
+}
 function mountDep(host) {
   const q = $('#dep-q', host), rows = $$('#dep-t tbody tr', host), n = $('#dep-n', host);
   const f = () => {
@@ -1859,7 +2378,7 @@ function mountWidgets(root) {
   $$('[data-widget]', root).forEach(h => {
     const k = h.dataset.widget;
     if (k === 'timeline') mountTimeline(h); else if (k === 'countdown') mountCountdown(h);
-    else if (k === 'calc') mountCalc(h); else if (k === 'gen') mountGen(h); else if (k === 'timer') mountTimer(h);
+    else if (k === 'calc') mountCalc(h); else if (k === 'gen') mountGen(h); else if (k === 'timer') mountTimer(h); else if (k === 'aide') mountAide(h);
   });
   if ($('#dep-q', root)) mountDep(root);
 }
@@ -1908,7 +2427,7 @@ function init() {
   <a class="back" href="index.html" title="Retour à la matière" aria-label="Retour à la matière">⌂</a><a class="brand" href="#accueil"><span class="brand-mark">SAE</span>1.03 <small>installation de poste</small></a>
   <div class="meter" role="progressbar" aria-label="Progression" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="prog-bar"></i></div>
   <span id="prog-txt" class="prog-txt"></span>
-  <div class="tools"><span class="dist-lbl">Distribution</span><div class="seg dist-seg" role="group" aria-label="Distribution"><button type="button" data-set-distro="debian" aria-pressed="true">Debian</button><button type="button" data-set-distro="xubuntu" aria-pressed="false">Xubuntu</button></div><button type="button" id="theme-btn" class="icon-btn" aria-label="Changer le thème" title="Thème clair / sombre">◐</button></div>
+  <div class="tools"><a class="btn mini help-top" href="#aide" title="Aide : je suis bloqué">🆘<span class="help-top-t"> Aide</span></a><span class="dist-lbl">Distribution</span><div class="seg dist-seg" role="group" aria-label="Distribution"><button type="button" data-set-distro="debian" aria-pressed="true">Debian</button><button type="button" data-set-distro="xubuntu" aria-pressed="false">Xubuntu</button></div><button type="button" id="theme-btn" class="icon-btn" aria-label="Changer le thème" title="Thème clair / sombre">◐</button></div>
 </header>
 <div class="shell"><nav id="side" class="side nav" aria-label="Sommaire">${navHTML()}</nav><div class="scrim" data-app="scrim"></div><main id="main" tabindex="-1"></main></div>`;
   document.addEventListener('click', e => {
@@ -1948,6 +2467,16 @@ async function act(b) {
     download('dossier-etude-sae103.md', $('.gen-out').value, 'text/markdown'); flash(b, 'Téléchargé ✓');
   } else if (k === 'reset-gen') {
     Store.data.gen = {}; Store.save(); mountGen($('[data-widget=gen]'));
+  } else if (k === 'help') {
+    const bar = b.closest('.help-bar'), panel = bar.nextElementSibling, open = panel.hidden;
+    if (open && !panel.innerHTML) panel.innerHTML = helpPanel(b.dataset.id);
+    panel.hidden = !open; b.setAttribute('aria-expanded', String(open));
+    if (open) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else if (k === 'help-open') {
+    const hb = $('.help-bar [data-act=help]'); if (hb) { const panel = $('.help-panel'); if (panel.hidden) hb.click(); else panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  } else if (k === 'help-goto') {
+    window.__aideSel = b.dataset.id;
+    if (currentId() === 'aide') route(); else location.hash = '#aide';
   } else if (k === 'copy-memo' || k === 'dl-memo') {
     const t = 'SAE 1.03 - Liste minimale des actions et commandes (' + DIST_NAME[Store.data.distro] + ')\n\n' + memoText(Store.data.distro, 'tarball');
     if (k === 'copy-memo') flash(b, (await copyText(t)) ? 'Copié ✓' : 'Copie impossible'); else { download('commandes-minimales-sae103.txt', t); flash(b, 'Téléchargé ✓'); }
