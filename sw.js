@@ -43,6 +43,7 @@ const FICHIERS = [
   'assets/maths.css',
   'assets/recherche-index.js',
   'assets/recherche.js',
+  'assets/sae103.css',
   'assets/sauvegarde.js',
   'assets/sql-moteur.js',
   'assets/sql.css',
@@ -101,7 +102,8 @@ const FICHIERS = [
   'sql/index.html',
   'sql/sql-requetes-simples.html',
   'systeme/index.html',
-  'systeme/intro-systeme.html'
+  'systeme/intro-systeme.html',
+  'systeme/sae-103.html'
 ];
 // </généré>
 const CACHE = 'mes-cours-' + VERSION;
