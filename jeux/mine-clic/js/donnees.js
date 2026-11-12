@@ -22,7 +22,13 @@
     quartz: { nom: 'Minerai de quartz', durete: 9, son: 'pierre' },
     glowstone: { nom: 'Pierre lumineuse', durete: 7, son: 'verre' },
     endstone: { nom: "Pierre de l'End", durete: 10, son: 'pierre' },
-    sculk: { nom: 'Bloc de sculk', durete: 12, son: 'terre' }
+    sculk: { nom: 'Bloc de sculk', durete: 12, son: 'terre' },
+    bedrock: { nom: 'Bedrock', durete: 26, son: 'lourd' },
+    debris: { nom: 'Débris antique', durete: 22, son: 'lourd' },
+    amethyste: { nom: "Amas d'améthyste", durete: 18, son: 'verre' },
+    meteorite: { nom: 'Météorite', durete: 28, son: 'lourd' },
+    solaire: { nom: 'Bloc de soleil', durete: 20, son: 'verre' },
+    vide: { nom: 'Pierre du vide', durete: 32, son: 'lourd' }
   };
 
   /* ---------- Dimensions : changent le décor et les blocs ----------
@@ -34,7 +40,10 @@
     { id: 'coeur', nom: 'Le cœur de la mine', blocs: ['diamant', 'emeraude', 'obsidienne'], fond: 'obsidienne', ciel: ['#0d0a16', '#241a38'], seuil: 1e7 },
     { id: 'nether', nom: 'Le Nether', blocs: ['netherrack', 'quartz', 'glowstone'], fond: 'netherrack', ciel: ['#3a0d0d', '#6e1f12'], machine: 'nether' },
     { id: 'end', nom: "L'End", blocs: ['endstone', 'obsidienne'], fond: 'endstone', ciel: ['#0b0614', '#22123a'], machine: 'end' },
-    { id: 'cite', nom: 'La cité antique', blocs: ['sculk', 'obsidienne', 'diamant'], fond: 'sculk', ciel: ['#03100f', '#0b2a2c'], machine: 'sculk' }
+    { id: 'cite', nom: 'La cité antique', blocs: ['sculk', 'obsidienne', 'diamant'], fond: 'sculk', ciel: ['#03100f', '#0b2a2c'], machine: 'sculk' },
+    { id: 'bedrock', nom: 'La roche-mère', blocs: ['bedrock', 'debris', 'amethyste'], fond: 'bedrock', ciel: ['#0a0a0c', '#1c1c22'], machine: 'bedrock' },
+    { id: 'cosmos', nom: 'Le cosmos', blocs: ['meteorite', 'solaire', 'amethyste'], fond: 'meteorite', ciel: ['#05060f', '#141a3a'], machine: 'soleil' },
+    { id: 'infini', nom: "L'infini", blocs: ['vide', 'solaire', 'diamant'], fond: 'vide', ciel: ['#000000', '#120828'], machine: 'boucle' }
   ];
 
   /* ---------- Machines (bâtiments) : produisent des blocs toutes seules ---------- */
@@ -52,7 +61,14 @@
     { id: 'oeuf', nom: 'Œuf de dragon', pl: 'œufs de dragon', prix: 1e12, cps: 1e7, premier: "ton premier œuf de dragon", desc: 'Les dragons éclos creusent des cavernes grandes comme des montagnes.' },
     { id: 'sculk', nom: 'Cœur de sculk', pl: 'cœurs de sculk', prix: 1.4e13, cps: 6.5e7, premier: "ton premier cœur de sculk", desc: "La cité antique s'éveille et dévore la roche dans un silence total." },
     { id: 'wither', nom: 'Wither apprivoisé', pl: 'withers apprivoisés', prix: 2.1e14, cps: 4.3e8, premier: "ton premier wither apprivoisé", desc: 'Ses trois têtes crachent des crânes qui pulvérisent des montagnes entières.' },
-    { id: 'monde', nom: 'Générateur de mondes', pl: 'générateurs de mondes', prix: 2.6e15, cps: 2.9e9, premier: "ton premier générateur de mondes", desc: 'Crée de nouveaux mondes remplis de minerai, prêts à être minés.' }
+    { id: 'monde', nom: 'Générateur de mondes', pl: 'générateurs de mondes', prix: 2.6e15, cps: 2.9e9, premier: "ton premier générateur de mondes", desc: 'Crée de nouveaux mondes remplis de minerai, prêts à être minés.' },
+    { id: 'commande', nom: 'Bloc de commande', pl: 'blocs de commande', prix: 3.6e16, cps: 1e10, premier: "ton premier bloc de commande", desc: 'Une seule commande /fill et des montagnes entières disparaissent.' },
+    { id: 'bedrock', nom: 'Briseur de bedrock', pl: 'briseurs de bedrock', prix: 5.1e17, cps: 3.5e10, premier: "ton premier briseur de bedrock", desc: 'Même la roche-mère finit par céder.' },
+    { id: 'ordi', nom: 'Super-ordinateur', pl: 'super-ordinateurs', prix: 7.1e18, cps: 1.2e11, premier: "ton premier super-ordinateur", desc: 'Des milliards de calculs par tick pour trouver le meilleur filon.' },
+    { id: 'soleil', nom: 'Soleil cubique', pl: 'soleils cubiques', prix: 1e20, cps: 4.3e11, premier: "ton premier soleil cubique", desc: 'Un astre carré qui fait fondre la roche à des années-lumière.' },
+    { id: 'univers', nom: "Forge d'univers", pl: "forges d'univers", prix: 1.4e21, cps: 1.5e12, premier: "ta première forge d'univers", desc: 'On y forge des univers entiers, déjà remplis de minerai.' },
+    { id: 'singularite', nom: 'Singularité', pl: 'singularités', prix: 2e22, cps: 5.3e12, premier: "ta première singularité", desc: 'Un point minuscule qui avale des galaxies de blocs.' },
+    { id: 'boucle', nom: 'Boucle temporelle', pl: 'boucles temporelles', prix: 2.8e23, cps: 1.8e13, premier: "ta première boucle temporelle", desc: 'Le même bloc miné encore et encore, à travers tous les temps.' }
   ];
 
   /* ---------- Améliorations ----------
@@ -67,30 +83,40 @@
     ['fer', 'Pioche en fer', 600, 400],
     ['or', 'Pioche en or', 12000, 6000],
     ['diamant', 'Pioche en diamant', 250000, 100000],
-    ['netherite', 'Pioche en netherite', 2.5e7, 1e7]
+    ['netherite', 'Pioche en netherite', 2.5e7, 1e7],
+    ['amethyste', "Pioche en améthyste", 2.5e12, 1e12],
+    ['cosmique', 'Pioche cosmique', 2.5e18, 1e18]
   ];
   PIOCHES.forEach(function (p) {
     amel({ id: 'pioche-' + p[0], nom: p[1], prix: p[2], effet: 'clic', icone: { s: 'pioche', m: p[0] },
       desc: 'Chaque clic rapporte 2 fois plus.', cond: { total: p[3] } });
   });
-  ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'].forEach(function (r, i) {
+  ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'].forEach(function (r, i) {
     amel({ id: 'efficacite-' + (i + 1), nom: 'Efficacité ' + r, prix: 5e4 * Math.pow(100, i), effet: 'pct', icone: { s: 'livre' },
-      desc: 'Chaque clic rapporte en plus 1 % de ta production par seconde.', cond: { clics: [100, 500, 1000, 2000, 4000, 7000, 10000][i], total: 2e4 * Math.pow(100, i) } });
+      desc: 'Chaque clic rapporte en plus 1 % de ta production par seconde.', cond: { clics: [100, 500, 1000, 2000, 4000, 7000, 10000, 14000, 20000, 30000][i], total: 2e4 * Math.pow(100, i) } });
   });
   ['I', 'II', 'III'].forEach(function (r, i) {
     amel({ id: 'fortune-' + (i + 1), nom: 'Fortune ' + r, prix: [1000, 2e5, 4e7][i], effet: 'fortune', icone: { s: 'gemme' },
       desc: 'Le bonus reçu quand un bloc casse est doublé.', cond: { casses: [5, 50, 250][i] } });
   });
   amel({ id: 'fortune-4', nom: 'Fortune IV', prix: 8e9, effet: 'fortune', icone: { s: 'gemme' }, desc: 'Le bonus reçu quand un bloc casse est doublé.', cond: { casses: 1000 } });
+  amel({ id: 'fortune-5', nom: 'Fortune V', prix: 4e13, effet: 'fortune', icone: { s: 'gemme' }, desc: 'Le bonus reçu quand un bloc casse est doublé.', cond: { casses: 2500 } });
+  amel({ id: 'fortune-6', nom: 'Fortune VI', prix: 6e17, effet: 'fortune', icone: { s: 'gemme' }, desc: 'Le bonus reçu quand un bloc casse est doublé.', cond: { casses: 6000 } });
+  amel({ id: 'combo-3', nom: 'Rythme infernal', prix: 5e12, effet: 'combo', icone: { s: 'horloge' }, desc: 'Chaque niveau de combo ajoute 5 % au clic.', cond: { comboMax: 50 } });
   amel({ id: 'combo-1', nom: 'Métronome', prix: 5e5, effet: 'combo', icone: { s: 'horloge' }, desc: 'Chaque niveau de combo ajoute 3 % au clic au lieu de 2 %.', cond: { comboMax: 20 } });
   amel({ id: 'combo-2', nom: 'Rythme du forgeron', prix: 5e8, effet: 'combo', icone: { s: 'horloge' }, desc: 'Chaque niveau de combo ajoute 4 % au clic.', cond: { comboMax: 40 } });
   amel({ id: 'brillance-1', nom: 'Loupe de mineur', prix: 2e6, effet: 'brillance', icone: { s: 'gemme', m: 'or' }, desc: 'Les blocs brillants donnent 20 fois le bonus au lieu de 10.', cond: { brillants: 3 } });
   amel({ id: 'brillance-2', nom: 'Toucher doré', prix: 2e10, effet: 'brillance', icone: { s: 'gemme', m: 'or' }, desc: 'Les blocs brillants donnent 40 fois le bonus.', cond: { brillants: 15 } });
+  amel({ id: 'brillance-3', nom: 'Éclat de météorite', prix: 2e14, effet: 'brillance', icone: { s: 'gemme', m: 'or' }, desc: 'Les blocs brillants donnent 80 fois le bonus.', cond: { brillants: 60 } });
+  amel({ id: 'recharge-2', nom: 'Circuit de redstone', prix: 4e15, effet: 'recharge', icone: { s: 'foreuse' }, desc: 'Les capacités se rechargent encore 25 % plus vite.', cond: { capacites: 20 } });
   amel({ id: 'recharge-1', nom: 'Redstone accélérée', prix: 1e7, effet: 'recharge', icone: { s: 'foreuse' }, desc: 'Les capacités se rechargent 25 % plus vite.', cond: { capacites: 5 } });
   amel({ id: 'epee-1', nom: 'Épée en diamant', prix: 5e7, effet: 'epee', icone: { s: 'epee', m: 'diamant' }, desc: 'Tes coups font 2 fois plus de dégâts aux boss.', cond: { boss: 2 } });
   amel({ id: 'epee-2', nom: 'Épée en netherite', prix: 5e11, effet: 'epee', icone: { s: 'epee', m: 'netherite' }, desc: 'Tes coups font encore 2 fois plus de dégâts aux boss.', cond: { boss: 8 } });
+  amel({ id: 'epee-3', nom: "Épée d'améthyste", prix: 5e15, effet: 'epee', icone: { s: 'epee', m: 'amethyste' }, desc: 'Tes coups font encore 2 fois plus de dégâts aux boss.', cond: { boss: 20 } });
+  amel({ id: 'epee-4', nom: "Lame du cosmos", prix: 5e20, effet: 'epee', icone: { s: 'epee', m: 'cosmique' }, desc: 'Tes coups font encore 2 fois plus de dégâts aux boss.', cond: { boss: 45 } });
   amel({ id: 'chance-1', nom: 'Chance de la mer I', prix: 7777, effet: 'chance', icone: { s: 'coffre' }, desc: 'Les coffres et les creepers apparaissent plus souvent.', cond: { coffres: 3 } });
   amel({ id: 'chance-2', nom: 'Chance de la mer II', prix: 7.77e6, effet: 'chance', icone: { s: 'coffre' }, desc: 'Les coffres et les creepers apparaissent encore plus souvent.', cond: { coffres: 10 } });
+  amel({ id: 'chance-3', nom: 'Chance de la mer III', prix: 7.77e12, effet: 'chance', icone: { s: 'coffre' }, desc: 'Les coffres et les creepers apparaissent encore plus souvent.', cond: { coffres: 60 } });
   amel({ id: 'duree-1', nom: 'Potion de longue durée', prix: 7.77e8, effet: 'duree', icone: { s: 'potion', m: 'violet' }, desc: 'Les effets des coffres durent 2 fois plus longtemps, et les coffres restent plus longtemps.', cond: { coffres: 25 } });
 
   // nourriture et potions : bonus pour toute la production
@@ -108,7 +134,12 @@
     ['souffle', 'Souffle du dragon', 5e14, 25, { s: 'potion', m: 'rose' }],
     ['steak', 'Steak grillé', 5e15, 25, { s: 'steak' }],
     ['citrouille', 'Tarte de la fête', 5e16, 30, { s: 'citrouille' }],
-    ['regeneration', 'Potion de régénération', 5e17, 30, { s: 'potion', m: 'rose' }]
+    ['regeneration', 'Potion de régénération', 5e17, 30, { s: 'potion', m: 'rose' }],
+    ['saut', 'Potion de saut', 5e18, 35, { s: 'potion', m: 'vert' }],
+    ['vision', 'Potion de vision nocturne', 5e19, 35, { s: 'potion', m: 'jaune' }],
+    ['resistance', 'Potion de résistance', 5e20, 40, { s: 'potion', m: 'orange' }],
+    ['chance', 'Potion de chance', 5e21, 40, { s: 'potion', m: 'cyan' }],
+    ['totem', "Totem d'immortalité", 5e22, 50, { s: 'totem' }]
   ].forEach(function (f) {
     amel({ id: 'mange-' + f[0], nom: f[1], prix: f[2], effet: 'global', val: f[3], icone: f[4],
       desc: 'Toute la production augmente de ' + f[3] + ' %.', cond: { total: f[2] / 5 } });
@@ -138,19 +169,20 @@
   [
     [1, 'Premier coup de pioche'], [1000, 'Un bel établi'], [1e5, "L'âge de pierre"], [1e6, 'Ça brille, là-dedans !'],
     [1e8, 'Toujours plus profond'], [1e10, 'Fièvre du diamant'], [1e12, 'Le cœur du monde'], [1e14, 'Au-delà de la roche-mère'],
-    [1e16, 'Mineur de légende'], [1e18, 'Le monde entier y est passé'], [1e21, 'Plus rien à miner ?']
+    [1e16, 'Mineur de légende'], [1e18, 'Le monde entier y est passé'], [1e21, 'Plus rien à miner ?'],
+    [1e24, 'Plus loin que les étoiles'], [1e30, 'Cosmos en poche'], [1e36, 'Hors du temps'], [1e45, 'Mineur éternel']
   ].forEach(function (t, i) {
     prog('total-' + i, t[1], 'Miner ' + (t[0] == 1 ? 'ton premier bloc' : '{' + t[0] + '} blocs au total') + '.', { s: 'pioche', m: ['bois', 'pierre', 'fer', 'or', 'diamant', 'netherite'][Math.min(5, Math.floor(i / 2))] },
       function (S) { return S.totalAll >= t[0]; });
   });
-  [[1, 'Ça tourne tout seul'], [100, 'Petite entreprise'], [1e4, 'Chantier à plein régime'], [1e6, 'Usine à blocs'], [1e8, 'Machine de redstone géante'], [1e10, "L'industrie de l'End"]]
+  [[1, 'Ça tourne tout seul'], [100, 'Petite entreprise'], [1e4, 'Chantier à plein régime'], [1e6, 'Usine à blocs'], [1e8, 'Machine de redstone géante'], [1e10, "L'industrie de l'End"], [1e13, 'Production galactique'], [1e16, 'Boucle sans fin'], [1e20, 'Au rythme des étoiles']]
     .forEach(function (t, i) {
       prog('cps-' + i, t[1], 'Produire {' + t[0] + '} bloc' + (t[0] > 1 ? 's' : '') + ' par seconde.', { s: 'foreuse' }, function (S, J) { return J.cpsBase >= t[0]; });
     });
-  [[100, 'Doigts agiles'], [1000, 'Tendinite du mineur'], [10000, 'Clic-clac infini']].forEach(function (t, i) {
+  [[100, 'Doigts agiles'], [1000, 'Tendinite du mineur'], [10000, 'Clic-clac infini'], [50000, 'Poignet de titane'], [250000, 'Clic éternel']].forEach(function (t, i) {
     prog('clics-' + i, t[1], 'Cliquer {' + t[0] + '} fois sur le bloc.', { s: 'pioche', m: 'fer' }, function (S) { return S.clics >= t[0]; });
   });
-  [[10, 'Casseur de blocs'], [100, 'Démolisseur'], [1000, 'Rien ne me résiste']].forEach(function (t, i) {
+  [[10, 'Casseur de blocs'], [100, 'Démolisseur'], [1000, 'Rien ne me résiste'], [10000, 'Tremblement de terre'], [100000, 'Érosion à grande vitesse']].forEach(function (t, i) {
     prog('casses-' + i, t[1], 'Casser {' + t[0] + '} blocs à la pioche.', { s: 'gemme' }, function (S) { return S.casses >= t[0]; });
   });
   var NOMS_MACHINES = {
@@ -167,7 +199,14 @@
     oeuf: ["L'œuf ou le dragon ?", 'Nid de dragons', 'Couveuse légendaire'],
     sculk: ['Chut…', 'Écho des profondeurs', 'La cité se réveille'],
     wither: ["Trois têtes valent mieux qu'une", 'Armée de withers', 'Fin du monde'],
-    monde: ['Créateur', 'Multivers', "Architecte de l'infini"]
+    monde: ['Créateur', 'Multivers', "Architecte de l'infini"],
+    commande: ['/give moi tout', 'Opérateur du serveur', 'Maître des commandes'],
+    bedrock: ['Casseur de roche-mère', 'Les fondations tremblent', 'Il ne reste que le vide'],
+    ordi: ['Premier programme', 'Salle des serveurs', 'Superordinateur'],
+    soleil: ['Lever de soleil', 'Système solaire', 'Constellation de soleils'],
+    univers: ['Forgeron cosmique', 'Atelier des mondes', 'Big Bang quotidien'],
+    singularite: ['Trou noir de poche', "Horizon des événements", 'Au bord de la singularité'],
+    boucle: ['Déjà vu', 'Éternel recommencement', 'Maître du temps']
   };
   MACHINES.forEach(function (m) {
     [1, 50, 100].forEach(function (n, i) {
@@ -214,6 +253,27 @@
   prog('collection-1', 'Apprenti géologue', 'Atteindre la maîtrise 1 sur un bloc de la collection.', { s: 'pierre-ic' }, function (S, J) { return J.maitrise >= 1; });
   prog('collection-tous', 'Géologue', 'Atteindre la maîtrise 1 sur tous les blocs de la collection.', { s: 'pierre-ic' }, function (S, J) { return J.blocsMaitrises >= Object.keys(BLOCS).length; });
   prog('collection-max', 'Maître géologue', 'Atteindre la maîtrise 3 sur tous les blocs de la collection.', { s: 'gemme' }, function (S, J) { return J.maitrise >= Object.keys(BLOCS).length * 3; });
+  prog('amel-200', 'Encyclopédie', 'Acheter 200 améliorations.', { s: 'livre' }, function (S) { return S.amels.length >= 200; });
+  prog('renaitre-25', 'Cycle éternel', 'Renaître 25 fois.', { s: 'etoile' }, function (S) { return S.renaissances >= 25; });
+  prog('renaitre-100', 'Roue du temps', 'Renaître 100 fois.', { s: 'etoile' }, function (S) { return S.renaissances >= 100; });
+  prog('temps-100', 'Colocataire de la mine', 'Jouer pendant 100 heures.', { s: 'horloge' }, function (S) { return S.tempsJeu >= 360000; });
+  prog('temps-500', 'Légende vivante', 'Jouer pendant 500 heures.', { s: 'horloge' }, function (S) { return S.tempsJeu >= 1800000; });
+  prog('etoiles-1000', 'Voie lactée', 'Posséder 1 000 étoiles du Nether.', { s: 'etoile' }, function (S) { return S.etoiles >= 1000; });
+  prog('etoiles-10000', "L'Univers observable", 'Posséder 10 000 étoiles du Nether.', { s: 'etoile' }, function (S) { return S.etoiles >= 10000; });
+  prog('etoiles-100000', 'Ciel sans fin', 'Posséder 100 000 étoiles du Nether.', { s: 'etoile' }, function (S) { return S.etoiles >= 100000; });
+  prog('eclat-1', 'Premier éclat', 'Acheter un éclat stellaire.', { s: 'etoile', m: 'fragment' }, function (S) { return S.eclats >= 1; });
+  prog('eclat-10', 'Poussière d\'étoile', 'Acheter 10 éclats stellaires.', { s: 'etoile', m: 'fragment' }, function (S) { return S.eclats >= 10; });
+  prog('eclat-50', 'Aurore stellaire', 'Acheter 50 éclats stellaires.', { s: 'etoile', m: 'fragment' }, function (S) { return S.eclats >= 50; });
+  prog('eclat-200', 'Soleil intérieur', 'Acheter 200 éclats stellaires.', { s: 'etoile', m: 'fragment' }, function (S) { return S.eclats >= 200; });
+  prog('brillant-100', "Mine d'or", 'Casser 100 blocs brillants.', { s: 'gemme', m: 'or' }, function (S) { return S.brillants >= 100; });
+  prog('combo-75', 'Doigts de fée', 'Atteindre un combo de 75.', { s: 'horloge' }, function (S) { return S.comboMax >= 75; });
+  prog('missions-200', 'Employé du siècle', 'Terminer 200 missions.', { s: 'parchemin' }, function (S) { return S.missionsFaites >= 200; });
+  prog('coffres-200', 'Roi des trésors', 'Ouvrir 200 coffres au trésor.', { s: 'coffre' }, function (S) { return S.coffres >= 200; });
+  prog('creeper-100', 'Chuchoteur de creepers', 'Désamorcer 100 creepers.', { s: 'creeper' }, function (S) { return S.creepers >= 100; });
+  prog('boss-bedrock', 'Brise-roche', 'Vaincre le Golem de bedrock.', { s: 'gbedrock' }, function (S) { return S.bossVaincus.indexOf('bedrock') >= 0; });
+  prog('boss-cosmos', 'Poussière de météorite', 'Vaincre le Colosse de météorite.', { s: 'colosse' }, function (S) { return S.bossVaincus.indexOf('cosmos') >= 0; });
+  prog('boss-infini', 'Le dernier mot', 'Vaincre le Dernier Ender.', { s: 'ender' }, function (S) { return S.bossVaincus.indexOf('infini') >= 0; });
+  prog('boss-50', 'Exterminateur', 'Vaincre 50 boss.', { s: 'dragon' }, function (S) { return S.bossTotal >= 50; });
   prog('curieux', 'Curieux', 'Progrès secret.', { s: 'livre' }, function (S) { return S.secrets.indexOf('titre') >= 0; }, true);
   prog('minuit', 'Mineur de minuit', 'Progrès secret.', { s: 'horloge' }, function (S) { return S.secrets.indexOf('minuit') >= 0; }, true);
   prog('nuit', 'Gardien de la nuit', 'Progrès secret.', { s: 'creeper' }, function (S) { return S.creepersNuit >= 1; }, true);
@@ -229,7 +289,10 @@
     coeur: { nom: 'Golem de diamant', icone: { s: 'golem', m: 'golem-diamant' }, pv: 85, couleurs: ['#2fd3c6', '#b0fff7', '#1a9a95'] },
     nether: { nom: 'Blaze ardent', icone: { s: 'blaze' }, pv: 100, couleurs: ['#f5d042', '#d9822b', '#f0b45a'] },
     end: { nom: "Dragon de l'End", icone: { s: 'dragon' }, pv: 130, couleurs: ['#1d1d1d', '#3a3a3a', '#d18cff'] },
-    cite: { nom: 'Le Warden', icone: { s: 'warden' }, pv: 160, couleurs: ['#0b3a3e', '#1f8a8f', '#c4fcff'] }
+    cite: { nom: 'Le Warden', icone: { s: 'warden' }, pv: 160, couleurs: ['#0b3a3e', '#1f8a8f', '#c4fcff'] },
+    bedrock: { nom: 'Golem de bedrock', icone: { s: 'gbedrock' }, pv: 190, couleurs: ['#1e1e1e', '#454545', '#2fd3c6'] },
+    cosmos: { nom: 'Colosse de météorite', icone: { s: 'colosse' }, pv: 230, couleurs: ['#3a3f4a', '#ff9a3c', '#ffcf6b'] },
+    infini: { nom: 'Le Dernier Ender', icone: { s: 'ender' }, pv: 280, couleurs: ['#05030a', '#b98ae6', '#ffffff'] }
   };
 
   /* ---------- Familiers : un seul accompagne le mineur, chacun donne un bonus ---------- */
@@ -241,7 +304,10 @@
     { id: 'perroquet', nom: 'Perroquet', desc: "Le combo te laisse plus de temps entre deux clics et monte jusqu'à 75.", aide: 'Atteindre un combo de 40', test: function (S) { return S.comboMax >= 40; } },
     { id: 'renard', nom: 'Renard', desc: 'Les missions rapportent 50 % de plus.', aide: 'Terminer 10 missions', test: function (S) { return S.missionsFaites >= 10; } },
     { id: 'allay', nom: 'Allay', desc: "Ramasse les coffres pour toi : ils s'ouvrent tout seuls au bout de 3 secondes.", aide: 'Ouvrir 25 coffres', test: function (S) { return S.coffres >= 25; } },
-    { id: 'dragonnet', nom: 'Bébé dragon', desc: 'Tes coups font 2 fois plus de dégâts aux boss.', aide: "Vaincre le dragon de l'End", test: function (S) { return S.bossVaincus.indexOf('end') >= 0; } }
+    { id: 'dragonnet', nom: 'Bébé dragon', desc: 'Tes coups font 2 fois plus de dégâts aux boss.', aide: "Vaincre le dragon de l'End", test: function (S) { return S.bossVaincus.indexOf('end') >= 0; } },
+    { id: 'panda', nom: 'Panda', desc: 'Les trésors des coffres et des creepers sont 3 fois plus gros.', aide: 'Ouvrir 100 coffres', test: function (S) { return S.coffres >= 100; } },
+    { id: 'tortue', nom: 'Tortue', desc: 'Les machines coûtent 10 % moins cher.', aide: 'Acheter 1 000 machines', test: function (S) { return S.achats >= 1000; } },
+    { id: 'phenix', nom: 'Phénix', desc: 'Toute la production augmente de 25 %.', aide: 'Vaincre le Golem de bedrock', test: function (S) { return S.bossVaincus.indexOf('bedrock') >= 0; } }
   ];
   FAMILIERS.forEach(function (f) { f.icone = { s: f.id }; });
 
@@ -271,26 +337,73 @@
     { id: 'grand-marchand', nom: 'Grand marchand', prix: 60, icone: { s: 'mineur' }, desc: 'Les machines coûtent encore 10 % moins cher.' },
     { id: 'constellation', nom: 'Constellation', prix: 100, icone: { s: 'etoile', m: 'fragment' }, desc: 'Chaque étoile du Nether ajoute 3 % de production au lieu de 2 %.' },
     { id: 'dragon', nom: 'Souffle du dragon', prix: 200, icone: { s: 'oeuf' }, desc: 'La frénésie multiplie la production par 10 au lieu de 7.' },
-    { id: 'forge1', nom: 'Forge céleste I', prix: 30, icone: { s: 'foreuse' }, desc: 'Toute la production ×1,5.' },
+    { id: 'forge1', nom: 'Forge céleste I', prix: 30, forge: 1.5, icone: { s: 'foreuse' }, desc: 'Toute la production ×1,5.' },
     { id: 'gant2', nom: 'Gant de netherite', prix: 35, icone: { s: 'golem', m: 'golem-diamant' }, desc: 'Tes clics rapportent encore 3 fois plus.' },
     { id: 'geologue', nom: 'Géologue céleste', prix: 45, icone: { s: 'pierre-ic' }, desc: 'Chaque niveau de maîtrise de la collection ajoute 2 % de production au lieu de 1 %.' },
     { id: 'depart2', nom: 'Sac de départ II', prix: 50, icone: { s: 'coffre' }, desc: 'Chaque nouvelle vie commence avec 50 pioches, 25 mineurs, 10 golems et 5 wagonnets.' },
     { id: 'primes', nom: 'Chasseur de primes', prix: 60, icone: { s: 'epee', m: 'netherite' }, desc: 'Les boss rapportent 3 fois plus de blocs.' },
-    { id: 'forge2', nom: 'Forge céleste II', prix: 80, icone: { s: 'foreuse' }, desc: 'Toute la production ×2.' },
+    { id: 'forge2', nom: 'Forge céleste II', prix: 80, forge: 2, icone: { s: 'foreuse' }, desc: 'Toute la production ×2.' },
     { id: 'soie2', nom: 'Toucher de soie II', prix: 120, icone: { s: 'gemme' }, desc: 'Le bonus quand un bloc casse est encore multiplié par 3.' },
     { id: 'fantome2', nom: 'Pioche fantôme II', prix: 150, icone: { s: 'pioche', m: 'netherite' }, desc: 'La pioche fantôme frappe 5 fois par seconde au lieu de 2.' },
     { id: 'gant3', nom: "Gant de l'End", prix: 200, icone: { s: 'golem', m: 'golem-diamant' }, desc: 'Tes clics rapportent encore 5 fois plus.' },
-    { id: 'forge3', nom: 'Forge céleste III', prix: 200, icone: { s: 'foreuse' }, desc: 'Toute la production ×3.' },
+    { id: 'forge3', nom: 'Forge céleste III', prix: 200, forge: 3, icone: { s: 'foreuse' }, desc: 'Toute la production ×3.' },
     { id: 'maitre-marchand', nom: 'Maître marchand', prix: 250, icone: { s: 'mineur' }, desc: 'Les machines coûtent encore 10 % moins cher.' },
     { id: 'bibliothecaire2', nom: 'Grande bibliothèque', prix: 250, icone: { s: 'livre' }, desc: 'Les améliorations coûtent encore 10 % moins cher.' },
     { id: 'constellation2', nom: 'Voie lactée', prix: 400, icone: { s: 'etoile', m: 'fragment' }, desc: 'Chaque étoile du Nether ajoute 5 % de production (au lieu de 2 ou 3 %).' },
-    { id: 'forge4', nom: 'Forge céleste IV', prix: 500, icone: { s: 'foreuse' }, desc: 'Toute la production ×5.' },
-    { id: 'forge5', nom: 'Forge céleste V', prix: 1000, icone: { s: 'foreuse' }, desc: 'Toute la production ×10.' }
+    { id: 'forge4', nom: 'Forge céleste IV', prix: 500, forge: 5, icone: { s: 'foreuse' }, desc: 'Toute la production ×5.' },
+    { id: 'forge5', nom: 'Forge céleste V', prix: 1000, forge: 10, icone: { s: 'foreuse' }, desc: 'Toute la production ×10.' },
+    { id: 'depart3', nom: 'Sac de départ III', prix: 385, icone: { s: 'coffre' }, desc: 'Chaque nouvelle vie commence avec 250 pioches, 150 mineurs, 75 golems, 40 wagonnets et 20 TNT.' },
+    { id: 'forge6', nom: 'Forge céleste VI', prix: 570, forge: 3, icone: { s: 'foreuse' }, desc: 'Toute la production ×3.' },
+    { id: 'sablier2', nom: 'Sablier éternel', prix: 660, icone: { s: 'sablier' }, desc: 'Les effets des coffres et des capacités durent encore 50 % plus longtemps.' },
+    { id: 'geologue2', nom: 'Géologue stellaire', prix: 740, icone: { s: 'pierre-ic' }, desc: 'Chaque niveau de maîtrise de la collection ajoute 3 % de production.' },
+    { id: 'constellation3', nom: 'Galaxie', prix: 850, icone: { s: 'etoile', m: 'fragment' }, desc: 'Chaque étoile du Nether ajoute 8 % de production.' },
+    { id: 'absence2', nom: 'Horloge éternelle', prix: 970, icone: { s: 'horloge' }, desc: "Pendant ton absence, les machines travaillent à pleine vitesse jusqu'à 7 jours." },
+    { id: 'marchand4', nom: "Marchand de l'infini", prix: 1100, icone: { s: 'mineur' }, desc: 'Les machines coûtent encore 10 % moins cher.' },
+    { id: 'bibliothecaire3', nom: 'Bibliothèque infinie', prix: 1100, icone: { s: 'livre' }, desc: 'Les améliorations coûtent encore 10 % moins cher.' },
+    { id: 'gant4', nom: 'Gant du Vide', prix: 1320, icone: { s: 'golem', m: 'golem-diamant' }, desc: 'Tes clics rapportent encore 10 fois plus.' },
+    { id: 'fantome3', nom: 'Pioche fantôme III', prix: 1490, icone: { s: 'pioche', m: 'cosmique' }, desc: 'La pioche fantôme frappe 10 fois par seconde.' }
   ];
   POUVOIRS.sort(function (x, y) { return x.prix - y.prix; });
 
   /* ---------- Paliers d'étoiles : à chaque palier atteint, toute la production est multipliée ---------- */
-  var JALONS = [[1, 1.1], [5, 1.25], [10, 1.5], [25, 2], [50, 3], [100, 5], [250, 10], [500, 25], [1000, 100]];
+  var JALONS = [[1, 1.1], [5, 1.25], [10, 1.5], [25, 2], [50, 3], [100, 5], [250, 2], [500, 2], [1000, 3]];
+  // …et ils ne s'arrêtent jamais : ensuite, un palier tous les ×2,5, ×2 puis ×2 étoiles (2 500, 5 000, 10 000, 25 000, 50 000, 100 000…)
+  var JALONS_SUITE = [[2.5, 2], [2, 1.6], [2, 1.6]];
+  // produit de tous les paliers atteints avec n étoiles
+  function multJalons(n) {
+    var x = 1, i;
+    for (i = 0; i < JALONS.length; i++) { if (n < JALONS[i][0]) return x; x *= JALONS[i][1]; }
+    var e = JALONS[JALONS.length - 1][0], k = 0;
+    for (;;) { var f = JALONS_SUITE[k % JALONS_SUITE.length]; e = Math.round(e * f[0]); if (!(n >= e)) return x; x *= f[1]; k++; }
+  }
+  // les nb prochains paliers au-delà de n étoiles : [[étoiles, multiplicateur], …]
+  function prochainsJalons(n, nb) {
+    var res = [], i;
+    for (i = 0; i < JALONS.length && res.length < nb; i++) if (JALONS[i][0] > n) res.push(JALONS[i]);
+    var e = JALONS[JALONS.length - 1][0], k = 0;
+    while (res.length < nb) { var f = JALONS_SUITE[k % JALONS_SUITE.length]; e = Math.round(e * f[0]); k++; if (e > n) res.push([e, f[1]]); }
+    return res;
+  }
+  /* Règles de la renaissance.
+     Étoiles : la 1re à 100 millions de blocs minés (au total), racine cubique jusqu'à 10 étoiles ; au-delà, chaque étoile
+     coûte de plus en plus cher (racine sixième), ce qui rend la suite de la partie bien plus longue.
+     Effet des étoiles : au-delà de ×100, il continue de croître sans jamais s'arrêter, mais plus doucement (puissance 0,5).
+     Éclats stellaires : une boutique sans fond, chaque éclat coûte plus cher que le précédent et multiplie l'effet des étoiles. */
+  var REGLES = {
+    seuilEtoile: 1e8, palier: 10, racine: 6.15, plafondEffet: 100, douceur: 0.5,
+    seuil: function (k) { return k <= 10 ? 1e8 * k * k * k : 1e8 * Math.pow(k, REGLES.racine) / Math.pow(10, REGLES.racine - 3); },
+    etoiles: function (total) {
+      if (!(total > 0)) return 0;
+      var r = REGLES.racine;
+      return Math.floor((total <= 1e11 ? Math.cbrt(total / 1e8) : Math.pow(total * Math.pow(10, r - 3) / 1e8, 1 / r)) + 1e-9);
+    },
+    prixEclat: function (n) { return Math.ceil(400 * Math.pow(1.15, n)); },
+    multEclat: function (n) { return Math.pow(1.06, n); },
+    // effet des étoiles : identique jusqu'à ×100, puis 100 × (x / 100)^0,5, sans plafond
+    doux: function (x) { return x <= 100 ? x : 100 * Math.pow(x / 100, 0.5); },
+    multJalons: multJalons, prochainsJalons: prochainsJalons
+  };
+
 
   /* ---------- Capacités : boutons à recharge sous le bloc ---------- */
   var CAPACITES = [
@@ -327,6 +440,8 @@
   var MATIERES = {
     bois: { x: '#9c6b30', X: '#c79a5a' }, pierre: { x: '#7a7a7a', X: '#adadad' }, fer: { x: '#c9c9c9', X: '#f4f4f4' },
     or: { x: '#e8b923', X: '#fff27a' }, diamant: { x: '#2fd3c6', X: '#b0fff7' }, netherite: { x: '#3d3438', X: '#776a6f' },
+    amethyste: { x: '#7a3fc4', X: '#d7b4ff' }, cosmique: { x: '#2a3a8f', X: '#8fb6ff' },
+    vert: { q: '#3fbf4a', Q: '#b8f5bd' }, jaune: { q: '#f5d042', Q: '#fff6b0' }, orange: { q: '#e8821a', Q: '#ffd199' }, cyan: { q: '#2fd3c6', Q: '#c4fcff' },
     rouge: { q: '#c62828', Q: '#ff8a80' }, bleu: { q: '#4f7cff', Q: '#b3c8ff' }, violet: { q: '#8a2be2', Q: '#d6a8ff' }, rose: { q: '#e055c0', Q: '#ffb3ec' },
     enchantee: { r: '#f5d042', R: '#fff6b0' }, fragment: { W: '#e2b8ff', G: '#9b4de0' }, 'golem-diamant': { g: '#2fd3c6', G: '#b0fff7', s: '#1a9a95' }
   };
@@ -381,7 +496,21 @@
     dragonnet: ['............', '.p........p.', '.pk......kp.', '..kkkkkkkk..', '.kKKKKKKKKk.', '.kKpKKKKpKk.', '.kKKKKKKKKk.', '..kKKKKKKk..', '..kKkKKkKk..', '...kkkkkk...', '............', '............'],
     epee: ['..........XX', '.........XxX', '........XxX.', '.......XxX..', '......XxX...', '.....XxX....', '.d..XxX.....', '..dXxX......', '..ddX.......', '.bdd........', 'bb..d.......', 'b...........'],
     'pierre-ic': ['gggggggggggg', 'gGggsggggGgg', 'ggggggGggggg', 'gsgggggggsgg', 'ggggGggggggg', 'ggsgggggGggg', 'gggggggsgggg', 'gGgggggggggs', 'gggggsgGgggg', 'gggGgggggggg', 'gsgggggggGgg', 'gggggggggggg'],
-    etoile: ['.....WW.....', '.....WW.....', '....WWWW....', 'WWWWWGGWWWWW', '.WWWGGGGWWW.', '..WWGGGGWW..', '...WWGGWW...', '..WWW..WWW..', '.WWW....WWW.', 'WW........WW', '............', '............']
+    etoile: ['.....WW.....', '.....WW.....', '....WWWW....', 'WWWWWGGWWWWW', '.WWWGGGGWWW.', '..WWGGGGWW..', '...WWGGWW...', '..WWW..WWW..', '.WWW....WWW.', 'WW........WW', '............', '............'],
+    commande: ['dddddddddddd', 'dmmmmmmmmmmd', 'dmMMMMMMMMmd', 'dmMkMMMMMMmd', 'dmMMkMMMMMmd', 'dmMMMkMMMMmd', 'dmMMkMMMMMmd', 'dmMkMMYYYMmd', 'dmMMMMMMMMmd', 'dmmmmmmmmmmd', 'dddddddddddd', '............'],
+    bedrock: ['kKkKKkKkKKkK', 'KkKkkKkKkkKk', 'kKKkKkKKkKKk', 'KkkKkKkkKkkK', 'kKkKcCcKkKkK', 'KkKcCCCcKkKk', 'kKkKcCcKkKKk', 'KkKkKcKkKkkK', 'kKKkKkKKkKKk', 'KkKkkKkKkkKk', 'kKkKKkKkKKkK', 'KkKkKkKkKkKk'],
+    ordi: ['GGGGGGGGGGGG', 'GkkkkkkkkkkG', 'GkrRrkkkkrkG', 'GkkkrkrRrrkG', 'GkrrrkrkkkkG', 'GkkkkkrkrrkG', 'GkrRrrrkrkkG', 'GkkkkkkkkkkG', 'GGGGGGGGGGGG', '....GGGG....', '..GGGGGGGG..', '..gggggggg..'],
+    soleil: ['.Y...YY...Y.', '..Y.YYYY.Y..', '...YMMMMY...', 'Y.YMMYYMMY.Y', '.YMMYWWYMMY.', 'YYMYWWWWYMYY', 'YYMYWWWWYMYY', '.YMMYWWYMMY.', 'Y.YMMYYMMY.Y', '...YMMMMY...', '..Y.YYYY.Y..', '.Y...YY...Y.'],
+    univers: ['oooooooooooo', 'oWoooooOOooo', 'oooOOOOPPPoo', 'ooOPPPPPPPPo', 'oOPPuuuuPPPo', 'oOPuUUWUuPPo', 'oPPuUWWUuPOo', 'oPPuuUUuuPOo', 'oPPPuuuuPPOo', 'ooPPPPPPPOoo', 'oooPPPOOOooo', 'oooooooWoooo'],
+    singularite: ['............', '...mmMMmm...', '..mMYYYYMm..', '.mMYooooYMm.', '.mYooookoYm.', 'mMYookkkoYMm', 'mMYookkkoYMm', '.mYooookoYm.', '.mMYooooYMm.', '..mMYYYYMm..', '...mmMMmm...', '............'],
+    boucle: ['............', '............', '..ccc..ccc..', '.cCCCccCCCc.', 'cCc.cCCc.cCc', 'cC..cWWc..Cc', 'cCc.cCCc.cCc', '.cCCCccCCCc.', '..ccc..ccc..', '............', '............', '............'],
+    gbedrock: ['..kkkkkkkk..', '.kKKKKKKKKk.', '.kKcCKKcCKk.', '.kKKKKKKKKk.', '.kKKkKKkKKk.', '..kKKKKKKk..', '.kkKKKKKKkk.', 'kKKkKKKKkKKk', 'kKKkKccKkKKk', 'kKKkKKKKkKKk', '.kk.kKKk.kk.', '.kk..kk..kk.'],
+    colosse: ['...kKKKKk...', '..kKgKKKKk..', '.kKKKKKgKKk.', 'kKrrKKKKrrKk', 'kKKKKmKKKKKk', 'kKgKKmYKKgKk', 'kKKKmYmKKKKk', 'kKKKKmKKKKgk', '.kKgKKKKKKk.', '.kKKKKgKKKk.', '..kkKKKKkk..', '...kkkkkk...'],
+    ender: ['...kkkkkk...', '..kKKKKKKk..', '..kPPkkPPk..', '..kKKKKKKk..', '...kkkkkk...', '..kKKKKKKk..', '.kKkKKKKkKk.', '.kK.kKKk.Kk.', '.kK.kKKk.Kk.', '.kK.kKKk.Kk.', '.kk.kKKk.kk.', '....kkkk....'],
+    panda: ['kk........kk', 'kkk......kkk', '.WWWWWWWWWW.', 'WWWWWWWWWWWW', 'WWkkWWWWkkWW', 'WWkWkWWkWkWW', 'WWWWWWWWWWWW', 'WWWWWkkWWWWW', 'WWWWkkkkWWWW', '.WWWWWWWWWW.', '..WWWWWWWW..', '............'],
+    tortue: ['....eeee....', '....ekke....', '....eeee....', '..EEEEEEEE..', '.EeeEeeEeeE.', 'EeeeEeeEeeeE', 'EEEEEEEEEEEE', 'EeeeEeeEeeeE', '.EeeEeeEeeE.', '..EEEEEEEE..', 'ee..e..e..ee', 'ee........ee'],
+    phenix: ['.....rr.....', '....rRRr....', '...rRYYRr...', '.r.rRYYRr.r.', 'rRrrRRRRrrRr', '.rRrRRRRrRr.', '..rRRYYRRr..', '...rRYYRr...', '....rRRr....', '...m.rr.m...', '..mM.mm.Mm..', '.mM......Mm.'],
+    totem: ['....YYYY....', '...YkYYkY...', '...YYYYYY...', '..eeYmmYee..', '.YeeYYYYeeY.', '.YYYYYYYYYY.', '..YYYmmYYY..', '...YYYYYY...', '....YYYY....', '....YeeY....', '....YYYY....', '............']
   };
   // couleur du cadre des améliorations de machine, palier par palier
   var COULEURS_PALIERS = ['#b87333', '#c0c0c0', '#f5c518', '#3fd8e0', '#b469ff', '#ff5252', '#4caf50', '#222222'];
@@ -398,6 +527,6 @@
   window.MC_DONNEES = {
     BLOCS: BLOCS, DIMENSIONS: DIMENSIONS, MACHINES: MACHINES, AMELIORATIONS: AMELIORATIONS, PROGRES: PROGRES,
     PALETTE: PALETTE, MATIERES: MATIERES, SPRITES: SPRITES, COULEURS_PALIERS: COULEURS_PALIERS, EFFETS: EFFETS, PALIERS: PALIERS,
-    POUVOIRS: POUVOIRS, JALONS: JALONS, CAPACITES: CAPACITES, MISSIONS: MISSIONS, BOSS: BOSS, FAMILIERS: FAMILIERS, MAITRISE: MAITRISE, PHRASES: PHRASES
+    POUVOIRS: POUVOIRS, JALONS: JALONS, REGLES: REGLES, CAPACITES: CAPACITES, MISSIONS: MISSIONS, BOSS: BOSS, FAMILIERS: FAMILIERS, MAITRISE: MAITRISE, PHRASES: PHRASES
   };
 })();

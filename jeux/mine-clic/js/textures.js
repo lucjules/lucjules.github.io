@@ -89,6 +89,16 @@
     quartz: function (r) { return { tout: minerai(r, bruit(r, NETHER), '#f2ede4', '#c9bfb1') }; },
     glowstone: function (r) { return { tout: taches(r, bruit(r, ['#b78a3c', '#dcb156', '#f2d272', '#8a5f2a']), ['#fff1a8', '#ffffff'], 14) }; },
     endstone: function (r) { return { tout: taches(r, bruit(r, ['#dbdea2', '#e6e8b1', '#cfd291', '#d5d89a']), ['#b8ba7a', '#c3c585'], 16) }; },
+    bedrock: function (r) { return { tout: taches(r, bruit(r, ['#2b2b2b', '#1e1e1e', '#3a3a3a', '#161616', '#454545']), ['#5a5a5a', '#0c0c0c'], 16) }; },
+    debris: function (r) { return { tout: minerai(r, bruit(r, ['#5a3a2e', '#4a2f26', '#6b4636', '#3d261f']), '#d8a27a', '#9a6a4a') }; },
+    amethyste: function (r) { return { tout: minerai(r, bruit(r, PIERRE), '#d7b4ff', '#7a3fc4') }; },
+    meteorite: function (r) { return { tout: taches(r, bruit(r, ['#3a3f4a', '#2e323b', '#454b57', '#272a33']), ['#ff9a3c', '#ffcf6b', '#6a7288'], 14) }; },
+    solaire: function (r) { return { tout: taches(r, bruit(r, ['#f5c518', '#ffd84a', '#ffb300', '#ffea7a']), ['#fff6b0', '#ff8f00', '#ffffff'], 14) }; },
+    vide: function (r) {
+      var g = bruit(r, ['#05030a', '#0a0614', '#0d0818', '#03020a']);
+      for (var i = 0; i < 12; i++) { var x = Math.floor(r() * 16), y = Math.floor(r() * 16); g[y][x] = r() < 0.5 ? '#ffffff' : '#b98ae6'; if (r() < 0.3) g[y][(x + 1) % 16] = '#5a3f8c'; }
+      return { tout: g };
+    },
     sculk: function (r) {
       var g = bruit(r, ['#0b2a2e', '#0d3438', '#08201f', '#0f3c40']);
       for (var i = 0; i < 9; i++) { var x = Math.floor(r() * 15), y = Math.floor(r() * 15); g[y][x] = '#2de0d9'; if (r() < 0.6) g[y][x + 1] = '#1a9a95'; if (r() < 0.4) g[y + 1][x] = '#1a9a95'; }
