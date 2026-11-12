@@ -48,7 +48,7 @@ function serveur() {
   await ouvrir();
   verifier('le jeu démarre', await ev(() => document.body.classList.contains('pret')));
   egal('partie neuve', await ev(() => [MC.etat().blocs, MC.etat().bloc, MC.etat().dim]), [0, 'herbe', 'surface']);
-  verifier('14 machines dans la boutique', (await page.$$('#machines .machine')).length == 14);
+  verifier('toutes les machines sont dans la boutique', (await page.$$('#machines .machine')).length == await ev(() => MC_DONNEES.MACHINES.length));
   verifier('le cube est dessiné', await ev(() => { const c = document.getElementById('cube'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n > 1000; }));
 
   console.log('Nombres');
@@ -106,7 +106,7 @@ function serveur() {
   console.log('Onglet Étoiles et boutique céleste');
   await page.click('#o-etoiles');
   const et = await ev(() => ({ titre: document.getElementById('et-nb').textContent, paliers: document.querySelectorAll('#et-paliers tr').length, pouvoirs: document.querySelectorAll('#pouvoirs .pouvoir').length, barre: document.getElementById('et-prochaine').textContent }));
-  verifier('l\'onglet Étoiles explique la renaissance', et.titre == '2 étoiles du Nether' && et.paliers >= 8 && et.pouvoirs == 31 && /Étoile n° 3/.test(et.barre), et);
+  verifier('l\'onglet Étoiles explique la renaissance', et.titre == '2 étoiles du Nether' && et.paliers >= 8 && et.pouvoirs == 1 + await ev(() => MC_DONNEES.POUVOIRS.length) && /Étoile n° 3/.test(et.barre), et);
   verifier('seuils : 1 étoile à 100 millions, 3 à 2,7 milliards', await ev(() => MC.seuil(1) == 1e8 && MC.seuil(3) == 2.7e9));
   await page.click('#pouvoirs .pouvoir:nth-child(2) button'); // Gant de golem (2 fragments)
   egal('acheter le Gant de golem avec 2 fragments', await ev(() => [MC.etat().pouvoirs, MC.etat().fragments]), [['gant'], 0]);
@@ -177,7 +177,7 @@ function serveur() {
   const col = await ev(() => { const S = MC.etat(); MC.choisirDim('surface'); S.bloc = 'terre'; S.coups = 0; S.collection.terre = 24; const m0 = MC.calc().maitrise; for (let i = 0; i < 4; i++) MC.frapper(400, 300); return { n: S.collection.terre, m: MC.calc().maitrise - m0 }; });
   verifier('collection : 25 terres cassées = maîtrise 1', col.n >= 25 && col.m == 1, col); // « minage éclair » d'un coffre peut casser à chaque coup
   await page.click('#o-progres');
-  egal('onglet Progrès : familiers et collection', await ev(() => [document.querySelectorAll('#familiers .pouvoir').length, document.querySelectorAll('#collection .carte-bloc').length]), [8, 17]);
+  egal('onglet Progrès : familiers et collection', await ev(() => [document.querySelectorAll('#familiers .pouvoir').length, document.querySelectorAll('#collection .carte-bloc').length]), [11, 23]);
   const nuit = await ev(() => { window.MC_PHASE = 0.8; MC.choisirDim('surface'); MC.majJourNuit(); const r = [MC.estNuit(), document.body.classList.contains('nuit')]; window.MC_PHASE = 0.2; MC.majJourNuit(); r.push(document.body.classList.contains('nuit')); window.MC_PHASE = null; return r; });
   egal('cycle jour et nuit à la surface', nuit, [true, true, false]);
   for (let i = 0; i < 10; i++) await page.click('.titre', { position: { x: 5, y: 5 } });
@@ -211,6 +211,68 @@ function serveur() {
   await ev(() => localStorage.setItem('mine-clic', '{pas du json'));
   await ouvrir();
   egal('sauvegarde illisible : nouvelle partie', await ev(() => MC.etat().totalAll), 0);
+
+  console.log('Étoiles sans fin, éclats stellaires, effet adouci');
+  await ev(() => MC.charger(null));
+  const inf = await ev(() => {
+    const R = MC_DONNEES.REGLES;
+    const reciproque = [1, 2, 9, 10, 11, 50, 100, 1000, 12345].every(k => R.etoiles(R.seuil(k) * (1 + 1e-4 / k)) == k && R.etoiles(R.seuil(k) * (1 - 1e-4 / k)) == k - 1);
+    return { reciproque, j: [R.multJalons(999), R.multJalons(1000), R.multJalons(2500), R.multJalons(1e6), R.multJalons(1e12)], suite: R.prochainsJalons(1000, 4).map(x => x[0]), raccord: R.seuil(10) == 1e11 && R.etoiles(1e11) == 10 && R.etoiles(0) == 0 };
+  });
+  verifier('étoiles : la courbe se raccorde à 10 et chaque seuil est exact', inf.reciproque && inf.raccord, inf);
+  verifier('paliers d\'étoiles : toujours croissants, jamais plafonnés', inf.j.every((x, i) => i == 0 || x > inf.j[i - 1]), inf.j);
+  proche('palier de 1 000 étoiles', inf.j[1] / inf.j[0], 3); proche('palier de 2 500 étoiles', inf.j[2] / inf.j[1], 2);
+  egal('paliers au-delà de 1 000 étoiles', inf.suite, [2500, 5000, 10000, 25000]);
+  const doux = await ev(() => { const R = MC_DONNEES.REGLES; return [R.doux(50), R.doux(100), R.doux(400), R.doux(1e6), R.doux(1e100) > R.doux(1e99)]; });
+  egal('effet adouci : identique jusqu\'à ×100, puis racine carrée, sans plafond', doux, [50, 100, 200, 10000, true]);
+  const gros = await ev(() => { const S = MC.etat(); S.etoiles = 1e7; MC.recalculer(); const a = { mult: MC.calc().mult, brut: MC.calc().multBrut }; S.etoiles = 1e9; MC.recalculer(); const b = { mult: MC.calc().mult }; S.etoiles = 0; MC.recalculer(); return { a: a.mult, ab: a.brut, b: b.mult, fini: isFinite(b.mult) }; });
+  verifier('des millions d\'étoiles : l\'effet grandit encore, sans déborder', gros.b > gros.a && gros.a < gros.ab && gros.fini, gros);
+  const ec = await ev(() => {
+    const S = MC.etat(); S.fragments = 5000; S.eclats = 0; MC.recalculer();
+    const m0 = MC.calc().multBrut, f0 = S.fragments, ok1 = MC.acheterEclat(1), un = [S.eclats, f0 - S.fragments, MC.calc().eclat], f1 = S.fragments, ok2 = MC.acheterEclat('max');
+    return { ok1, un, ok2, total: S.eclats, depense: f1 - S.fragments, reste: S.fragments, suivant: MC_DONNEES.REGLES.prixEclat(S.eclats), refus: !MC.acheterEclat(1) };
+  });
+  egal('un éclat stellaire : 400 fragments, effet des étoiles ×1,06', [ec.ok1, ec.un[0], ec.un[1]], [true, 1, 400]);
+  proche('éclat : ×1,06 sur l\'effet des étoiles', ec.un[2], 1.06, 1e-9);
+  verifier('« Max » achète tous les éclats abordables, pas un de plus', ec.ok2 && ec.total > 5 && ec.reste < ec.suivant && ec.refus, ec);
+  await page.click('#o-etoiles');
+  await ev(() => { MC.etat().fragments = 2000; });
+  await page.click('#o-boutique'); await page.click('#o-etoiles');
+  const carteEclat = await ev(() => { const b = document.querySelector('#pouvoirs .eclat .po-btn'); return { vu: !!b, actif: b && !b.disabled, lignes: document.querySelectorAll('#et-paliers tr').length, suite: !!document.querySelector('#et-paliers tr.suite') }; });
+  verifier('la carte « Éclat stellaire » et la suite infinie du tableau s\'affichent', carteEclat.vu && carteEclat.actif && carteEclat.suite && carteEclat.lignes >= 13, carteEclat);
+  await page.click('#pouvoirs .eclat .po-btn');
+  verifier('un clic sur la carte achète un éclat', await ev(() => MC.etat().eclats) == ec.total + 1);
+  await ev(() => { MC.etat().etoiles = 1e7; MC.recalculer(); });
+  await page.click('#o-boutique'); await page.click('#o-etoiles');
+  verifier('avec 10 millions d\'étoiles, le tableau montre encore les paliers à venir', await ev(() => { const l = [...document.querySelectorAll('#et-paliers tr:not(.suite)')], dernier = l[l.length - 1]; return /★/.test(dernier.textContent) && !dernier.classList.contains('ok'); }));
+  const grands = await ev(() => [MC.nombre(1e45), MC.nombre(5e63), MC.nombre(1e66)]);
+  egal('très grands nombres, jusqu\'au décilliard puis en puissances de 10', grands, ['1 septilliard', '5 décilliards', '1,00 × 10^66']);
+  console.log('Nouvelles dimensions, familiers, absence longue, ancienne sauvegarde');
+  const nd = await ev(() => {
+    MC.charger(null); const S = MC.etat(); S.totalAll = 1e9; S.machines.bedrock = 1; S.machines.soleil = 1; S.machines.boucle = 1; MC.avancer(0);
+    const r = { dims: S.dims.slice(), boutons: document.querySelectorAll('#dims .dim:not([disabled])').length, total: document.querySelectorAll('#dims .dim').length };
+    MC.choisirDim('infini'); const b = MC.lancerBoss(); r.boss = b && b.def.nom; r.bloc = S.bloc;
+    while (MC.boss()) MC.blesserBoss(10, 400, 300);
+    r.vaincu = S.bossVaincus.includes('infini'); return r;
+  });
+  egal('les dimensions de la fin se débloquent avec leur machine', [nd.dims.includes('bedrock'), nd.dims.includes('cosmos'), nd.dims.includes('infini'), nd.total], [true, true, true, 10]);
+  egal('et ont leur boss', [nd.boss, nd.vaincu, ['vide', 'solaire', 'diamant'].includes(nd.bloc)], ['Le Dernier Ender', true, true]);
+  const famNeufs = await ev(() => {
+    const S = MC.etat(); S.familiers = ['tortue', 'phenix', 'panda']; MC.choisirFamilier('loup'); S.familier = null; MC.recalculer();
+    const p0 = MC.prixMachine({ prix: 100 }, 0, 10), m0 = MC.calc().multBrut;
+    S.familier = 'tortue'; MC.recalculer(); const p1 = MC.prixMachine({ prix: 100 }, 0, 10);
+    S.familier = 'phenix'; MC.recalculer(); const m1 = MC.calc().multBrut;
+    S.familier = 'panda'; MC.recalculer(); const t = MC.calc().multTresor;
+    S.familier = null; MC.recalculer(); return { tortue: p1 / p0, phenix: m1 / m0, panda: t };
+  });
+  proche('tortue : machines −10 %', famNeufs.tortue, 0.9, 0.01); proche('phénix : production +25 %', famNeufs.phenix, 1.25, 1e-9); proche('panda : trésors ×3', famNeufs.panda, 3, 1e-9);
+  const absLongue = await ev(() => { const r = MC.charger({ machines: { mineur: 10 }, pouvoirs: ['absence', 'absence2'], derniere: Date.now() - 864000e3 }); return { maxi: r.maxi, plein: r.plein, rapport: MC.etat().blocs / (MC.calc().cpsBase * 604800) }; });
+  egal('horloge éternelle : absence comptée jusqu\'à 7 jours à pleine vitesse', [absLongue.maxi, absLongue.plein], [604800, true]); proche('et le gain correspond', absLongue.rapport, 1, 1e-3);
+  const mig = await ev(() => { const a = MC.charger({ v: 2, totalAll: 1e9, etoiles: 3, fragments: 3, derniere: Date.now() }).ancienne, b = MC.charger({ v: 3, totalAll: 1e9, derniere: Date.now() }).ancienne; return [a, b, MC.etat().v, MC.charger({ v: 2, totalAll: 1e9, etoiles: 3, fragments: 3 }) && [MC.etat().etoiles, MC.etat().fragments]]; });
+  egal('une sauvegarde d\'avant la mise à jour est reconnue et gardée intacte', mig, [true, false, 3, [3, 3]]);
+  await page.click('#o-progres');
+  verifier('aucun progrès n\'affiche d\'accolades (grands nombres)', await ev(() => [...document.querySelectorAll('#progres .trophee')].every(b => !/[{}]/.test(b.getAttribute('aria-label')))));
+  await ev(() => MC.charger(null));
 
   console.log('Écrans');
   await page.click('#o-progres');

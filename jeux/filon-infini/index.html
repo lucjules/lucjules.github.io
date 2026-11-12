@@ -1,0 +1,1669 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:dark}body{margin:0}[hidden]{display:none!important}</style></head><body>
+<title>Filon Infini</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Disposition : barre de ressources collante, mine à gauche (clic + générateurs), onglets de paliers à droite, schéma d'automatisation en bas. */
+:root{
+  color-scheme:dark;
+  --bg:#0c0e1d; --bg2:#12152b; --panel:#181c38; --panel2:#212648; --edge:#2c3363; --edge2:#3a4281;
+  --text:#f3f5ff; --mute:#a3abd8; --dim:#6b74a6;
+  --c0:#ffc93c; --c1:#4ade80; --c2:#38bdf8; --c3:#b57bff; --c4:#ff6b8f;
+  --bad:#ff6b6b; --good:#4ade80;
+  --font:'Fredoka','Trebuchet MS','Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --gutter-l:max(16px,env(safe-area-inset-left,0px));
+  --gutter-r:max(16px,env(safe-area-inset-right,0px));
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background-color:var(--bg); color:var(--text);
+  font-family:var(--font); font-weight:500; font-size:15px; line-height:1.35;
+  background-image:linear-gradient(rgba(255,255,255,.028) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.028) 1px,transparent 1px);
+  background-size:34px 34px;
+  -webkit-tap-highlight-color:transparent;
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg2);z-index:60}
+button{font:inherit;color:inherit}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:.01em}
+.wrap{padding-left:var(--gutter-l);padding-right:var(--gutter-r);max-width:1280px;margin:0 auto}
+
+/* ---------- en-tête ---------- */
+.head{padding-block:14px 10px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:22px;
+  background:linear-gradient(160deg,#ffe28a,var(--c0) 55%,#d99400);box-shadow:0 4px 0 #8a5a00}
+.brand h1{font-size:22px;line-height:1}
+.brand small{display:block;color:var(--mute);font-size:12px;font-weight:500}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;background:var(--bg2);border:2px solid var(--edge);border-radius:12px;padding:3px;gap:3px}
+.seg button{border:0;background:transparent;color:var(--mute);padding:5px 10px;border-radius:8px;cursor:pointer;font-weight:600;min-width:40px}
+.seg button[aria-pressed="true"]{background:var(--c0);color:#1b1500;box-shadow:0 2px 0 #8a5a00}
+.mini{border:2px solid var(--edge);background:var(--panel);color:var(--text);border-radius:12px;padding:6px 12px;cursor:pointer;font-weight:600;box-shadow:0 3px 0 rgba(0,0,0,.35)}
+.mini:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.35)}
+.mini.danger.armed{background:var(--bad);border-color:var(--bad);color:#2a0000}
+.savestate{font-size:12px;color:var(--dim);min-width:74px}
+
+/* ---------- barre de ressources ---------- */
+.resbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:color-mix(in srgb,var(--bg2) 94%,transparent);
+  border-block:2px solid var(--edge);backdrop-filter:blur(6px)}
+.res{display:flex;gap:10px;padding-block:8px;overflow-x:auto;scrollbar-width:none}
+.res::-webkit-scrollbar{display:none}
+.chip{--tc:var(--c0);flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:6px 14px 6px 8px;border-radius:14px;
+  background:color-mix(in srgb,var(--tc) 14%,var(--panel));border:2px solid color-mix(in srgb,var(--tc) 55%,var(--edge));
+  box-shadow:0 3px 0 color-mix(in srgb,var(--tc) 30%,#000)}
+.chip .ico{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:19px;background:var(--tc);box-shadow:inset 0 -3px 0 rgba(0,0,0,.2)}
+.chip b{display:block;font-size:17px;line-height:1.05;color:var(--text)}
+.chip small{display:block;font-size:11px;color:var(--mute);line-height:1.2}
+.chip .pend{color:var(--tc);font-weight:700}
+.chip.fresh{animation:pop .7s cubic-bezier(.2,1.6,.4,1) both}
+
+/* ---------- grille principale ---------- */
+.main{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;padding-block:16px 8px}
+@media(min-width:960px){.main{grid-template-columns:minmax(320px,430px) minmax(0,1fr);align-items:start}}
+.panel{background:var(--panel);border:2px solid var(--edge);border-radius:18px;box-shadow:0 5px 0 rgba(0,0,0,.32);padding:14px}
+.panel h2{font-size:17px}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+
+/* ---------- objectif ---------- */
+.goal .gl{display:flex;justify-content:space-between;gap:10px;align-items:baseline;color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+.goal .gt{font-size:17px;font-weight:600;margin:4px 0 8px}
+.bar{height:16px;border-radius:9px;background:var(--bg);border:2px solid var(--edge);overflow:hidden;position:relative}
+.bar i{display:block;height:100%;width:0;border-radius:7px;background:repeating-linear-gradient(-45deg,var(--tc,var(--c0)) 0 10px,color-mix(in srgb,var(--tc,var(--c0)) 78%,#fff) 10px 20px);transition:width .25s}
+.goal .gn{margin-top:6px;font-size:12px;color:var(--mute);display:flex;justify-content:space-between;gap:8px}
+.goal.done .gt{color:var(--good)}
+
+/* ---------- la mine ---------- */
+.oreBox{display:flex;flex-direction:column;align-items:center;gap:10px;position:relative;padding-block:18px}
+.ore{width:min(210px,64vw);aspect-ratio:1;border:0;border-radius:30px;cursor:pointer;position:relative;display:grid;place-items:center;font-size:88px;line-height:1;
+  background:
+    radial-gradient(circle at 27% 15%,rgba(255,255,255,.7) 0 5.5%,transparent 6.5%),
+    radial-gradient(circle at 73% 15%,rgba(255,255,255,.7) 0 5.5%,transparent 6.5%),
+    radial-gradient(circle at 30% 28%,#fff1b8,var(--c0) 48%,#e19a00);
+  box-shadow:0 11px 0 #8a5a00,0 22px 34px rgba(0,0,0,.5),inset 0 -12px 0 rgba(0,0,0,.14);
+  transition:transform .05s,box-shadow .05s;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.ore:active,.ore.hit{transform:translateY(8px);box-shadow:0 3px 0 #8a5a00,0 10px 18px rgba(0,0,0,.5),inset 0 -12px 0 rgba(0,0,0,.14)}
+.ore span{filter:drop-shadow(0 4px 0 rgba(0,0,0,.25));pointer-events:none}
+.oreinfo{text-align:center;color:var(--mute);font-size:13px}
+.oreinfo b{color:var(--c0);font-size:19px}
+.fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.fl{position:absolute;font-family:var(--mono);font-weight:700;color:var(--c0);text-shadow:0 2px 0 #4a3000,0 0 8px rgba(255,201,60,.5);font-size:18px;white-space:nowrap;
+  animation:floaty .9s ease-out forwards;transform:translate(-50%,-50%)}
+@keyframes floaty{to{transform:translate(-50%,-190%);opacity:0}}
+
+/* ---------- générateurs ---------- */
+.gens-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.gens-head .seg button{padding:4px 8px;min-width:34px;font-size:13px}
+#gens{display:flex;flex-direction:column;gap:10px}
+.gen{--tc:var(--c0);display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px;border-radius:14px;background:var(--panel2);border:2px solid var(--edge)}
+.gen.fresh{animation:pop .7s cubic-bezier(.2,1.6,.4,1) both;border-color:var(--c0);box-shadow:0 0 0 4px rgba(255,201,60,.22)}
+.gico{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;font-size:26px;background:linear-gradient(160deg,#323a78,#242a56);box-shadow:inset 0 -4px 0 rgba(0,0,0,.25)}
+.ginfo{min-width:0}
+.gname{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.gname b{font-size:16px}
+.gname .cnt{color:var(--c0);font-size:14px;font-weight:700}
+.gdesc{font-size:12px;color:var(--mute);line-height:1.25}
+.gprod{font-size:12px;color:var(--text)}
+.gprod em{font-style:normal;color:var(--dim)}
+.buy{--tc:var(--c0);border:0;border-radius:12px;padding:8px 12px;min-width:96px;cursor:pointer;display:flex;flex-direction:column;align-items:center;line-height:1.15;
+  background:var(--tc);color:#1b1500;font-weight:700;box-shadow:0 4px 0 color-mix(in srgb,var(--tc) 50%,#000);transition:transform .05s}
+.buy:active{transform:translateY(3px);box-shadow:0 1px 0 color-mix(in srgb,var(--tc) 50%,#000)}
+.buy .bq{font-size:11px;opacity:.75}
+.buy .bc{font-size:14px}
+.buy.off{background:#2b3160;color:var(--dim);box-shadow:0 4px 0 #181c3b;cursor:not-allowed}
+.buy.off:active{transform:none;box-shadow:0 4px 0 #181c3b}
+
+/* ---------- onglets ---------- */
+.side{min-width:0;display:flex;flex-direction:column;gap:12px}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:thin}
+.tab{--tc:var(--c0);flex:0 0 auto;border:2px solid var(--edge);background:var(--panel);color:var(--mute);border-radius:14px 14px 10px 10px;padding:8px 14px;cursor:pointer;font-weight:600;display:flex;gap:8px;align-items:center;
+  box-shadow:0 4px 0 rgba(0,0,0,.3);position:relative}
+.tab[aria-selected="true"]{background:var(--tc);color:#101018;border-color:var(--tc);box-shadow:0 4px 0 color-mix(in srgb,var(--tc) 50%,#000)}
+.tab .dot{position:absolute;top:-5px;right:-4px;width:14px;height:14px;border-radius:50%;background:var(--tc);border:2px solid var(--bg);display:none}
+.tab.has .dot{display:block;animation:pulse .7s ease-in-out infinite alternate}
+.tab.ready::after{content:"✦";position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--tc)}
+.tab.fresh{animation:pop .8s cubic-bezier(.2,1.6,.4,1) both}
+.tabbody{padding:14px;min-height:260px}
+.empty{padding:34px 18px;text-align:center;color:var(--mute)}
+.empty b{display:block;font-size:18px;color:var(--text);margin-bottom:6px}
+.empty .big{font-size:44px;display:block;margin-bottom:6px;filter:grayscale(.3)}
+
+/* ---------- améliorations de pièces ---------- */
+.uphead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+.uphead small{color:var(--mute)}
+.uplist{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.upg{--tc:var(--c0);display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;padding:8px 10px;border-radius:14px;border:2px solid var(--edge);
+  background:var(--panel2);cursor:pointer;box-shadow:0 4px 0 rgba(0,0,0,.3);min-width:0}
+.upg .uico{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;font-size:21px;background:linear-gradient(160deg,#323a78,#242a56)}
+.upg b{font-size:14px;display:block;line-height:1.15}
+.upg small{display:block;color:var(--mute);font-size:12px;line-height:1.25}
+.upg .need{color:#ffb86b}
+.upg .need.ok{color:var(--good)}
+.upg .ucost{font-size:13px;font-weight:700;color:var(--bad);white-space:nowrap}
+.upg.can{border-color:var(--c0);box-shadow:0 4px 0 #8a5a00,0 0 0 3px rgba(255,201,60,.18)}
+.upg.can .ucost{color:var(--good)}
+.upg:not(.can){cursor:not-allowed}
+.upg.fresh{animation:pop .7s cubic-bezier(.2,1.6,.4,1) both;border-color:var(--c0)}
+.lockedlist{margin-top:14px}
+.lockedlist summary{cursor:pointer;color:var(--mute);font-size:13px}
+.lockedlist ul{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
+.lockedlist li{font-size:12px;color:var(--dim);display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--edge);padding:3px 0}
+
+/* ---------- carte de prestige ---------- */
+.pcard{--tc:var(--c1);border-radius:16px;border:2px solid color-mix(in srgb,var(--tc) 65%,var(--edge));background:linear-gradient(180deg,color-mix(in srgb,var(--tc) 16%,var(--panel2)),var(--panel2));padding:14px;display:flex;flex-direction:column;gap:10px}
+.pc-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.pc-title{display:flex;align-items:center;gap:10px}
+.pc-title .ico{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:23px;background:var(--tc);box-shadow:inset 0 -4px 0 rgba(0,0,0,.2)}
+.pc-title h2{font-size:21px}
+.pc-title small{display:block;color:var(--mute);font-size:12px;font-weight:500}
+.pc-cur{text-align:right}
+.pc-cur b{font-size:26px;color:var(--tc);line-height:1}
+.pc-cur small{display:block;color:var(--mute);font-size:12px}
+.pc-formula{font-size:13px;color:var(--mute);background:rgba(0,0,0,.2);border-radius:10px;padding:8px 10px;line-height:1.5}
+.pc-formula .f2{display:block;color:var(--text);font-size:12.5px;margin-top:2px;word-break:break-word}
+.pc-sub{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--mute);margin-top:4px;flex-wrap:wrap}
+.pbtn{border:0;border-radius:14px;padding:11px 14px 12px;cursor:pointer;text-align:left;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;
+  background:var(--tc);color:#0d1017;box-shadow:0 5px 0 color-mix(in srgb,var(--tc) 50%,#000);transition:transform .05s}
+.pbtn:active{transform:translateY(4px);box-shadow:0 1px 0 color-mix(in srgb,var(--tc) 50%,#000)}
+.pbtn .pb-main{font-size:18px;font-weight:700}
+.pbtn .pb-gain{font-size:20px;font-weight:700;text-align:right}
+.pbtn .pb-f{grid-column:1/-1;font-size:11.5px;opacity:.85;word-break:break-word}
+.pbtn.off{background:#2b3160;color:var(--mute);box-shadow:0 5px 0 #181c3b;cursor:not-allowed}
+.pbtn.off:active{transform:none}
+.pbtn.ready{animation:glow 1s ease-in-out infinite alternate}
+.pc-note{font-size:12px;color:var(--dim)}
+
+/* ---------- automatisations ---------- */
+.autos{border:2px dashed color-mix(in srgb,var(--tc,var(--c1)) 50%,var(--edge));border-radius:14px;padding:10px 12px;margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.autos h3{font-size:14px;color:var(--mute)}
+.tog{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;font-size:14px;background:none;border:0;padding:2px 0;text-align:left}
+.tog .sw{flex:0 0 auto;width:42px;height:24px;border-radius:14px;background:#2b3160;position:relative;transition:background .15s;border:2px solid var(--edge)}
+.tog .sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#8b93c7;transition:transform .15s,background .15s}
+.tog.on .sw{background:color-mix(in srgb,var(--tc,var(--c1)) 70%,#000);border-color:var(--tc,var(--c1))}
+.tog.on .sw::after{transform:translateX(18px);background:#fff}
+.tog small{color:var(--dim);font-size:12px;margin-left:auto}
+.thr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:var(--mute)}
+.thr .st{display:inline-flex;align-items:center;gap:3px}
+.thr button{border:2px solid var(--edge);background:var(--panel);color:var(--text);border-radius:8px;width:30px;height:28px;cursor:pointer;font-weight:700;line-height:1}
+.thr button:active{transform:translateY(1px)}
+.thr b{min-width:54px;text-align:center;color:var(--tc,var(--c1));font-size:15px}
+
+/* ---------- arbre ---------- */
+.tree{--tc:var(--c1);position:relative;display:flex;flex-direction:column;gap:30px;padding:8px 0 4px;margin-top:14px}
+.tree svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:0}
+.trow{display:flex;justify-content:center;gap:14px;position:relative;z-index:1}
+.ln{fill:none;stroke:var(--edge2);stroke-width:3;stroke-dasharray:6 7;stroke-linecap:round}
+.ln.act{stroke:color-mix(in srgb,var(--tc) 70%,#fff);stroke-dasharray:none}
+.ln.own{stroke:var(--tc);stroke-dasharray:none;stroke-width:4}
+.node{--tc:var(--c1);position:relative;z-index:1;flex:1 1 0;min-width:0;max-width:240px;display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;
+  padding:10px 12px 11px;border-radius:14px;border:2px solid var(--edge);background:var(--panel2);cursor:pointer;box-shadow:0 4px 0 rgba(0,0,0,.35);transition:transform .05s}
+.node .nico{font-size:24px;line-height:1}
+.node .nname{font-size:14px;line-height:1.15;font-weight:600}
+.node .ndesc{font-size:12px;color:var(--mute);line-height:1.25}
+.node .ntag{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:2px 6px;border-radius:6px;background:rgba(255,255,255,.07);color:var(--tc)}
+.node .ncost{margin-top:auto;padding-top:4px;font-size:13px;font-weight:700;color:var(--bad)}
+.node.can{border-color:var(--tc);box-shadow:0 4px 0 color-mix(in srgb,var(--tc) 50%,#000),0 0 0 3px color-mix(in srgb,var(--tc) 28%,transparent)}
+.node.can .ncost{color:var(--good)}
+.node.can:active{transform:translateY(3px)}
+.node.lock{opacity:.5;cursor:not-allowed}
+.node.own{background:color-mix(in srgb,var(--tc) 20%,var(--panel2));border-color:var(--tc);cursor:default}
+.node.own .ncost{color:var(--tc)}
+.node.final{border-width:3px}
+.node.fresh{animation:pop .8s cubic-bezier(.2,1.6,.4,1) both;border-color:var(--tc)}
+.node.fresh::after,.upg.fresh::after,.gen.fresh::after{content:"NOUVEAU";position:absolute;top:-9px;right:8px;font-size:10px;font-weight:700;letter-spacing:.08em;background:var(--c0);color:#241a00;padding:2px 7px;border-radius:7px}
+.upg,.gen{position:relative}
+
+/* ---------- chaîne d'automatisation ---------- */
+.chainWrap h2{margin-bottom:4px}
+.chainWrap p{margin:0 0 10px;color:var(--mute);font-size:13px}
+.chain-scroll{overflow-x:auto;padding:12px 4px 10px;scrollbar-width:thin}
+.chain{display:flex;align-items:flex-start;gap:0;min-width:max-content}
+.cbox{--tc:var(--c0);width:190px;display:flex;flex-direction:column;gap:8px}
+.cnode{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:14px;background:var(--tc);color:#0d1017;font-weight:700;box-shadow:0 4px 0 color-mix(in srgb,var(--tc) 50%,#000)}
+.cnode span:first-child{font-size:22px}
+.cchips{display:flex;flex-direction:column;gap:5px}
+.cchips small{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.07em}
+.cchip{display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:10px;font-size:12.5px;border:2px dashed var(--edge);color:var(--dim);background:transparent;text-align:left;cursor:default;line-height:1.2}
+.cchip.own{border-style:solid;border-color:var(--tc);color:var(--text);background:color-mix(in srgb,var(--tc) 22%,transparent);box-shadow:0 0 12px color-mix(in srgb,var(--tc) 35%,transparent)}
+.cchip.own.off{box-shadow:none;border-color:var(--edge);color:var(--dim);background:transparent;text-decoration:line-through}
+.cchip.tg{cursor:pointer}
+.carrow{width:58px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;height:44px;color:var(--dim);font-size:26px;font-weight:700}
+.carrow.lit{color:var(--c0);text-shadow:0 0 12px currentColor}
+.chain-none{color:var(--dim);font-size:13px;padding:4px 2px}
+
+/* ---------- Roblox ---------- */
+details.lua{margin-top:16px}
+details.lua>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:12px;font-size:18px;font-weight:600}
+details.lua>summary::-webkit-details-marker{display:none}
+details.lua>summary::before{content:"▸";display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--c3);color:#12081f;transition:transform .15s}
+details.lua[open]>summary::before{transform:rotate(90deg)}
+.lua-body{margin-top:14px;display:flex;flex-direction:column;gap:14px;max-width:880px}
+.lua-body p,.lua-body li{color:var(--mute);font-size:14px;line-height:1.5;margin:0}
+.lua-body ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.lua-body h3{font-size:16px;color:var(--text)}
+.lua-body code.i{font-family:var(--mono);font-size:12.5px;background:rgba(255,255,255,.08);padding:1px 5px;border-radius:5px;color:var(--text)}
+pre.code{margin:0;background:#0a0c18;border:2px solid var(--edge);border-radius:14px;padding:12px 14px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.55;tab-size:4;color:#d6dbff}
+pre.code .c{color:#6b76a8;font-style:italic}
+pre.code .s{color:#8be9a8}
+pre.code .k{color:#ff8ab0}
+pre.code .n{color:#ffcf6b}
+.cap{font-size:12px;color:var(--c3);font-weight:600;text-transform:uppercase;letter-spacing:.07em}
+
+footer{padding-block:20px 40px;color:var(--dim);font-size:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+/* ---------- notifications ---------- */
+#toasts{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top,0px) + 70px);z-index:80;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;padding-inline:var(--gutter-l) var(--gutter-r)}
+.toast{--tc:var(--c0);pointer-events:none;display:flex;align-items:center;gap:10px;max-width:min(420px,100%);padding:9px 16px 10px;border-radius:14px;background:var(--panel2);border:2px solid var(--tc);
+  box-shadow:0 6px 0 rgba(0,0,0,.4),0 0 24px color-mix(in srgb,var(--tc) 35%,transparent);animation:toastin .35s cubic-bezier(.2,1.5,.4,1) both,toastout .35s ease-in 3.2s forwards}
+.toast .ti{font-size:22px}
+.toast b{display:block;font-size:15px;line-height:1.15}
+.toast small{display:block;color:var(--mute);font-size:12px}
+@keyframes toastin{from{transform:translateY(-14px) scale(.8);opacity:0}to{transform:none;opacity:1}}
+@keyframes toastout{to{transform:translateY(-10px);opacity:0}}
+
+/* ---------- victoire ---------- */
+.win{position:fixed;inset:0;z-index:90;background:rgba(6,7,16,.86);display:grid;place-items:center;padding:20px}
+.win .card{max-width:480px;width:100%;text-align:center;padding:28px 22px;border-radius:24px;background:var(--panel);border:3px solid var(--c4);box-shadow:0 8px 0 rgba(0,0,0,.4),0 0 60px rgba(255,107,143,.35)}
+.win .big{font-size:64px;line-height:1}
+.win h2{font-size:30px;margin:8px 0 6px;color:var(--c4)}
+.win p{color:var(--mute);margin:0 0 14px}
+.win .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0 18px;text-align:left}
+.win .stats div{background:var(--bg2);border-radius:12px;padding:8px 12px;font-size:12px;color:var(--mute)}
+.win .stats b{display:block;font-size:16px;color:var(--text)}
+.win .mini{background:var(--c4);color:#2a0010;border-color:var(--c4);font-size:16px;padding:10px 22px}
+
+@keyframes pop{0%{transform:scale(.55);opacity:0}60%{transform:scale(1.07);opacity:1}100%{transform:scale(1)}}
+@keyframes pulse{from{transform:scale(1)}to{transform:scale(1.12)}}
+@keyframes glow{from{box-shadow:0 5px 0 color-mix(in srgb,var(--tc) 50%,#000),0 0 0 0 color-mix(in srgb,var(--tc) 50%,transparent)}to{box-shadow:0 5px 0 color-mix(in srgb,var(--tc) 50%,#000),0 0 0 8px color-mix(in srgb,var(--tc) 0%,transparent)}}
+:focus-visible{outline:3px solid #fff;outline-offset:2px}
+@media(max-width:560px){
+  body{font-size:14px}
+  .head{padding-block:10px 8px}
+  .brand h1{font-size:19px}
+  .panel{padding:12px}
+  .gen{grid-template-columns:42px minmax(0,1fr) auto;gap:8px}
+  .gico{width:42px;height:42px;font-size:22px}
+  .buy{min-width:84px;padding:7px 9px}
+  .trow{gap:10px}
+  .tree{gap:26px}
+  .uplist{grid-template-columns:1fr}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition:none!important}
+}
+
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">⛏️</span>
+      <div><h1>Filon Infini</h1><small>Mine, renais, monte, transcende, deviens divin.</small></div>
+    </div>
+    <div class="tools">
+      <span class="savestate mono" id="savestate" aria-live="polite"></span>
+      <div class="seg" id="speed" role="group" aria-label="Vitesse du jeu">
+        <button data-act="speed" data-v="1" aria-pressed="true">×1</button>
+        <button data-act="speed" data-v="10" aria-pressed="false">×10</button>
+        <button data-act="speed" data-v="100" aria-pressed="false">×100</button>
+      </div>
+      <button class="mini" data-act="save" title="Sauvegarder maintenant">Sauver</button>
+      <button class="mini danger" id="wipe" data-act="wipe">Tout effacer</button>
+    </div>
+  </header>
+</div>
+
+<div class="resbar" role="status" aria-label="Ressources">
+  <div class="wrap"><div class="res" id="res"></div></div>
+</div>
+
+<div class="wrap">
+  <div class="win-banner" id="endbanner" hidden style="margin-top:14px;padding:10px 14px;border-radius:14px;border:2px solid var(--c4);background:rgba(255,107,143,.12);color:var(--text)">
+    <b style="color:var(--c4)">Apothéose accomplie.</b> Tu as terminé le jeu. Tu peux continuer à jouer librement.
+  </div>
+
+  <main class="main">
+    <section class="col" aria-label="La mine">
+      <div class="panel goal" id="goal">
+        <div class="gl"><span>Objectif</span><span></span></div>
+        <div class="gt">…</div>
+        <div class="bar"><i></i></div>
+        <div class="gn mono"><span></span><span></span></div>
+      </div>
+
+      <div class="panel oreBox">
+        <button class="ore" id="ore" data-act="click" aria-label="Miner : gagne des pièces"><span>⛏️</span></button>
+        <div class="oreinfo">+<b class="mono" id="clickval">1</b> pièce par clic</div>
+        <div class="fx" id="fx"></div>
+      </div>
+
+      <div class="panel">
+        <div class="gens-head">
+          <h2>Générateurs</h2>
+          <div class="seg" id="buymode" role="group" aria-label="Quantité achetée">
+            <button data-act="mode" data-v="1" aria-pressed="true">×1</button>
+            <button data-act="mode" data-v="10" aria-pressed="false">×10</button>
+            <button data-act="mode" data-v="100" aria-pressed="false">×100</button>
+            <button data-act="mode" data-v="max" aria-pressed="false">Max</button>
+          </div>
+        </div>
+        <div id="gens"></div>
+      </div>
+    </section>
+
+    <section class="side" id="side" aria-label="Paliers">
+      <div class="tabs" id="tabs" role="tablist"></div>
+      <div class="panel tabbody" id="tabbody"></div>
+    </section>
+  </main>
+
+  <section class="panel chainWrap" aria-label="Chaîne d’automatisation">
+    <h2>Chaîne d’automatisation</h2>
+    <p>Chaque palier automatise celui d’en dessous. Une pastille s’allume quand tu la débloques ; touche-la pour la couper ou la relancer.</p>
+    <div class="chain-scroll"><div class="chain" id="chain"></div></div>
+    <div class="chain-none" id="chainnone">Aucune automatisation débloquée pour l’instant.</div>
+  </section>
+
+  <details class="panel lua" id="lua">
+    <summary>Comment le coder sur Roblox</summary>
+    <div class="lua-body">
+      <p>Ce jeu est un bon modèle de <em>simulator</em> Roblox. La règle d’or : <b>le serveur décide de tout</b>. Le client affiche et demande, il ne calcule jamais un achat ni un reset. Voici l’architecture en 4 scripts.</p>
+      <ul>
+        <li><b>ModuleScript de config</b> dans <code class="i">ServerStorage</code> : les paliers et tous les nœuds (<code class="i">Id</code>, <code class="i">Cost</code>, <code class="i">Req</code>, <code class="i">Effect</code>). Les clients ne peuvent pas le lire.</li>
+        <li><b>Script serveur</b> : profil de chaque joueur, achat vérifié via un <code class="i">RemoteEvent</code>, découverte des nœuds.</li>
+        <li><b>Prestige</b> : gain en racine carrée, reset, et logique « garder » en chaîne.</li>
+        <li><b>LocalScript</b> : crée une carte uniquement pour les nœuds que le serveur lui annonce.</li>
+      </ul>
+      <div><div class="cap">1 · Configuration (ModuleScript)</div><pre class="code"><code><span class="c">-- ServerStorage/GameConfig  (ModuleScript)</span>
+<span class="c">-- Dans ServerStorage : les clients ne peuvent PAS lire ce module,</span>
+<span class="c">-- donc ils ne connaissent jamais les nœuds qu'ils n'ont pas découverts.</span>
+<span class="k">local</span> Config = {}
+
+Config.GrowthRate = <span class="n">1.15</span> <span class="c">-- coût ×1.15 à chaque achat d'un générateur</span>
+
+<span class="c">-- Paliers de prestige (0 = pièces)</span>
+Config.Tiers = {
+	[<span class="n">1</span>] = { Name = <span class="s">"Renaissance"</span>,   Currency = <span class="s">"RP"</span>, Threshold = <span class="n">1e9</span>,  BaseMult = <span class="n">3</span>, RevealAt = <span class="n">0.5</span> },
+	[<span class="n">2</span>] = { Name = <span class="s">"Ascension"</span>,     Currency = <span class="s">"AP"</span>, Threshold = <span class="n">3000</span>, BaseMult = <span class="n">3</span>, RevealAt = <span class="n">0.5</span> },
+	[<span class="n">3</span>] = { Name = <span class="s">"Transcendance"</span>, Currency = <span class="s">"TP"</span>, Threshold = <span class="n">120</span>,  BaseMult = <span class="n">3</span>, RevealAt = <span class="n">0.5</span> },
+	[<span class="n">4</span>] = { Name = <span class="s">"Divinité"</span>,      Currency = <span class="s">"DP"</span>, Threshold = <span class="n">600</span>,  BaseMult = <span class="n">3</span>, RevealAt = <span class="n">0.5</span> },
+}
+
+<span class="c">-- Le nœud "Garder l'arbre du palier inférieur" de chaque palier</span>
+Config.KeepNode = { [<span class="n">1</span>] = <span class="s">"R_Keep"</span>, [<span class="n">2</span>] = <span class="s">"A_Keep"</span>, [<span class="n">3</span>] = <span class="s">"T_Keep"</span>, [<span class="n">4</span>] = <span class="s">"D_Keep"</span> }
+
+<span class="c">-- Un nœud = Id, Tier (monnaie utilisée), Cost, Req (prérequis), Effect</span>
+Config.Nodes = {
+	{ Id = <span class="s">"R_Gold"</span>,    Tier = <span class="n">1</span>, Name = <span class="s">"Pioche dorée"</span>,      Cost = <span class="n">1</span>,  Req = {},             Effect = { Type = <span class="s">"CoinMult"</span>, Value = <span class="n">3</span> } },
+	{ Id = <span class="s">"R_Click"</span>,   Tier = <span class="n">1</span>, Name = <span class="s">"Apprentis"</span>,         Cost = <span class="n">5</span>,  Req = { <span class="s">"R_Gold"</span> },   Effect = { Type = <span class="s">"AutoClick"</span>, PerSecond = <span class="n">8</span> } },
+	{ Id = <span class="s">"R_Auto"</span>,    Tier = <span class="n">1</span>, Name = <span class="s">"Contremaître"</span>,      Cost = <span class="n">12</span>, Req = { <span class="s">"R_Click"</span> },  Effect = { Type = <span class="s">"AutoBuyGenerators"</span> } },
+	{ Id = <span class="s">"R_Keep"</span>,    Tier = <span class="n">1</span>, Name = <span class="s">"Coffre de la mine"</span>, Cost = <span class="n">60</span>, Req = { <span class="s">"R_Auto"</span> },   Effect = { Type = <span class="s">"KeepLower"</span> } },
+
+	{ Id = <span class="s">"A_Keep"</span>,    Tier = <span class="n">2</span>, Name = <span class="s">"Mémoire des cimes"</span>, Cost = <span class="n">2</span>,  Req = {},             Effect = { Type = <span class="s">"KeepLower"</span> } },
+	{ Id = <span class="s">"A_Auto"</span>,    Tier = <span class="n">2</span>, Name = <span class="s">"Ascenseur auto"</span>,    Cost = <span class="n">5</span>,  Req = { <span class="s">"A_Keep"</span> },   Effect = { Type = <span class="s">"AutoPrestige"</span> } },
+	{ Id = <span class="s">"A_Passive"</span>, Tier = <span class="n">2</span>, Name = <span class="s">"Source céleste"</span>,    Cost = <span class="n">12</span>, Req = { <span class="s">"A_Auto"</span> },   Effect = { Type = <span class="s">"PassiveLower"</span>, Rate = <span class="n">0.10</span> } },
+	{ Id = <span class="s">"A_Tree"</span>,    Tier = <span class="n">2</span>, Name = <span class="s">"Maître des arbres"</span>, Cost = <span class="n">20</span>, Req = { <span class="s">"A_Passive"</span> },Effect = { Type = <span class="s">"AutoBuyLowerTree"</span> } },
+	<span class="c">-- ... le jeu complet compte une quarantaine de nœuds, jusqu'à « D_End » (Apothéose)</span>
+}
+
+Config.NodeById = {}
+<span class="k">for</span> _, node <span class="k">in</span> ipairs(Config.Nodes) <span class="k">do</span>
+	Config.NodeById[node.Id] = node
+<span class="k">end</span>
+
+<span class="k">return</span> Config</code></pre></div>
+      <div><div class="cap">2 · Achat vérifié côté serveur (RemoteEvent)</div><pre class="code"><code><span class="c">-- ServerScriptService/GameServer  (Script)</span>
+<span class="c">-- Le serveur est la seule source de vérité : le client DEMANDE, le serveur DÉCIDE.</span>
+<span class="k">local</span> Players = game:GetService(<span class="s">"Players"</span>)
+<span class="k">local</span> ReplicatedStorage = game:GetService(<span class="s">"ReplicatedStorage"</span>)
+<span class="k">local</span> ServerStorage = game:GetService(<span class="s">"ServerStorage"</span>)
+
+<span class="k">local</span> Config = require(ServerStorage.GameConfig)
+
+<span class="k">local</span> Remotes = ReplicatedStorage:WaitForChild(<span class="s">"Remotes"</span>)
+<span class="k">local</span> BuyNode = Remotes:WaitForChild(<span class="s">"BuyNode"</span>)               <span class="c">-- RemoteEvent client -&gt; serveur</span>
+<span class="k">local</span> NodeDiscovered = Remotes:WaitForChild(<span class="s">"NodeDiscovered"</span>) <span class="c">-- RemoteEvent serveur -&gt; client</span>
+
+<span class="k">local</span> Profiles = {} <span class="c">-- [Player] = profil (à sauvegarder avec DataStore / ProfileService)</span>
+
+<span class="k">local</span> <span class="k">function</span> newProfile()
+	<span class="k">return</span> {
+		Currency = { [<span class="n">0</span>] = <span class="n">0</span>, [<span class="n">1</span>] = <span class="n">0</span>, [<span class="n">2</span>] = <span class="n">0</span>, [<span class="n">3</span>] = <span class="n">0</span>, [<span class="n">4</span>] = <span class="n">0</span> },
+		Earned = { [<span class="n">0</span>] = <span class="n">0</span>, [<span class="n">1</span>] = <span class="n">0</span>, [<span class="n">2</span>] = <span class="n">0</span>, [<span class="n">3</span>] = <span class="n">0</span>, [<span class="n">4</span>] = <span class="n">0</span> }, <span class="c">-- gagné pendant CE run</span>
+		Owned = {},      <span class="c">-- [nodeId] = true</span>
+		Discovered = {}, <span class="c">-- [nodeId] = true, reste vrai même après un reset</span>
+		TierSeen = {},   <span class="c">-- [tier] = true</span>
+	}
+<span class="k">end</span>
+
+<span class="k">local</span> <span class="k">function</span> reqsOwned(profile, node)
+	<span class="k">for</span> _, reqId <span class="k">in</span> ipairs(node.Req) <span class="k">do</span>
+		<span class="k">if</span> <span class="k">not</span> profile.Owned[reqId] <span class="k">then</span>
+			<span class="k">return</span> <span class="k">false</span>
+		<span class="k">end</span>
+	<span class="k">end</span>
+	<span class="k">return</span> <span class="k">true</span>
+<span class="k">end</span>
+
+<span class="c">-- Un palier apparaît quand on atteint 50 % de son coût, la première fois</span>
+<span class="k">local</span> <span class="k">function</span> tierSeen(profile, tier)
+	<span class="k">if</span> profile.TierSeen[tier] <span class="k">then</span>
+		<span class="k">return</span> <span class="k">true</span>
+	<span class="k">end</span>
+	<span class="k">local</span> cfg = Config.Tiers[tier]
+	<span class="k">if</span> profile.Earned[tier - <span class="n">1</span>] &gt;= cfg.Threshold * cfg.RevealAt <span class="k">then</span>
+		profile.TierSeen[tier] = <span class="k">true</span>
+		<span class="k">return</span> <span class="k">true</span>
+	<span class="k">end</span>
+	<span class="k">return</span> <span class="k">false</span>
+<span class="k">end</span>
+
+<span class="c">-- Révèle les nœuds dont TOUS les prérequis sont possédés.</span>
+<span class="c">-- On n'envoie au client que ces nœuds-la, jamais le reste.</span>
+<span class="k">local</span> <span class="k">function</span> refreshDiscovery(player, profile)
+	<span class="k">for</span> _, node <span class="k">in</span> ipairs(Config.Nodes) <span class="k">do</span>
+		<span class="k">if</span> <span class="k">not</span> profile.Discovered[node.Id] <span class="k">and</span> tierSeen(profile, node.Tier) <span class="k">and</span> reqsOwned(profile, node) <span class="k">then</span>
+			profile.Discovered[node.Id] = <span class="k">true</span>
+			NodeDiscovered:FireClient(player, {
+				Id = node.Id, Tier = node.Tier, Name = node.Name,
+				Cost = node.Cost, Req = node.Req,
+			})
+		<span class="k">end</span>
+	<span class="k">end</span>
+<span class="k">end</span>
+
+<span class="c">-- Achat : toutes les vérifications sont faites ici, jamais côté client</span>
+BuyNode.OnServerEvent:Connect(<span class="k">function</span>(player, nodeId)
+	<span class="k">if</span> typeof(nodeId) ~= <span class="s">"string"</span> <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>        <span class="c">-- 1. type de l'argument</span>
+	<span class="k">local</span> profile = Profiles[player]
+	<span class="k">local</span> node = Config.NodeById[nodeId]
+	<span class="k">if</span> <span class="k">not</span> profile <span class="k">or</span> <span class="k">not</span> node <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>            <span class="c">-- 2. le nœud existe</span>
+	<span class="k">if</span> profile.Owned[nodeId] <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>              <span class="c">-- 3. pas déjà acheté</span>
+	<span class="k">if</span> <span class="k">not</span> profile.Discovered[nodeId] <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>     <span class="c">-- 4. visible pour ce joueur</span>
+	<span class="k">if</span> <span class="k">not</span> reqsOwned(profile, node) <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>       <span class="c">-- 5. prérequis possédés</span>
+	<span class="k">if</span> profile.Currency[node.Tier] &lt; node.Cost <span class="k">then</span> <span class="k">return</span> <span class="k">end</span> <span class="c">-- 6. assez de monnaie</span>
+
+	profile.Currency[node.Tier] -= node.Cost
+	profile.Owned[nodeId] = <span class="k">true</span>
+	refreshDiscovery(player, profile)
+<span class="k">end</span>)
+
+Players.PlayerAdded:Connect(<span class="k">function</span>(player)
+	Profiles[player] = newProfile() <span class="c">-- ici : charger depuis le DataStore</span>
+	refreshDiscovery(player, Profiles[player])
+	<span class="c">-- à la connexion, renvoyer aussi les nœuds déjà découverts (jamais les autres)</span>
+<span class="k">end</span>)
+Players.PlayerRemoving:Connect(<span class="k">function</span>(player)
+	Profiles[player] = <span class="k">nil</span> <span class="c">-- ici : sauvegarder</span>
+<span class="k">end</span>)</code></pre></div>
+      <div><div class="cap">3 · Reset et « garder » en chaîne</div><pre class="code"><code><span class="c">-- Suite de GameServer : prestige, reset et "garder"</span>
+<span class="k">local</span> DoPrestige = Remotes:WaitForChild(<span class="s">"DoPrestige"</span>) <span class="c">-- RemoteEvent client -&gt; serveur</span>
+
+<span class="c">-- Garder l'arbre `lowTier` quand on reset `resetTier` ne marche que si</span>
+<span class="c">-- TOUS les nœuds « garder » des paliers entre les deux sont possédés.</span>
+<span class="c">-- Exemple : garder l'arbre 1 lors d'une Transcendance (3) exige A_Keep ET T_Keep.</span>
+<span class="k">local</span> <span class="k">function</span> keepsTree(profile, lowTier, resetTier)
+	<span class="k">for</span> tier = lowTier + <span class="n">1</span>, resetTier <span class="k">do</span>
+		<span class="k">if</span> <span class="k">not</span> profile.Owned[Config.KeepNode[tier]] <span class="k">then</span>
+			<span class="k">return</span> <span class="k">false</span>
+		<span class="k">end</span>
+	<span class="k">end</span>
+	<span class="k">return</span> <span class="k">true</span>
+<span class="k">end</span>
+
+<span class="k">local</span> <span class="k">function</span> gainMultiplier(profile, tier)
+	<span class="k">local</span> mult = Config.Tiers[tier].BaseMult
+	<span class="k">for</span> _, node <span class="k">in</span> ipairs(Config.Nodes) <span class="k">do</span>
+		<span class="k">local</span> fx = node.Effect
+		<span class="k">if</span> profile.Owned[node.Id] <span class="k">and</span> fx.Type == <span class="s">"GainMult"</span> <span class="k">and</span> fx.Tier == tier <span class="k">then</span>
+			mult *= fx.Value
+		<span class="k">end</span>
+	<span class="k">end</span>
+	<span class="k">return</span> mult
+<span class="k">end</span>
+
+<span class="c">-- gain = floor( racine( gagné pendant ce run ÷ seuil ) x multiplicateurs )</span>
+<span class="k">local</span> <span class="k">function</span> pendingGain(profile, tier)
+	<span class="k">local</span> cfg = Config.Tiers[tier]
+	<span class="k">local</span> earned = profile.Earned[tier - <span class="n">1</span>] <span class="c">-- GAGNÉ pendant ce run, pas la monnaie possédée</span>
+	<span class="k">if</span> earned &lt; cfg.Threshold <span class="k">then</span>
+		<span class="k">return</span> <span class="n">0</span>
+	<span class="k">end</span>
+	<span class="k">return</span> math.floor(math.sqrt(earned / cfg.Threshold) * gainMultiplier(profile, tier))
+<span class="k">end</span>
+
+<span class="k">local</span> <span class="k">function</span> wipeTree(profile, tier)
+	<span class="k">for</span> _, node <span class="k">in</span> ipairs(Config.Nodes) <span class="k">do</span>
+		<span class="k">if</span> node.Tier == tier <span class="k">then</span>
+			profile.Owned[node.Id] = <span class="k">nil</span> <span class="c">-- on efface Owned, PAS Discovered</span>
+		<span class="k">end</span>
+	<span class="k">end</span>
+	<span class="k">if</span> tier == <span class="n">0</span> <span class="k">then</span>
+		profile.CoinUpgrades = {}
+		profile.Generators = {}
+	<span class="k">end</span>
+<span class="k">end</span>
+
+DoPrestige.OnServerEvent:Connect(<span class="k">function</span>(player, tier)
+	<span class="k">if</span> typeof(tier) ~= <span class="s">"number"</span> <span class="k">or</span> <span class="k">not</span> Config.Tiers[tier] <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>
+	<span class="k">local</span> profile = Profiles[player]
+	<span class="k">if</span> <span class="k">not</span> profile <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>
+
+	<span class="k">local</span> gain = pendingGain(profile, tier)
+	<span class="k">if</span> gain &lt; <span class="n">1</span> <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>
+
+	<span class="c">-- 1. décider quoi garder AVANT d'effacer quoi que ce soit</span>
+	<span class="k">local</span> keep = {}
+	<span class="k">for</span> lower = <span class="n">0</span>, tier - <span class="n">1</span> <span class="k">do</span>
+		keep[lower] = keepsTree(profile, lower, tier)
+	<span class="k">end</span>
+
+	<span class="c">-- 2. créditer la monnaie du palier</span>
+	profile.Currency[tier] += gain
+	profile.Earned[tier] += gain
+
+	<span class="c">-- 3. remettre à zéro tout ce qui est en dessous</span>
+	<span class="k">for</span> lower = <span class="n">0</span>, tier - <span class="n">1</span> <span class="k">do</span>
+		profile.Currency[lower] = <span class="n">0</span>
+		profile.Earned[lower] = <span class="n">0</span>
+		<span class="k">if</span> <span class="k">not</span> keep[lower] <span class="k">then</span>
+			wipeTree(profile, lower)
+		<span class="k">end</span>
+	<span class="k">end</span>
+
+	refreshDiscovery(player, profile)
+<span class="k">end</span>)
+
+<span class="c">-- Boucle serveur (RunService.Heartbeat) : automatisations et gain passif</span>
+<span class="c">--   passif : profile.Currency[t-1] += 0.10 * pendingRaw(t-1) * dt</span>
+<span class="c">--   auto-prestige : si la condition choisie par le joueur est vraie, appeler la même fonction que DoPrestige</span></code></pre></div>
+      <div><div class="cap">4 · Cacher les nœuds non découverts côté client</div><pre class="code"><code><span class="c">-- StarterPlayerScripts/TreeUI  (LocalScript)</span>
+<span class="c">-- Le client ne contient AUCUNE donnée sur les nœuds cachés.</span>
+<span class="c">-- Il crée une carte uniquement quand le serveur lui envoie NodeDiscovered.</span>
+<span class="k">local</span> ReplicatedStorage = game:GetService(<span class="s">"ReplicatedStorage"</span>)
+<span class="k">local</span> TweenService = game:GetService(<span class="s">"TweenService"</span>)
+<span class="k">local</span> Players = game:GetService(<span class="s">"Players"</span>)
+
+<span class="k">local</span> Remotes = ReplicatedStorage:WaitForChild(<span class="s">"Remotes"</span>)
+<span class="k">local</span> gui = Players.LocalPlayer:WaitForChild(<span class="s">"PlayerGui"</span>):WaitForChild(<span class="s">"TreeGui"</span>)
+<span class="k">local</span> treeFrame = gui:WaitForChild(<span class="s">"Tree"</span>)
+<span class="k">local</span> template = script:WaitForChild(<span class="s">"NodeTemplate"</span>)
+
+<span class="k">local</span> cards = {} <span class="c">-- [nodeId] = Frame, uniquement les nœuds découverts</span>
+
+<span class="k">local</span> <span class="k">function</span> drawLine(fromCard, toCard)
+	<span class="c">-- un Frame fin, tourné entre les deux cartes (ou une UIStroke / Beam)</span>
+<span class="k">end</span>
+
+<span class="k">local</span> <span class="k">function</span> createCard(info)
+	<span class="k">if</span> cards[info.Id] <span class="k">then</span> <span class="k">return</span> <span class="k">end</span> <span class="c">-- une fois découvert, il reste affiché</span>
+
+	<span class="k">local</span> card = template:Clone()
+	card.Name = info.Id
+	card.NodeName.Text = info.Name
+	card.Cost.Text = tostring(info.Cost)
+	card.Parent = treeFrame
+	cards[info.Id] = card
+
+	<span class="c">-- petite animation d'apparition</span>
+	<span class="k">local</span> target = card.Size
+	card.Size = UDim2.fromScale(<span class="n">0</span>, <span class="n">0</span>)
+	TweenService:Create(card, TweenInfo.new(<span class="n">0.35</span>, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = target }):Play()
+
+	<span class="c">-- lignes : seulement vers les prérequis déjà découverts</span>
+	<span class="k">for</span> _, reqId <span class="k">in</span> ipairs(info.Req) <span class="k">do</span>
+		<span class="k">if</span> cards[reqId] <span class="k">then</span>
+			drawLine(cards[reqId], card)
+		<span class="k">end</span>
+	<span class="k">end</span>
+
+	<span class="c">-- notification</span>
+	gui.Toast:Fire(<span class="s">"Nouvelle amélioration découverte !"</span>)
+<span class="k">end</span>
+
+Remotes.NodeDiscovered.OnClientEvent:Connect(createCard)
+
+<span class="c">-- Achat : le bouton n'achète rien lui-même, il demande au serveur</span>
+<span class="k">local</span> <span class="k">function</span> onNodeClicked(nodeId)
+	Remotes.BuyNode:FireServer(nodeId)
+<span class="k">end</span></code></pre></div>
+      <h3>Points importants</h3>
+      <ul>
+        <li><b>Ne jamais envoyer un nœud caché au client.</b> Un tricheur lit tout ce qui est dans <code class="i">ReplicatedStorage</code>. On n’envoie un nœud que lorsque ses prérequis sont possédés, et on le garde dans <code class="i">Discovered</code> pour qu’il reste visible après un reset.</li>
+        <li><b>Le gain se calcule sur la monnaie gagnée pendant le run</b> (<code class="i">Earned</code>), pas sur celle que le joueur possède, pour ne pas le punir quand il dépense.</li>
+        <li><b>Décide quoi garder avant d’effacer.</b> Les nœuds « garder » vivent dans les arbres que l’on est en train de réinitialiser ; il faut lire leur état avant le reset.</li>
+        <li><b>Production et automatisations</b> tournent sur le serveur dans <code class="i">RunService.Heartbeat</code>, avec le temps écoulé réel (<code class="i">dt</code>) pour que la progression hors-ligne reste juste.</li>
+        <li><b>Sauvegarde</b> avec <code class="i">DataStoreService</code> (ou ProfileService) à la déconnexion et toutes les 60 secondes. Garde la monnaie en <code class="i">number</code> ; au-delà de 1e300, passe à une bibliothèque de grands nombres.</li>
+      </ul>
+    </div>
+  </details>
+
+  <footer>
+    <span>Sauvegarde automatique dans ce navigateur. Les boutons ×10 et ×100 accélèrent le temps pour tester.</span>
+    <span class="mono" id="foot"></span>
+  </footer>
+</div>
+
+<div id="toasts" aria-live="polite"></div>
+
+<div class="win" id="win" hidden role="dialog" aria-modal="true" aria-label="Fin du jeu">
+  <div class="card">
+    <div class="big">🌟</div>
+    <h2>Apothéose !</h2>
+    <p>Tu es devenu la mine elle-même. Le filon est infini, et il porte ton nom.</p>
+    <div class="stats" id="winstats"></div>
+    <button class="mini" data-act="closewin">Continuer à jouer</button>
+  </div>
+</div>
+
+<script>
+const G=(function(){
+'use strict';
+
+/* =====================================================================
+   PARAMÈTRES D'ÉQUILIBRAGE
+   ===================================================================== */
+const P={
+  grow:1.15,            // coût ×1.15 par achat
+  reveal:0.5,           // un palier apparaît à 50 % de son coût
+  passive:0.1,          // 10 % du gain en attente par seconde
+  seuil:[0,1e9,3000,120,600],
+  guF:0.8,              // facteur de coût des jalons de générateurs
+  clicksPerSec:8,       // auto-clic
+  relic:[0,300,200,200],  // monnaie de départ offerte par les reliques (palier inférieur)
+  apo:800,              // coût de l'Apothéose (en DP)
+  base:[0,3,3,3,3],     // multiplicateur de base du gain de prestige de chaque palier
+  cs:[0,1,1,1,1],       // échelle des coûts des arbres (par palier)
+  start:1e6,            // capital de départ (arbre Renaissance)
+  q:10,                 // rapport de coût entre deux générateurs successifs
+  rho0:0.06,            // rendement/s du 1er générateur (production ÷ coût)
+  rhoD:0.75,            // décroissance du rendement d'un générateur au suivant
+};
+const KEY='filon-infini-v1';
+
+/* =====================================================================
+   FORMATAGE
+   ===================================================================== */
+const SUF=['','K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','Dc','Ud','Dd','Td','Qad','Qid','Sxd','Spd','Ocd','Nod','Vg'];
+function fmt(n){
+  if(n===Infinity) return '∞';
+  if(!(n>0)) return n<0?'-'+fmt(-n):'0';
+  if(n<1000){
+    if(n<10) return String(Math.round(n*100)/100);
+    if(n<100) return String(Math.round(n*10)/10);
+    return String(Math.floor(n));
+  }
+  let e=Math.floor(Math.log10(n)/3), m=n/Math.pow(10,e*3);
+  if(m>=999.5){m/=1000;e++;}
+  if(e>=SUF.length){return n.toExponential(2).replace('e+','e');}
+  let s=m<10?m.toFixed(2):m<100?m.toFixed(1):m.toFixed(0);
+  if(s.indexOf('.')>=0) s=s.replace(/\.?0+$/,'');
+  return s+SUF[e];
+}
+function fmtTime(s){
+  s=Math.max(0,Math.floor(s));
+  const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60;
+  if(h>0) return h+'h '+String(m).padStart(2,'0')+'m';
+  if(m>0) return m+'m '+String(x).padStart(2,'0')+'s';
+  return x+'s';
+}
+function sig(x,d){ return Number(x.toPrecision(d||2)); }
+
+/* =====================================================================
+   PALIERS
+   ===================================================================== */
+const TIERS=[
+  {key:'pieces',name:'Pièces',cur:'pièces',css:'c0',icon:'🪙'},
+  {key:'ren',name:'Renaissance',cur:'RP',css:'c1',icon:'🌱',earnLabel:'pièces gagnées',unit:'pièces'},
+  {key:'asc',name:'Ascension',cur:'AP',css:'c2',icon:'🚀',earnLabel:'RP gagnés',unit:'RP'},
+  {key:'tra',name:'Transcendance',cur:'TP',css:'c3',icon:'🌌',earnLabel:'AP gagnés',unit:'AP'},
+  {key:'div',name:'Divinité',cur:'DP',css:'c4',icon:'👑',earnLabel:'TP gagnés',unit:'TP'},
+];
+
+/* échelle des seuils d'auto-prestige : 1, 2, 5, 10, 20, 50 ... */
+const THR=[]; for(let e=0;e<=40;e++){[1,2,5].forEach(m=>THR.push(m*Math.pow(10,e)));}
+function thrIndex(v){ for(let i=0;i<THR.length;i++) if(THR[i]>=v) return i; return THR.length-1; }
+
+/* =====================================================================
+   GÉNÉRATEURS (phase 1)
+   ===================================================================== */
+const GEN_DEF=[
+  ['Mineur','Mineurs','⛏️','Gratte la roche, un caillou à la fois.'],
+  ['Foreuse','Foreuses','🕳️','Troue la montagne sans rechigner.'],
+  ['Wagon','Wagons','🚃','Remonte le minerai à pleine vitesse.'],
+  ['Excavatrice','Excavatrices','🚜','Avale des tonnes de terre à l’heure.'],
+  ['Usine','Usines','🏭','Transforme le minerai en lingots.'],
+  ['Laser','Lasers','⚡','Découpe la roche comme du beurre.'],
+  ['Réacteur','Réacteurs','☢️','Une énergie folle pour des pépites folles.'],
+  ['Portail','Portails','🌀','Pioche dans les mines d’autres mondes.'],
+];
+const GENS=GEN_DEF.map((d,i)=>{
+  const base=sig(15*Math.pow(P.q,i),2);
+  return {n:d[0],pl:d[1],ic:d[2],txt:d[3],base:base,cps:sig(base*P.rho0*Math.pow(P.rhoD,i),2)};
+});
+
+/* =====================================================================
+   OBJECTIFS (chaîne ; un seul visible à la fois)
+   ===================================================================== */
+const GOALS=[];
+function goal(kind,t,v,txt){GOALS.push({kind:kind,t:t,v:v,txt:txt});}
+[100,1e3,1e4,1e5,1e6,1e7,1e8,5e8].forEach(v=>goal('tot',0,v,'Gagne '+fmt(v)+' pièces'));
+goal('tot',0,1e9,'Atteins 1B de pièces');
+[10,150,1000,P.seuil[2]].forEach(v=>goal('earn',1,v,'Gagne '+fmt(v)+' RP en un seul run'));
+[10,40,P.seuil[3]].forEach(v=>goal('earn',2,v,'Gagne '+fmt(v)+' AP en un seul run'));
+[10,30,P.seuil[4]].forEach(v=>goal('earn',3,v,'Gagne '+fmt(v)+' TP en un seul run'));
+[100,1000,P.apo].forEach(v=>goal('earn',4,v,'Gagne '+fmt(v)+' DP en un seul run'));
+
+/* =====================================================================
+   AMÉLIORATIONS DE PIÈCES (palier 0)
+   ===================================================================== */
+const UPGS=[], UPG={};
+function addUpg(o){UPGS.push(o);UPG[o.id]=o;}
+let S; // état (défini plus bas)
+
+const GU_NAMES=[
+  ['Pioches renforcées','Lampes frontales','Syndicat des mineurs','Casques en titane','Vétérans du filon','Roi de la galerie'],
+  ['Mèches au carbure','Refroidissement par eau','Forage rotatif','Têtes en diamant','Turbo-couple','Forage infini'],
+  ['Rails graissés','Moteur diesel','Convois doublés','Freinage magnétique','Trains blindés','Réseau ferré mondial'],
+  ['Godets renforcés','Chenilles larges','Pilotage assisté','Bras hydrauliques','Excavation de nuit','Titan d’acier'],
+  ['Chaîne de montage','Robots soudeurs','Équipes de nuit','Ligne automatisée','Usine intelligente','Mégacomplexe'],
+  ['Lentilles polies','Faisceau cohérent','Refroidisseur cryo','Laser pulsé','Prisme multiple','Rayon solaire'],
+  ['Barres de contrôle','Cœur enrichi','Turbines doubles','Fusion tiède','Plasma stable','Étoile en bouteille'],
+  ['Cadre en antimatière','Faille stabilisée','Fenêtre dimensionnelle','Mines parallèles','Convergence des mondes','Porte du multivers'],
+];
+const GU_N=[10,25,50,100,150,200];
+const GU_M=[2,2,2,2,2,2];
+GENS.forEach((g,i)=>{
+  let prev=null;
+  GU_N.forEach((N,k)=>{
+    const id='g'+i+'_'+k;
+    addUpg({id:id,name:GU_NAMES[i][k],cost:sig(g.base*Math.pow(P.grow,N)*N*P.guF,2),prev:prev,gen:i,need:N,
+      fx:{gen:i,m:GU_M[k]},
+      head:k===0?(function(ii){return function(){return S.gens[ii]>=1;};})(i):null,
+      desc:g.pl+' ×'+GU_M[k]});
+    prev=id;
+  });
+});
+[
+ ['Pioche renforcée',100,{click:2},'Clic ×2'],
+ ['Pioche d’acier',700,{click:2},'Clic ×2'],
+ ['Marteau-piqueur',6e3,{pct:0.01},'Chaque clic rapporte +1 % de ta production/s'],
+ ['Pioche en diamant',8e4,{click:2},'Clic ×2'],
+ ['Marteau pneumatique',1e6,{pct:0.02},'Chaque clic rapporte +2 % de ta production/s'],
+ ['Pioche de légende',2e7,{click:3},'Clic ×3'],
+ ['Gantelet de titan',4e8,{pct:0.03},'Chaque clic rapporte +3 % de ta production/s'],
+ ['Main du destin',1e10,{click:5},'Clic ×5'],
+].forEach((a,k,arr)=>addUpg({id:'c'+k,name:a[0],cost:a[1],prev:k?'c'+(k-1):null,gen:null,need:null,fx:a[2],desc:a[3],
+  head:k===0?function(){return S.gens[0]>=1;}:null}));
+[
+ ['Casques à LED',8e3,1.25],
+ ['Convoyeurs',4e5,1.5],
+ ['Assurance mineurs',2e7,2],
+ ['Contrat municipal',1e9,2],
+ ['Subvention d’État',5e10,3],
+ ['Monopole minier',2.5e12,3],
+ ['Cartel des métaux',1e14,4],
+].forEach((a,k)=>addUpg({id:'p'+k,name:a[0],cost:a[1],prev:k?'p'+(k-1):null,gen:null,need:null,fx:{glob:a[2]},
+  desc:'Production globale ×'+a[2],head:k===0?function(){return S.goal>=2;}:null}));
+
+/* =====================================================================
+   ARBRES DE PRESTIGE
+   ===================================================================== */
+const NODES=[], NODE={}, AUTO={}, KEEP=[null,'r_keep','a_keep','t_keep','d_keep'];
+function N(tier,id,name,icon,cost,req,row,col,o){
+  const n=Object.assign({tier:tier,id:id,name:name,icon:icon,cost:Math.max(1,Math.round(sig(cost*P.cs[tier],2))),req:req,row:row,col:col},o||{});
+  NODES.push(n);NODE[id]=n; if(n.a) AUTO[n.a+tier]=n; return n;
+}
+const TX=[null,'pièces','RP','AP','TP'];
+function describe(n){
+  if(n.desc) return n.desc;
+  const f=n.fx||{}, out=[];
+  if(f.coin) out.push('Pièces ×'+f.coin);
+  if(f.click) out.push('Clic ×'+f.click);
+  for(let k=1;k<=4;k++) if(f['g'+k]) out.push('Gain de '+TIERS[k].cur+' ×'+f['g'+k]);
+  if(f.cost) out.push('Générateurs '+Math.round((1-f.cost)*100)+' % moins chers');
+  if(f.start) out.push('Démarre chaque run avec '+fmt(f.start)+' pièces');
+  for(let k=1;k<=3;k++) if(f['s'+k]) out.push('Offre '+fmt(f['s'+k])+' '+TIERS[k].cur+' maintenant et au début de chaque run');
+  return out.join(' · ');
+}
+
+/* --- Tier 1 : Renaissance (RP) --- */
+N(1,'r1','Pioche dorée','⛏️',1,[],0,0,{fx:{coin:3}});
+N(1,'r2','Capital de départ','💰',2,['r1'],1,0,{fx:{start:P.start}});
+N(1,'r3','Mémoire du filon','📜',3,['r1'],1,1,{fx:{g1:1.5}});
+N(1,'r4','Apprentis','🧒',5,['r2'],2,0,{a:'click',desc:'⚙ Clique tout seul, 8 fois par seconde.'});
+N(1,'r5','Veines profondes','💎',8,['r3'],2,1,{fx:{coin:4}});
+N(1,'r6','Contremaître','🧑‍💼',12,['r4'],3,0,{a:'gens',desc:'⚙ Achète automatiquement les générateurs.'});
+N(1,'r7','Négociateur','🤝',20,['r5'],3,1,{fx:{cost:0.85}});
+N(1,'r8','Ingénieur en chef','🧑‍🔬',35,['r6'],4,0,{a:'upg',desc:'⚙ Achète automatiquement les améliorations de pièces.'});
+N(1,'r_keep','Coffre de la mine','🔒',60,['r8'],5,0,{keep:true,desc:'🔒 Garde les améliorations de pièces après une Renaissance.'});
+N(1,'r10','Rayon de Renaissance','🌟',80,['r7'],5,1,{fx:{g1:2}});
+N(1,'r11','Fusion des âges','🔥',200,['r_keep','r10'],6,0,{fx:{coin:10}});
+
+/* --- Tier 2 : Ascension (AP) --- */
+N(2,'a1','Reliques de renaissance','🏺',1,[],0,0,{fx:{s1:P.relic[1]}});
+N(2,'a_keep','Mémoire des cimes','🔒',2,['a1'],1,0,{keep:true,desc:'🔒 Garde l’arbre Renaissance après une Ascension.'});
+N(2,'a2','Air pur','☁️',3,['a1'],1,1,{fx:{coin:5}});
+N(2,'a3','Ascenseur automatique','🛗',5,['a_keep'],2,0,{a:'pres',desc:'⚙ Lance la Renaissance tout seul, selon ta condition.'});
+N(2,'a4','Vents porteurs','🌬️',7,['a2'],2,1,{fx:{g1:3}});
+N(2,'a5','Source céleste','⛲',12,['a3'],3,0,{a:'pass',desc:'⚙ Gagne 10 % des RP en attente chaque seconde.'});
+N(2,'a6','Maître des arbres','🧙',20,['a5'],4,0,{a:'tree',desc:'⚙ Achète tout seul l’arbre Renaissance.'});
+N(2,'a7','Brume dorée','🌫️',28,['a4'],3,1,{fx:{coin:10}});
+N(2,'a8','Marée de lumière','🌊',45,['a7'],4,1,{fx:{g2:2}});
+N(2,'a9','Couronne des nuages','👑',80,['a6','a8'],5,0,{fx:{g1:5}});
+N(2,'a10','Zénith','☀️',160,['a9'],6,0,{fx:{coin:100}});
+
+/* --- Tier 3 : Transcendance (TP) --- */
+N(3,'t1','Reliques d’ascension','🏺',1,[],0,0,{fx:{s2:P.relic[2]}});
+N(3,'t_keep','Écho des sommets','🔒',2,['t1'],1,0,{keep:true,desc:'🔒 Garde l’arbre Ascension après une Transcendance.'});
+N(3,'t2','Énergie noire','🕳️',3,['t1'],1,1,{fx:{coin:20}});
+N(3,'t3','Portail automatique','🌀',5,['t_keep'],2,0,{a:'pres',desc:'⚙ Lance l’Ascension toute seule, selon ta condition.'});
+N(3,'t4','Constellations','✨',7,['t2'],2,1,{fx:{g2:3}});
+N(3,'t5','Pluie d’étoiles','🌠',12,['t3'],3,0,{a:'pass',desc:'⚙ Gagne 10 % des AP en attente chaque seconde.'});
+N(3,'t6','Cartographe du vide','🗺️',20,['t5'],4,0,{a:'tree',desc:'⚙ Achète tout seul l’arbre Ascension.'});
+N(3,'t7','Trou de ver','🪐',28,['t4'],3,1,{fx:{coin:50}});
+N(3,'t8','Résonance','🎼',45,['t7'],4,1,{fx:{g3:2}});
+N(3,'t9','Singularité','⚫',80,['t6','t8'],5,0,{fx:{g2:5}});
+N(3,'t10','Au-delà de tout','🌌',160,['t9'],6,0,{fx:{coin:1000}});
+
+/* --- Tier 4 : Divinité (DP) --- */
+N(4,'d1','Reliques de transcendance','🏺',1,[],0,0,{fx:{s3:P.relic[3]}});
+N(4,'d_keep','Mémoire éternelle','🔒',2,['d1'],1,0,{keep:true,desc:'🔒 Garde l’arbre Transcendance après une Divinité.'});
+N(4,'d2','Souffle sacré','🕊️',3,['d1'],1,1,{fx:{coin:100}});
+N(4,'d3','Rituel automatique','🕯️',5,['d_keep'],2,0,{a:'pres',desc:'⚙ Lance la Transcendance toute seule, selon ta condition.'});
+N(4,'d4','Chœur céleste','🎶',7,['d2'],2,1,{fx:{g3:3}});
+N(4,'d5','Fontaine d’éternité','⛲',12,['d3'],3,0,{a:'pass',desc:'⚙ Gagne 10 % des TP en attente chaque seconde.'});
+N(4,'d6','Grand architecte','📐',20,['d5'],4,0,{a:'tree',desc:'⚙ Achète tout seul l’arbre Transcendance.'});
+N(4,'d7','Autel doré','🏛️',28,['d4'],3,1,{fx:{coin:500}});
+N(4,'d8','Ferveur des mondes','🔥',45,['d7'],4,1,{fx:{g4:2}});
+N(4,'d9','Trône des dieux','🪑',80,['d6','d8'],5,0,{fx:{g3:5}});
+N(4,'d_end','Apothéose','🌟',P.apo,['d9'],6,0,{final:true,desc:'Ascension finale : tu deviens la mine elle-même. Termine le jeu.'});
+
+/* =====================================================================
+   ÉTAT
+   ===================================================================== */
+let A=null;                 // agrégats (multiplicateurs)
+let EV=[];                  // événements pour l'interface
+function newState(){
+  return {
+    v:1,
+    res:[0,0,0,0,0], earn:[0,0,0,0,0], tot:[0,0,0,0,0],
+    gens:GENS.map(()=>0),
+    upg:{}, nodes:{}, disc:{g0:1}, goal:0,
+    auto:{}, thr:[0,thrIndex(5),thrIndex(5),thrIndex(5),0],
+    n:[0,0,0,0,0], last:[0,0,0,0,0], runT:[0,0,0,0,0],
+    clicks:0, played:0, buy:1, speed:1,
+    ended:false, endAt:0, saved:Date.now(), created:Date.now(),
+  };
+}
+S=newState();
+
+function recalc(){
+  const a={gm:GENS.map(()=>1),glob:1,click:1,pct:0,cost:1,start:0,startK:[0,0,0,0,0],gain:P.base.slice()};
+  for(const u of UPGS){
+    if(!S.upg[u.id]) continue; const f=u.fx;
+    if(f.gen!==undefined) a.gm[f.gen]*=f.m;
+    if(f.glob) a.glob*=f.glob;
+    if(f.click) a.click*=f.click;
+    if(f.pct) a.pct+=f.pct;
+  }
+  for(const n of NODES){
+    if(!S.nodes[n.id]||!n.fx) continue; const f=n.fx;
+    if(f.coin) a.glob*=f.coin;
+    if(f.click) a.click*=f.click;
+    if(f.cost) a.cost*=f.cost;
+    if(f.start) a.start+=f.start;
+    for(let k=1;k<=4;k++){ if(f['g'+k]) a.gain[k]*=f['g'+k]; if(f['s'+k]) a.startK[k]+=f['s'+k]; }
+  }
+  A=a;
+}
+recalc();
+
+/* =====================================================================
+   PRODUCTION
+   ===================================================================== */
+function genCps(i){ return GENS[i].cps*A.gm[i]*A.glob; }          // production d'une unité
+function cps(){ let s=0; for(let i=0;i<GENS.length;i++) s+=S.gens[i]*genCps(i); return s; }
+function clickValue(){ return A.click*A.glob + A.pct*cps(); }
+function addCur(k,x){ S.res[k]+=x; S.earn[k]+=x; S.tot[k]+=x; }
+function click(){ S.clicks++; const v=clickValue(); addCur(0,v); return v; }
+
+/* coûts */
+function genCostK(i,n,k){
+  const r=P.grow, base=GENS[i].base*A.cost;
+  return base*Math.pow(r,n)*(Math.pow(r,k)-1)/(r-1);
+}
+function genCost(i){ return genCostK(i,S.gens[i],1); }
+function maxAfford(i,cap){
+  const n=S.gens[i], c=S.res[0], r=P.grow, first=GENS[i].base*A.cost*Math.pow(r,n);
+  if(c<first) return 0;
+  let k=Math.floor(Math.log(c*(r-1)/first+1)/Math.log(r));
+  k=Math.max(0,Math.min(k,cap));
+  while(k>0&&genCostK(i,n,k)>c) k--;
+  while(k<cap&&genCostK(i,n,k+1)<=c) k++;
+  return k;
+}
+function buyGen(i,amount){
+  if(!S.disc['g'+i]) return 0;
+  const cap=amount==='max'?1e6:amount;
+  const k=maxAfford(i,cap); if(k<=0) return 0;
+  S.res[0]-=genCostK(i,S.gens[i],k); S.gens[i]+=k; return k;
+}
+function paybackGen(i){ return genCost(i)/genCps(i); }
+
+/* =====================================================================
+   AMÉLIORATIONS
+   ===================================================================== */
+function upgVisible(u){ return !!S.disc['u:'+u.id]; }
+function upgReveal(u){
+  if(u.prev&&!S.upg[u.prev]) return false;
+  if(u.head&&!u.head()) return false;
+  return true;
+}
+function upgInfo(u){
+  const owned=!!S.upg[u.id];
+  const prevOk=!u.prev||!!S.upg[u.prev];
+  const needOk=u.need==null||S.gens[u.gen]>=u.need;
+  return {owned:owned,prevOk:prevOk,needOk:needOk,afford:S.res[0]>=u.cost,
+    can:!owned&&prevOk&&needOk&&S.res[0]>=u.cost};
+}
+function buyUpg(id){
+  const u=UPG[id]; if(!u||!upgVisible(u)) return false;
+  const i=upgInfo(u); if(!i.can) return false;
+  S.res[0]-=u.cost; S.upg[id]=1; recalc(); return true;
+}
+function visibleUpgs(){ return UPGS.filter(u=>upgVisible(u)&&!S.upg[u.id]); }
+
+/* =====================================================================
+   NŒUDS DES ARBRES
+   ===================================================================== */
+function nodeVisible(n){ return !!S.disc['n:'+n.id]; }
+function nodeInfo(n){
+  const owned=!!S.nodes[n.id];
+  const locked=!n.req.every(r=>S.nodes[r]);
+  const afford=S.res[n.tier]>=n.cost;
+  return {owned:owned,locked:locked,afford:afford,can:!owned&&!locked&&afford};
+}
+function buyNode(id){
+  const n=NODE[id]; if(!n||!nodeVisible(n)) return false;
+  const i=nodeInfo(n); if(!i.can) return false;
+  S.res[n.tier]-=n.cost; S.nodes[id]=1; recalc();
+  if(n.fx){ for(let k=1;k<=3;k++) if(n.fx['s'+k]) S.res[k]+=n.fx['s'+k]; }
+  if(n.a==='pres') S.thr[n.tier-1]=thrIndex(Math.max(5,S.last[n.tier-1]));
+  if(n.final){S.ended=true;S.endAt=S.played;EV.push({kind:'win'});}
+  discover(); return true;
+}
+function treeNodes(t){ return NODES.filter(n=>n.tier===t); }
+function visibleNodes(t){ return NODES.filter(n=>n.tier===t&&nodeVisible(n)); }
+
+/* =====================================================================
+   AUTOMATISATIONS
+   ===================================================================== */
+function autoOwned(type,tier){ const n=AUTO[type+tier]; return !!(n&&S.nodes[n.id]); }
+function autoOn(type,tier){ const n=AUTO[type+tier]; return !!(n&&S.nodes[n.id]&&S.auto[n.id]!==false); }
+function toggleAuto(id){ if(!S.nodes[id]) return; S.auto[id]=S.auto[id]===false; }
+function setThr(t,idx){ S.thr[t]=Math.max(0,Math.min(THR.length-1,idx)); }
+function thrValue(t){ return THR[S.thr[t]]; }
+
+/* =====================================================================
+   PRESTIGE
+   ===================================================================== */
+function rawPending(t){
+  const e=S.earn[t-1], s=P.seuil[t];
+  if(e<s) return 0;
+  return Math.sqrt(e/s)*A.gain[t];
+}
+function pending(t){ return Math.floor(rawPending(t)); }
+function canPrestige(t){ return S.earn[t-1]>=P.seuil[t]&&pending(t)>=1; }
+/* gain de l'arbre k conservé lors du reset du palier t ? (logique en chaîne) */
+function keepTree(k,t){
+  for(let j=k+1;j<=t;j++) if(!S.nodes[KEEP[j]]) return false;
+  return true;
+}
+function clearTree(k){
+  if(k===0){S.upg={};return;}
+  for(const n of NODES) if(n.tier===k) delete S.nodes[n.id];
+}
+function nextAt(t){            // monnaie gagnée nécessaire pour obtenir 1 de plus
+  const g=pending(t)+1, m=A.gain[t];
+  return P.seuil[t]*Math.pow(g/m,2);
+}
+function prestige(t){
+  if(!canPrestige(t)) return 0;
+  const gain=pending(t);
+  const keep=[]; for(let k=0;k<t;k++) keep[k]=keepTree(k,t);
+  addCur(t,gain); S.last[t]=gain; S.n[t]++;
+  for(let k=0;k<t;k++){
+    S.res[k]=0; S.earn[k]=0; S.runT[k]=0;
+    if(!keep[k]) clearTree(k);
+  }
+  S.runT[t]=0;
+  S.gens=GENS.map(()=>0);
+  recalc();
+  S.res[0]+=A.start;
+  for(let k=1;k<t;k++) S.res[k]+=A.startK[k];
+  EV.push({kind:'prestige',t:t,gain:gain});
+  discover();
+  return gain;
+}
+
+/* =====================================================================
+   DÉCOUVERTE
+   ===================================================================== */
+function discover(silent){
+  const found=[];
+  const add=(id,kind,label)=>{ if(!S.disc[id]){S.disc[id]=1; if(!silent) found.push({id:id,kind:kind,label:label});} };
+  for(let t=1;t<=4;t++){
+    if(!S.disc['T'+t]&&(S.earn[t-1]>=P.reveal*P.seuil[t]||S.tot[t]>0)) add('T'+t,'tier',TIERS[t].name);
+  }
+  for(let i=1;i<GENS.length;i++) if(S.goal>=i) add('g'+i,'gen',GENS[i].n);
+  let anyUpg=false;
+  for(const u of UPGS){
+    if(S.disc['u:'+u.id]){anyUpg=true;continue;}
+    if(upgReveal(u)){add('u:'+u.id,'upg',u.name);anyUpg=true;}
+  }
+  if(anyUpg) add('tab0','tab0','');
+  for(const n of NODES){
+    if(S.disc['n:'+n.id]) continue;
+    if(S.disc['T'+n.tier]&&n.req.every(r=>S.nodes[r])) add('n:'+n.id,'node',n.name);
+  }
+  if(found.length) EV.push({kind:'found',items:found});
+}
+function goalInfo(){
+  const g=GOALS[S.goal]; if(!g) return null;
+  const cur=g.kind==='earn'?S.earn[g.t]:S.tot[g.t];
+  return {g:g,cur:cur,frac:Math.max(0,Math.min(1,cur/g.v))};
+}
+function checkGoals(){
+  let g;
+  while((g=GOALS[S.goal])){
+    const cur=g.kind==='earn'?S.earn[g.t]:S.tot[g.t];
+    if(cur<g.v) break;
+    S.goal++; EV.push({kind:'goal',txt:g.txt});
+  }
+}
+
+/* =====================================================================
+   AUTOMATISME & BOUCLE
+   ===================================================================== */
+function bestGenIndex(){
+  let best=-1,bp=Infinity;
+  for(let i=0;i<GENS.length;i++){
+    if(!S.disc['g'+i]) continue;
+    const p=paybackGen(i); if(p<bp){bp=p;best=i;}
+  }
+  return best;
+}
+function autoBuyGens(){
+  for(let g=0;g<200;g++){
+    const i=bestGenIndex(); if(i<0) break;
+    if(!buyGen(i,1)) break;
+  }
+}
+function autoBuyUpgs(){
+  for(let g=0;g<40;g++){
+    let pick=null;
+    for(const u of UPGS){
+      if(!upgVisible(u)||S.upg[u.id]) continue;
+      if(!upgInfo(u).can) continue;
+      if(!pick||u.cost<pick.cost) pick=u;
+    }
+    if(!pick) break;
+    buyUpg(pick.id);
+  }
+}
+function autoBuyTree(t){
+  for(let g=0;g<40;g++){
+    let pick=null;
+    for(const n of NODES){
+      if(n.tier!==t||!nodeVisible(n)) continue;
+      if(!nodeInfo(n).can) continue;
+      if(!pick||n.cost<pick.cost) pick=n;
+    }
+    if(!pick) break;
+    buyNode(pick.id);
+  }
+}
+function autoClickRate(){ return autoOn('click',1)?P.clicksPerSec:0; }
+
+function tick(dt){
+  S.played+=dt;
+  for(let k=0;k<5;k++) S.runT[k]+=dt;
+  const c=cps(); if(c>0) addCur(0,c*dt);
+  const ac=autoClickRate(); if(ac>0) addCur(0,clickValue()*ac*dt);
+  for(let h=2;h<=4;h++){
+    if(autoOn('pass',h)){ const r=rawPending(h-1); if(r>0) addCur(h-1,r*P.passive*dt); }
+  }
+  if(autoOn('upg',1)) autoBuyUpgs();
+  if(autoOn('gens',1)) autoBuyGens();
+  for(let h=2;h<=4;h++) if(autoOn('tree',h)) autoBuyTree(h-1);
+  for(let t=3;t>=1;t--){
+    if(autoOn('pres',t+1)&&canPrestige(t)&&pending(t)>=THR[S.thr[t]]) prestige(t);
+  }
+  discover(); checkGoals();
+}
+function advance(dt){           // avance de dt secondes de jeu (sous-pas ≤ 0.25 s)
+  let left=dt;
+  while(left>1e-9){ const d=Math.min(0.25,left); tick(d); left-=d; }
+}
+function catchUp(sec){          // progression hors-ligne
+  const steps=Math.min(300,Math.max(1,Math.ceil(sec/2))), d=sec/steps;
+  for(let i=0;i<steps;i++) tick(d);
+}
+
+/* =====================================================================
+   SAUVEGARDE
+   ===================================================================== */
+function save(){ try{S.saved=Date.now();localStorage.setItem(KEY,JSON.stringify(S));return true;}catch(e){return false;} }
+function load(){
+  try{
+    const raw=localStorage.getItem(KEY); if(!raw) return false;
+    const o=JSON.parse(raw), b=newState();
+    for(const k in b) if(o[k]!==undefined) b[k]=o[k];
+    while(b.gens.length<GENS.length) b.gens.push(0);
+    ['res','earn','tot','n','last','runT','thr'].forEach(k=>{ while(b[k].length<5) b[k].push(0); });
+    S=b; recalc(); discover(true); return true;
+  }catch(e){return false;}
+}
+function wipe(){ try{localStorage.removeItem(KEY);}catch(e){} S=newState(); EV=[]; recalc(); discover(true); }
+function reset(){ S=newState(); EV=[]; recalc(); discover(true); }
+
+return {
+  P:P,TIERS:TIERS,GENS:GENS,UPGS:UPGS,UPG:UPG,NODES:NODES,NODE:NODE,GOALS:GOALS,THR:THR,KEEP:KEEP,AUTO:AUTO,
+  get S(){return S;}, get A(){return A;},
+  fmt:fmt,fmtTime:fmtTime,thrIndex:thrIndex,describe:describe,
+  recalc:recalc,cps:cps,genCps:genCps,clickValue:clickValue,click:click,addCur:addCur,
+  genCost:genCost,genCostK:genCostK,maxAfford:maxAfford,buyGen:buyGen,paybackGen:paybackGen,
+  upgInfo:upgInfo,upgVisible:upgVisible,buyUpg:buyUpg,visibleUpgs:visibleUpgs,
+  nodeInfo:nodeInfo,nodeVisible:nodeVisible,buyNode:buyNode,treeNodes:treeNodes,visibleNodes:visibleNodes,
+  autoOwned:autoOwned,autoOn:autoOn,toggleAuto:toggleAuto,setThr:setThr,thrValue:thrValue,
+  rawPending:rawPending,pending:pending,canPrestige:canPrestige,keepTree:keepTree,nextAt:nextAt,prestige:prestige,
+  goalInfo:goalInfo,discover:discover,tick:tick,advance:advance,catchUp:catchUp,
+  popEvents:function(){const e=EV;EV=[];return e;},
+  save:save,load:load,wipe:wipe,reset:reset,
+};
+})();
+
+</script>
+<script>
+(function(){
+'use strict';
+const fmt=G.fmt, TIERS=G.TIERS, GENS=G.GENS;
+const $=(s,r)=>(r||document).querySelector(s);
+const $$=(s,r)=>Array.prototype.slice.call((r||document).querySelectorAll(s));
+const SV=()=>G.S;
+const UI={tab:-1,sig:{},fresh:{},gen:{},res:{},tabEls:{},manual:false,lastToastAt:{},saveAt:0,savedFlash:0,wipeArmed:0};
+const FRESH_MS=9000;
+
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function setText(el,t){ if(el&&el._t!==t){el._t=t;el.textContent=t;} }
+function setCls(el,c,on){ if(el&&el.classList.contains(c)!==!!on) el.classList.toggle(c,!!on); }
+function isFresh(id){ return UI.fresh[id]&&UI.fresh[id]>Date.now(); }
+function markFresh(id){ UI.fresh[id]=Date.now()+FRESH_MS; }
+function tcol(t){ return 'var(--c'+t+')'; }
+
+/* ================= notifications ================= */
+function toast(title,sub,icon,tier){
+  const box=$('#toasts'); if(!box) return;
+  const el=document.createElement('div'); el.className='toast';
+  el.style.setProperty('--tc',tcol(tier||0));
+  el.innerHTML='<span class="ti">'+(icon||'✨')+'</span><span><b>'+esc(title)+'</b>'+(sub?'<small>'+esc(sub)+'</small>':'')+'</span>';
+  box.appendChild(el);
+  while(box.children.length>3) box.removeChild(box.firstChild);
+  setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); },3700);
+}
+function handleEvents(){
+  const evs=G.popEvents();
+  for(const e of evs){
+    if(e.kind==='found'){
+      const tiers=e.items.filter(i=>i.kind==='tier'), others=e.items.filter(i=>i.kind!=='tier'&&i.kind!=='tab0');
+      for(const it of e.items) markFresh(it.id);
+      for(const t of tiers){
+        const ti=TIERS.findIndex(x=>x.name===t.label);
+        toast('Nouveau palier découvert !',t.label,TIERS[ti].icon,ti);
+      }
+      if(others.length){
+        const names=others.slice(0,2).map(i=>i.label).join(', ')+(others.length>2?' +'+(others.length-2):'');
+        const tier=others[0].kind==='node'?G.NODE[others[0].id.slice(2)].tier:0;
+        toast('Nouvelle amélioration découverte !',names,'🔍',tier);
+      }
+    } else if(e.kind==='goal'){
+      toast('Objectif accompli !',e.txt,'🎯',0);
+    } else if(e.kind==='prestige'){
+      const now=Date.now();
+      if(UI.manual||SV().n[e.t]===1||now-(UI.lastToastAt[e.t]||0)>15000){
+        toast(TIERS[e.t].name+' !','+'+fmt(e.gain)+' '+TIERS[e.t].cur,TIERS[e.t].icon,e.t);
+        UI.lastToastAt[e.t]=now;
+      }
+      UI.manual=false;
+    } else if(e.kind==='win'){
+      showWin();
+    }
+  }
+}
+
+/* ================= barre de ressources ================= */
+function buildRes(){
+  const s=SV(), list=[0,1,2,3,4].filter(t=>t===0||s.disc['T'+t]);
+  const key=list.join(',');
+  if(UI.sig.res===key) return; UI.sig.res=key;
+  const box=$('#res'); box.innerHTML=''; UI.res={};
+  for(const t of list){
+    const el=document.createElement('div'); el.className='chip'+(isFresh('T'+t)?' fresh':''); el.style.setProperty('--tc',tcol(t));
+    el.innerHTML='<span class="ico">'+TIERS[t].icon+'</span><span><b class="mono v"></b><small class="mono r"></small></span>';
+    box.appendChild(el); UI.res[t]={v:$('.v',el),r:$('.r',el)};
+  }
+}
+function updateRes(){
+  const s=SV();
+  for(const k in UI.res){
+    const t=+k, r=UI.res[t];
+    if(t===0){ setText(r.v,fmt(s.res[0])); setText(r.r,'+'+fmt(G.cps())+' /s'); }
+    else{
+      setText(r.v,fmt(s.res[t])+' '+TIERS[t].cur);
+      const p=G.pending(t);
+      if(p>0){ r.r.innerHTML='<span class="pend">+'+fmt(p)+'</span> en attente'; r._p=1; }
+      else if(r._p||!r.r._t){ r._p=0; setText(r.r,'gagné : '+fmt(s.tot[t])); }
+    }
+  }
+}
+
+/* ================= objectif ================= */
+function updateGoal(){
+  const s=SV(), gi=G.goalInfo(), box=$('#goal');
+  if(!gi){
+    box.classList.add('done');
+    setText($('.gt',box),'Tous les objectifs sont accomplis');
+    setText($('.gn span:first-child',box),''); setText($('.gn span:last-child',box),'');
+    $('.bar i',box).style.width='100%'; return;
+  }
+  setText($('.gt',box),gi.g.txt);
+  $('.bar i',box).style.width=(gi.frac*100).toFixed(1)+'%';
+  setText($('.gn span:first-child',box),fmt(gi.cur)+' / '+fmt(gi.g.v));
+  setText($('.gn span:last-child',box),(gi.frac*100).toFixed(gi.frac<0.1?1:0)+' %');
+  setText($('.gl span:last-child',box),s.goal+' accompli'+(s.goal>1?'s':''));
+}
+
+/* ================= générateurs ================= */
+function syncGens(){
+  const s=SV(), list=$('#gens');
+  if(UI.gensOwner!==s){ list.innerHTML=''; UI.gen={}; UI.gensOwner=s; }
+  GENS.forEach(function(g,i){
+    if(!s.disc['g'+i]||UI.gen[i]) return;
+    const el=document.createElement('div'); el.className='gen'+(isFresh('g'+i)?' fresh':'');
+    el.innerHTML='<div class="gico">'+g.ic+'</div>'+
+      '<div class="ginfo"><div class="gname"><b>'+esc(g.n)+'</b><span class="cnt mono"></span></div>'+
+      '<div class="gdesc">'+esc(g.txt)+'</div><div class="gprod mono"></div></div>'+
+      '<button class="buy" data-act="buygen" data-i="'+i+'"><span class="bq mono"></span><span class="bc mono"></span></button>';
+    list.appendChild(el);
+    UI.gen[i]={el:el,cnt:$('.cnt',el),prod:$('.gprod',el),btn:$('.buy',el),bq:$('.bq',el),bc:$('.bc',el)};
+  });
+}
+function updateGens(){
+  const s=SV(), mode=s.buy, cap=mode==='max'?1e6:mode;
+  for(const i in UI.gen){
+    const u=UI.gen[i], n=s.gens[i];
+    setText(u.cnt,'×'+fmt(n));
+    const per=G.genCps(+i);
+    u.prod.innerHTML=fmt(n*per)+' /s <em>· '+fmt(per)+' chacun'+(G.A.gm[i]>1?' · bonus ×'+fmt(G.A.gm[i]):'')+'</em>';
+    const k=G.maxAfford(+i,cap);
+    setText(u.bq,k>0?'×'+fmt(k):'×1');
+    setText(u.bc,fmt(k>0?G.genCostK(+i,n,k):G.genCost(+i)));
+    setCls(u.btn,'off',k<=0);
+  }
+}
+
+/* ================= améliorations de pièces (onglet 0) ================= */
+function sigUpg(){
+  const s=SV(); let k='';
+  for(const u of G.UPGS){ if(G.upgVisible(u)){ k+=u.id+(s.upg[u.id]?'o':(u.prev&&!s.upg[u.prev]?'l':'a')); } }
+  return k;
+}
+function buildUpg(){
+  const s=SV(), body=$('#tabbody');
+  const avail=[], locked=[]; let owned=0;
+  for(const u of G.UPGS){
+    if(!G.upgVisible(u)) continue;
+    if(s.upg[u.id]){owned++;continue;}
+    if(u.prev&&!s.upg[u.prev]) locked.push(u); else avail.push(u);
+  }
+  avail.sort(function(a,b){return a.cost-b.cost;});
+  let h='<div class="uphead"><h2>Améliorations</h2><small>'+owned+' achetée'+(owned>1?'s':'')+'</small></div><div class="uplist">';
+  for(const u of avail){
+    const ic=u.gen!=null?GENS[u.gen].ic:(u.fx.glob?'📈':'👆');
+    h+='<button class="upg'+(isFresh('u:'+u.id)?' fresh':'')+'" data-act="buyupg" data-id="'+u.id+'"><span class="uico">'+ic+'</span>'+
+      '<span><b>'+esc(u.name)+'</b><small>'+esc(u.desc)+'</small>'+(u.need!=null?'<small class="need"></small>':'')+'</span>'+
+      '<span class="ucost mono">'+fmt(u.cost)+'</span></button>';
+  }
+  h+='</div>';
+  if(!avail.length) h+='<div class="empty" style="padding:18px">Rien à acheter pour l’instant.</div>';
+  if(locked.length){
+    h+='<details class="lockedlist"><summary>'+locked.length+' amélioration'+(locked.length>1?'s':'')+' à débloquer à nouveau</summary><ul>';
+    for(const u of locked) h+='<li><span>'+esc(u.name)+'</span><span>après '+esc(G.UPG[u.prev].name)+'</span></li>';
+    h+='</ul></details>';
+  }
+  body.innerHTML=h;
+}
+function updateUpg(){
+  const s=SV();
+  $$('.upg',$('#tabbody')).forEach(function(el){
+    const u=G.UPG[el.dataset.id], inf=G.upgInfo(u);
+    setCls(el,'can',inf.can);
+    if(u.need!=null){
+      const n=$('.need',el);
+      if(n){ const have=s.gens[u.gen]; setText(n,inf.needOk?'✓ '+fmt(u.need)+' '+GENS[u.gen].pl+' possédés':'Requiert '+fmt(u.need)+' '+GENS[u.gen].pl+' ('+fmt(have)+'/'+fmt(u.need)+')'); setCls(n,'ok',inf.needOk); }
+    }
+  });
+}
+
+/* ================= paliers de prestige ================= */
+function visibleNodeIds(t){ return G.visibleNodes(t); }
+function sigTier(t){
+  const s=SV(); let k='t'+t+':';
+  for(const n of visibleNodeIds(t)) k+=n.id+(s.nodes[n.id]?'o':'')+(s.nodes[n.id]&&n.a&&s.auto[n.id]===false?'x':'')+(isFresh('n:'+n.id)?'f':'');
+  return k;
+}
+function autoLabel(n){
+  const low=TIERS[n.tier-1];
+  if(n.a==='click') return 'Auto-clic';
+  if(n.a==='gens') return 'Auto-achat des générateurs';
+  if(n.a==='upg') return 'Auto-achat des améliorations';
+  if(n.a==='pres') return 'Auto-'+low.name;
+  if(n.a==='pass') return 'Gain passif de '+low.cur+' (10 %/s)';
+  if(n.a==='tree') return 'Auto-achat de l’arbre '+low.name;
+  return n.name;
+}
+function resetNote(t){
+  const names=[];
+  for(let k=0;k<t;k++) names.push(k===0?'pièces':TIERS[k].cur);
+  return 'Remet à zéro : '+names.join(', ')+', générateurs, améliorations et arbres inférieurs, sauf ce que tes nœuds 🔒 gardent.';
+}
+function buildTier(t){
+  const s=SV(), T=TIERS[t], body=$('#tabbody');
+  let h='<div class="pcard" style="--tc:'+tcol(t)+'" data-t="'+t+'">'+
+    '<div class="pc-head"><div class="pc-title"><span class="ico">'+T.icon+'</span><div><h2>'+T.name+'</h2><small class="runt"></small></div></div>'+
+    '<div class="pc-cur"><b class="mono cur"></b><small>'+T.cur+' en réserve</small></div></div>'+
+    '<div class="pc-formula">Gain = ⌊ √( '+T.earnLabel+' ÷ <span class="mono">'+fmt(G.P.seuil[t])+'</span> ) × multiplicateurs ⌋<span class="f2 mono"></span></div>'+
+    '<div><div class="bar" style="--tc:'+tcol(t)+'"><i></i></div><div class="pc-sub mono"><span class="s1"></span><span class="s2"></span></div></div>'+
+    '<button class="pbtn" data-act="prestige" data-t="'+t+'"><span class="pb-main">'+T.name+'</span><span class="pb-gain mono"></span><span class="pb-f mono"></span></button>'+
+    '<div class="pc-note">'+esc(resetNote(t))+'</div></div>';
+  // automatisations possédées
+  const autos=visibleNodeIds(t).filter(n=>n.a&&s.nodes[n.id]);
+  if(autos.length){
+    h+='<div class="autos" style="--tc:'+tcol(t)+'"><h3>⚙ Automatisations</h3>';
+    for(const n of autos){
+      const on=s.auto[n.id]!==false;
+      h+='<button class="tog'+(on?' on':'')+'" data-act="toggle" data-id="'+n.id+'"><span class="sw"></span><span>'+esc(autoLabel(n))+'</span><small>'+(on?'ACTIF':'PAUSE')+'</small></button>';
+      if(n.a==='pres'){
+        h+='<div class="thr"><span>Dès que le gain en attente ≥</span><span class="st"><button data-act="thr" data-t="'+(t-1)+'" data-d="-3" aria-label="Seuil beaucoup plus bas">«</button><button data-act="thr" data-t="'+(t-1)+'" data-d="-1" aria-label="Seuil plus bas">‹</button>'+
+          '<b class="mono thrv" data-t="'+(t-1)+'"></b><button data-act="thr" data-t="'+(t-1)+'" data-d="1" aria-label="Seuil plus haut">›</button><button data-act="thr" data-t="'+(t-1)+'" data-d="3" aria-label="Seuil beaucoup plus haut">»</button></span><span>'+TIERS[t-1].cur+'</span></div>';
+      }
+    }
+    h+='</div>';
+  }
+  // arbre : uniquement les nœuds découverts, lignes seulement entre nœuds visibles
+  const vis=visibleNodeIds(t), rows={};
+  for(const n of vis){ (rows[n.row]=rows[n.row]||[]).push(n); }
+  const keys=Object.keys(rows).map(Number).sort(function(a,b){return a-b;});
+  h+='<div class="tree" id="tree" style="--tc:'+tcol(t)+'"><svg aria-hidden="true"></svg>';
+  for(const r of keys){
+    h+='<div class="trow">';
+    rows[r].sort(function(a,b){return a.col-b.col;});
+    for(const n of rows[r]){
+      const tag=n.final?'<span class="ntag">★ Final</span>':n.keep?'<span class="ntag">🔒 Garde</span>':n.a?'<span class="ntag">⚙ Auto</span>':'';
+      const d=G.describe(n).replace(/^(⚙|🔒)\s*/,'');
+      h+='<button class="node'+(n.final?' final':'')+(isFresh('n:'+n.id)?' fresh':'')+'" data-act="buynode" data-id="'+n.id+'" id="nd-'+n.id+'">'+
+        '<span class="nico">'+n.icon+'</span><span class="nname">'+esc(n.name)+'</span>'+tag+'<span class="ndesc">'+esc(d)+'</span><span class="ncost mono"></span></button>';
+    }
+    h+='</div>';
+  }
+  h+='</div>';
+  body.innerHTML=h;
+  requestAnimationFrame(drawLines);
+}
+function drawLines(){
+  const tree=$('#tree'); if(!tree) return;
+  const svg=$('svg',tree), s=SV(), box=tree.getBoundingClientRect();
+  const t=+$('.pcard').dataset.t; let h='';
+  for(const n of G.visibleNodes(t)){
+    const c=document.getElementById('nd-'+n.id); if(!c) continue;
+    for(const rid of n.req){
+      const p=document.getElementById('nd-'+rid); if(!p) continue;
+      const a=p.getBoundingClientRect(), b=c.getBoundingClientRect();
+      const x1=a.left+a.width/2-box.left, y1=a.bottom-box.top-2, x2=b.left+b.width/2-box.left, y2=b.top-box.top+2, m=(y2-y1)*0.55;
+      const cls='ln'+(s.nodes[rid]?(s.nodes[n.id]?' own':' act'):'');
+      h+='<path class="'+cls+'" d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' C'+x1.toFixed(1)+' '+(y1+m).toFixed(1)+' '+x2.toFixed(1)+' '+(y2-m).toFixed(1)+' '+x2.toFixed(1)+' '+y2.toFixed(1)+'"/>';
+    }
+  }
+  svg.innerHTML=h;
+}
+function updateTier(t){
+  const s=SV(), T=TIERS[t], body=$('#tabbody'), card=$('.pcard',body); if(!card) return;
+  const e=s.earn[t-1], seuil=G.P.seuil[t], m=G.A.gain[t], g=G.pending(t), can=G.canPrestige(t);
+  setText($('.cur',card),fmt(s.res[t]));
+  setText($('.runt',card),'Run en cours : '+G.fmtTime(s.runT[t])+(s.n[t]?' · '+s.n[t]+' fois':''));
+  setText($('.f2',card),'⌊ √( '+fmt(e)+' ÷ '+fmt(seuil)+' ) × '+fmt(m)+' ⌋ = '+fmt(g));
+  const bar=$('.bar i',card);
+  if(e<seuil){
+    bar.style.width=(e/seuil*100).toFixed(1)+'%';
+    setText($('.s1',card),fmt(e)+' / '+fmt(seuil)+' '+T.earnLabel.replace(' gagnées','').replace(' gagnés',''));
+    setText($('.s2',card),(e/seuil*100).toFixed(1)+' %');
+  }else{
+    const lo=seuil*Math.pow(g/m,2), hi=G.nextAt(t);
+    bar.style.width=Math.max(0,Math.min(100,(e-lo)/(hi-lo)*100)).toFixed(1)+'%';
+    setText($('.s1',card),'Prochain +1 '+T.cur+' à '+fmt(hi));
+    setText($('.s2',card),'reste '+fmt(Math.max(0,hi-e)));
+  }
+  const btn=$('.pbtn',card);
+  setCls(btn,'off',!can); setCls(btn,'ready',can);
+  setText($('.pb-gain',btn),can?'+'+fmt(g)+' '+T.cur:(e<seuil?(e/seuil*100).toFixed(0)+' %':'—'));
+  setText($('.pb-main',btn),can?T.name:'Objectif : '+fmt(seuil)+' '+T.earnLabel.split(' ')[0]);
+  setText($('.pb-f',btn),'⌊ √( '+fmt(e)+' ÷ '+fmt(seuil)+' ) × '+fmt(m)+' ⌋ = '+fmt(g)+' '+T.cur);
+  $$('.thrv',body).forEach(function(el){ setText(el,fmt(G.thrValue(+el.dataset.t))); });
+  $$('.node',body).forEach(function(el){
+    const n=G.NODE[el.dataset.id], inf=G.nodeInfo(n);
+    setCls(el,'own',inf.owned); setCls(el,'can',inf.can); setCls(el,'lock',inf.locked&&!inf.owned);
+    setText($('.ncost',el),inf.owned?'✓ Acheté':(inf.locked?'Prérequis manquant':fmt(n.cost)+' '+T.cur));
+  });
+}
+
+/* ================= onglets ================= */
+function tabList(){
+  const s=SV(), l=[];
+  if(s.disc.tab0) l.push(0);
+  for(let t=1;t<=4;t++) if(s.disc['T'+t]) l.push(t);
+  return l;
+}
+function buildTabs(){
+  const l=tabList(), key=l.join(',')+'|'+UI.tab;
+  if(UI.sig.tabs===key) return; UI.sig.tabs=key;
+  if(l.length&&l.indexOf(UI.tab)<0) UI.tab=l[0];
+  if(!l.length) UI.tab=-1;
+  const box=$('#tabs'); box.innerHTML=''; UI.tabEls={};
+  for(const t of l){
+    const b=document.createElement('button'); b.className='tab'+(isFresh(t===0?'tab0':'T'+t)?' fresh':'');
+    b.style.setProperty('--tc',tcol(t)); b.setAttribute('role','tab'); b.setAttribute('aria-selected',t===UI.tab?'true':'false');
+    b.dataset.act='tab'; b.dataset.t=t;
+    b.innerHTML='<span>'+(t===0?'⛏️':TIERS[t].icon)+'</span><span>'+(t===0?'Améliorations':TIERS[t].name)+'</span><i class="dot"></i>';
+    box.appendChild(b); UI.tabEls[t]=b;
+  }
+}
+function updateTabs(){
+  const s=SV();
+  for(const k in UI.tabEls){
+    const t=+k, el=UI.tabEls[t]; let has=false, ready=false;
+    if(t===0){ has=G.visibleUpgs().some(u=>G.upgInfo(u).can); }
+    else{ has=G.visibleNodes(t).some(n=>G.nodeInfo(n).can); ready=G.canPrestige(t); }
+    setCls(el,'has',has&&t!==UI.tab); setCls(el,'ready',ready);
+  }
+}
+function renderBody(){
+  const body=$('#tabbody'), t=UI.tab;
+  if(t<0){
+    body.innerHTML='<div class="empty"><span class="big">🪨</span><b>Continue de miner…</b>Les améliorations apparaîtront ici dès que tu en auras découvert une.</div>'; UI.sig.body='empty'; return;
+  }
+  const sig=t===0?'u:'+sigUpg():sigTier(t);
+  if(UI.sig.body===sig) return;
+  UI.sig.body=sig;
+  const keep=window.scrollY;
+  if(t===0) buildUpg(); else buildTier(t);
+  if(Math.abs(window.scrollY-keep)>2) window.scrollTo(0,keep);
+}
+function updateBody(){
+  if(UI.tab===0) updateUpg(); else if(UI.tab>0) updateTier(UI.tab);
+}
+
+/* ================= chaîne d'automatisation ================= */
+const CHIP_ORDER=['click','gens','upg','pres','pass','tree'];
+function sigChain(){
+  const s=SV(); let k='';
+  for(let t=0;t<5;t++) k+=(t===0||s.disc['T'+t]?'1':'0');
+  for(const n of G.NODES){ if((n.a||n.keep)&&s.disc['n:'+n.id]) k+=n.id+(s.nodes[n.id]?(n.a&&s.auto[n.id]===false?'x':'o'):'-'); }
+  return k;
+}
+function chipLabel(n){
+  if(n.keep) return n.tier===1?'Garde les améliorations':'Garde l’arbre '+TIERS[n.tier-1].name;
+  const low=TIERS[n.tier-1];
+  return ({click:'Auto-clic',gens:'Auto-achat générateurs',upg:'Auto-achat améliorations',pres:'Auto-'+low.name,pass:low.cur+' passifs',tree:'Auto-achat de l’arbre'})[n.a];
+}
+function renderChain(){
+  const sig=sigChain(); if(UI.sig.chain===sig) return; UI.sig.chain=sig;
+  const s=SV(), box=$('#chain'); let h='', any=false, prevLit=false;
+  const shown=[0,1,2,3,4].filter(t=>t===0||s.disc['T'+t]);
+  shown.forEach(function(t,idx){
+    // boîte t : automatisée par l'arbre t+1
+    const nodes=G.NODES.filter(n=>n.tier===t+1&&(n.a||n.keep)&&s.disc['n:'+n.id]);
+    nodes.sort(function(a,b){ const ka=a.keep?9:CHIP_ORDER.indexOf(a.a), kb=b.keep?9:CHIP_ORDER.indexOf(b.a); return ka-kb; });
+    let lit=false;
+    h+='<div class="cbox" style="--tc:'+tcol(t)+'"><div class="cnode"><span>'+TIERS[t].icon+'</span><span>'+TIERS[t].name+'</span></div>';
+    if(nodes.length){
+      h+='<div class="cchips"><small>géré par '+TIERS[t+1].name+'</small>';
+      for(const n of nodes){
+        const own=!!s.nodes[n.id], on=own&&(!n.a||s.auto[n.id]!==false);
+        if(on) lit=true; if(own) any=true;
+        h+='<button class="cchip'+(own?' own':'')+(own&&!on?' off':'')+(own&&n.a?' tg':'')+'" '+(own&&n.a?'data-act="toggle" data-id="'+n.id+'" title="Activer / désactiver"':'tabindex="-1"')+'>'+(n.keep?'🔒':'⚙')+' '+esc(chipLabel(n))+'</button>';
+      }
+      h+='</div>';
+    }
+    h+='</div>';
+    if(idx<shown.length-1) h+='<div class="carrow'+(lit?' lit':'')+'">➜</div>';
+  });
+  box.innerHTML=h;
+  $('#chainnone').hidden=any;
+}
+
+/* ================= victoire ================= */
+function showWin(){
+  const s=SV(), w=$('#win');
+  $('#winstats').innerHTML='<div>Temps de jeu<b class="mono">'+G.fmtTime(s.endAt)+'</b></div><div>Clics<b class="mono">'+fmt(s.clicks)+'</b></div>'+
+    '<div>Renaissances<b class="mono">'+fmt(s.n[1])+'</b></div><div>Ascensions<b class="mono">'+fmt(s.n[2])+'</b></div>'+
+    '<div>Transcendances<b class="mono">'+fmt(s.n[3])+'</b></div><div>Divinités<b class="mono">'+fmt(s.n[4])+'</b></div>';
+  w.hidden=false;
+}
+
+/* ================= actions ================= */
+function floatText(x,y,txt){
+  const fx=$('#fx'); if(!fx) return;
+  if(fx.children.length>14) fx.removeChild(fx.firstChild);
+  const el=document.createElement('span'); el.className='fl'; el.textContent=txt;
+  const r=fx.getBoundingClientRect();
+  el.style.left=Math.max(30,Math.min(r.width-30,x-r.left))+'px'; el.style.top=Math.max(20,Math.min(r.height-10,y-r.top))+'px';
+  fx.appendChild(el); setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); },950);
+}
+function doClick(x,y){
+  const v=G.click();
+  floatText(x,y,'+'+fmt(v));
+  const ore=$('#ore'); ore.classList.add('hit'); clearTimeout(UI.hitT); UI.hitT=setTimeout(function(){ore.classList.remove('hit');},70);
+}
+function onAct(el,ev){
+  const a=el.dataset.act, s=SV();
+  if(a==='buygen'){ G.buyGen(+el.dataset.i,s.buy); }
+  else if(a==='buyupg'){ G.buyUpg(el.dataset.id); }
+  else if(a==='buynode'){ G.buyNode(el.dataset.id); }
+  else if(a==='prestige'){ UI.manual=true; if(!G.prestige(+el.dataset.t)) UI.manual=false; UI.sig={}; }
+  else if(a==='tab'){ UI.tab=+el.dataset.t; UI.sig.body=null; UI.sig.tabs=null; }
+  else if(a==='toggle'){ G.toggleAuto(el.dataset.id); UI.sig.body=null; UI.sig.chain=null; }
+  else if(a==='thr'){ const t=+el.dataset.t; G.setThr(t,s.thr[t]+(+el.dataset.d)); }
+  else if(a==='mode'){ const v=el.dataset.v; s.buy=v==='max'?'max':+v; syncModeBtns(); }
+  else if(a==='speed'){ s.speed=+el.dataset.v; syncSpeedBtns(); }
+  else if(a==='save'){ doSave(true); }
+  else if(a==='wipe'){ onWipe(); }
+  else if(a==='closewin'){ $('#win').hidden=true; }
+  refresh();
+}
+function syncModeBtns(){ const s=SV(); $$('#buymode button').forEach(function(b){ b.setAttribute('aria-pressed',String(String(s.buy)===b.dataset.v)); }); }
+function syncSpeedBtns(){ const s=SV(); $$('#speed button').forEach(function(b){ b.setAttribute('aria-pressed',String(+b.dataset.v===s.speed)); }); }
+function doSave(manual){
+  const ok=G.save(); UI.savedFlash=Date.now()+2200;
+  if(manual) toast(ok?'Partie sauvegardée':'Sauvegarde impossible',ok?'Dans ce navigateur':'Le stockage local est bloqué','💾',0);
+}
+function onWipe(){
+  const b=$('#wipe');
+  if(!UI.wipeArmed||Date.now()>UI.wipeArmed){
+    UI.wipeArmed=Date.now()+4000; b.classList.add('armed'); b.textContent='Sûr ? Clique encore';
+    clearTimeout(UI.wipeT); UI.wipeT=setTimeout(disarm,4000); return;
+  }
+  disarm(); G.wipe(); UI.sig={}; UI.tab=-1; UI.fresh={}; UI.gensOwner=null; $('#toasts').innerHTML='';
+  $('#win').hidden=true; syncModeBtns(); syncSpeedBtns();
+  toast('Partie effacée','Tout repart de zéro','🗑️',0);
+}
+function disarm(){ const b=$('#wipe'); UI.wipeArmed=0; b.classList.remove('armed'); b.textContent='Tout effacer'; }
+
+/* ================= boucle ================= */
+function refresh(){
+  buildRes(); syncGens(); buildTabs(); renderBody(); renderChain();
+  updateRes(); updateGoal(); updateGens(); updateTabs(); updateBody();
+  const st=$('#savestate'); setText(st,UI.savedFlash>Date.now()?'💾 sauvegardé':'');
+  $('#clickval').textContent=fmt(G.clickValue());
+  const ww=$('#endbanner'); if(ww) ww.hidden=!SV().ended;
+}
+function cleanFresh(){
+  const now=Date.now(); let any=false;
+  for(const k in UI.fresh){ if(UI.fresh[k]<=now){ delete UI.fresh[k]; any=true; } }
+  if(any) $$('.fresh').forEach(function(e){ e.classList.remove('fresh'); });
+}
+function init(){
+  const had=G.load(); const s=SV();
+  if(had){
+    const away=(Date.now()-s.saved)/1000;
+    if(away>20){
+      const before=s.res[0]+0, tb=s.tot[0];
+      G.catchUp(Math.min(away,8*3600)); G.popEvents();
+      toast('Bon retour !','Absent '+G.fmtTime(away)+' · +'+fmt(SV().tot[0]-tb)+' pièces','👋',0);
+    }
+  }
+  syncModeBtns(); syncSpeedBtns(); refresh();
+  document.addEventListener('click',function(ev){
+    const el=ev.target.closest&&ev.target.closest('[data-act]'); if(!el) return;
+    if(el.id==='ore'){ if(ev.detail===0){ const r=el.getBoundingClientRect(); doClick(r.left+r.width/2,r.top+r.height/2); refresh(); } return; }
+    onAct(el,ev);
+  });
+  const ore=$('#ore');
+  ore.addEventListener('pointerdown',function(ev){ ev.preventDefault(); doClick(ev.clientX,ev.clientY); });
+  ore.addEventListener('contextmenu',function(ev){ ev.preventDefault(); });
+  window.addEventListener('resize',function(){ drawLines(); });
+  if(window.ResizeObserver) new ResizeObserver(function(){ drawLines(); }).observe($('#side'));
+  document.addEventListener('visibilitychange',function(){ if(document.hidden) G.save(); });
+  window.addEventListener('pagehide',function(){ G.save(); });
+  try{ if(window.claude&&window.claude.hot&&window.claude.hot.snapshot) window.claude.hot.snapshot(function(){ G.save(); return {}; }); }catch(e){}
+  let last=performance.now(), acc=0;
+  setInterval(function(){
+    const now=performance.now(); let dt=(now-last)/1000; last=now;
+    if(dt>3){ G.catchUp(Math.min(dt,8*3600)); G.popEvents(); }
+    else G.advance(dt*SV().speed);
+    handleEvents(); refresh(); cleanFresh();
+    acc+=dt; if(acc>12){ acc=0; doSave(false); }
+  },100);
+  window.__game=G; window.__ui=UI;   // pratique pour tester dans la console
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+})();
+
+</script>
+
+</body></html>

@@ -3,7 +3,7 @@
    essayé d'abord (pour avoir la dernière version) et le cache sert de secours.
    VERSION et FICHIERS sont générés par outils/construire.js : ne pas les modifier à la main. */
 // <généré>
-const VERSION = 'f5f732b502';
+const VERSION = 'b248ac7a9c';
 const FICHIERS = [
   './',
   '404.html',
@@ -50,6 +50,7 @@ const FICHIERS = [
   'assets/systeme.css',
   'cours.html',
   'index.html',
+  'jeux/filon-infini/index.html',
   'jeux/mine-clic/icones/icone-192.png',
   'jeux/mine-clic/icones/icone-512.png',
   'jeux/mine-clic/icones/icone-apple-180.png',

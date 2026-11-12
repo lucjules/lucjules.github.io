@@ -284,6 +284,11 @@ h2.espace { margin-top: 18px; }
 .po-btn:disabled { cursor: default; opacity: .75; }
 .pouvoir.ok .po-btn { background: #7a4fb8; }
 .pouvoir.ok .po-btn:hover { background: #8f62d0; }
+.po-btns { display: flex; flex-direction: column; gap: 4px; }
+.pouvoir.eclat { background: #b4a6cf; }
+.pouvoir.eclat img { filter: none !important; }
+.po-max { min-height: 30px; font-size: 14px; }
+.paliers tr.suite td { color: #444; font-style: italic; font-weight: 400; text-align: center; }
 .liste-ren { margin: 8px 0; padding-left: 20px; }
 .perdu b { color: #a83232; }
 .garde b { color: #2e6b1f; }

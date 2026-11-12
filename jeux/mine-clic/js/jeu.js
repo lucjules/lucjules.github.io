@@ -6,15 +6,15 @@
   'use strict';
   var D = window.MC_DONNEES, T = window.MC_TEXTURES;
   var CLE = 'mine-clic';
-  var SEUIL_ETOILE = 1e8; // étoiles = racine cubique (minés au total / 100 millions)
+  var RG = D.REGLES; // règles de la renaissance : étoiles, paliers à l'infini, éclats stellaires, effet adouci des gros bonus
   var $ = function (id) { return document.getElementById(id); };
   var parId = function (liste) { var o = {}; liste.forEach(function (x) { o[x.id] = x; }); return o; };
   var MACHINE = parId(D.MACHINES), AMEL = parId(D.AMELIORATIONS), PROG = parId(D.PROGRES), DIM = parId(D.DIMENSIONS);
   var POUVOIR = parId(D.POUVOIRS), CAPA = parId(D.CAPACITES), MISSION = parId(D.MISSIONS), FAMILIER = parId(D.FAMILIERS);
 
   /* ================= Nombres et durées, à la française ================= */
-  var GRANDS = ['million', 'milliard', 'billion', 'billiard', 'trillion', 'trilliard', 'quadrillion', 'quadrilliard', 'quintillion', 'quintilliard', 'sextillion', 'sextilliard'];
-  var COURTS = ['M', 'Md', 'Bn', 'Bd', 'Tn', 'Td', 'Qn', 'Qd', 'Qt', 'Qtd', 'Sx', 'Sxd'];
+  var GRANDS = ['million', 'milliard', 'billion', 'billiard', 'trillion', 'trilliard', 'quadrillion', 'quadrilliard', 'quintillion', 'quintilliard', 'sextillion', 'sextilliard', 'septillion', 'septilliard', 'octillion', 'octilliard', 'nonillion', 'nonilliard', 'décillion', 'décilliard'];
+  var COURTS = ['M', 'Md', 'Bn', 'Bd', 'Tn', 'Td', 'Qn', 'Qd', 'Qt', 'Qtd', 'Sx', 'Sxd', 'Sp', 'Spd', 'Oc', 'Ocd', 'No', 'Nod', 'Dc', 'Dcd'];
   function nombre(n, decimales) {
     if (!isFinite(n)) return '∞';
     if (n < 1e6) {
@@ -29,6 +29,8 @@
     v = Math.floor(v * 1000) / 1000;
     return v.toLocaleString('fr-FR', { maximumFractionDigits: 3 }) + ' ' + GRANDS[p] + (v >= 2 ? 's' : '');
   }
+  // un facteur multiplicateur : « 1,19 », « 12,5 », « 3,4 millions »
+  function fois(x) { return x < 1000 ? x.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) : nombre(x); }
   function unite(n) { return n >= 1e6 && S.notation == 'mots' ? 'de blocs' : n >= 2 ? 'blocs' : 'bloc'; }
   function blocs(n, decimales) { return nombre(n, decimales) + ' ' + unite(n); }
   function duree(s) {
@@ -37,23 +39,24 @@
     if (s < 3600) return Math.floor(s / 60) + ' min ' + String(s % 60).padStart(2, '0') + ' s';
     if (s < 86400) return Math.floor(s / 3600) + ' h ' + String(Math.floor(s / 60) % 60).padStart(2, '0') + ' min';
     if (s < 86400 * 365) return Math.floor(s / 86400) + ' j ' + Math.floor(s / 3600) % 24 + ' h';
-    return 'plus d\'un an';
+    var a = Math.floor(s / 86400 / 365);
+    return a < 2 ? 'plus d\'un an' : 'plus de ' + a + ' ans';
   }
   // « {1000} » dans un texte → nombre mis en forme
-  function texte(t) { return t.replace(/\{(\d+(?:e\d+)?)\}/g, function (m, n) { return nombre(+n); }); }
+  function texte(t) { return t.replace(/\{(\d+(?:e\+?\d+)?)\}/g, function (m, n) { return nombre(+n); }); }
   function echappe(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function pluriel(n, mot, mots) { return n + ' ' + (n > 1 ? (mots || mot + 's') : mot); }
   function rond(n) { if (n < 100) return Math.ceil(n); var p = Math.pow(10, Math.floor(Math.log10(n)) - 1); return Math.ceil(n / p) * p; }
 
   /* ================= État de la partie ================= */
-  var COMPTEURS = ['clics', 'casses', 'etoiles', 'fragments', 'renaissances', 'coffres', 'creepers', 'boums', 'coups', 'missionsFaites', 'brillants', 'capacites', 'comboMax', 'achats', 'amelsAchetees', 'maxAchat', 'cadeaux', 'bossTotal', 'creepersNuit'];
+  var COMPTEURS = ['clics', 'casses', 'etoiles', 'fragments', 'renaissances', 'coffres', 'creepers', 'boums', 'coups', 'missionsFaites', 'brillants', 'capacites', 'comboMax', 'achats', 'amelsAchetees', 'maxAchat', 'cadeaux', 'bossTotal', 'creepersNuit', 'eclats'];
   function neuf() {
     var t = Date.now();
     return {
-      v: 2, blocs: 0, total: 0, totalAll: 0, machines: {}, amels: [], progres: [], pouvoirs: [], recharges: {}, missions: [],
+      v: 3, blocs: 0, total: 0, totalAll: 0, machines: {}, amels: [], progres: [], pouvoirs: [], recharges: {}, missions: [],
       clics: 0, casses: 0, etoiles: 0, fragments: 0, renaissances: 0, coffres: 0, creepers: 0, boums: 0, coups: 0,
       missionsFaites: 0, brillants: 0, capacites: 0, comboMax: 0, achats: 0, amelsAchetees: 0, maxAchat: 0, cadeaux: 0,
-      bossTotal: 0, creepersNuit: 0, maxMachines: {}, capasOk: [], bossVaincus: [], familiers: [], familier: null, collection: {}, secrets: [], historique: [],
+      bossTotal: 0, creepersNuit: 0, eclats: 0, maxMachines: {}, capasOk: [], bossVaincus: [], familiers: [], familier: null, collection: {}, secrets: [], historique: [],
       dims: ['surface'], vues: ['surface'], dim: 'surface', bloc: 'herbe', brillant: false,
       debut: t, debutVie: t, derniere: t, tempsJeu: 0, son: true, musique: true, particules: true, notation: 'mots', qte: 1
     };
@@ -110,17 +113,19 @@
       else m[u.effet]++;
     });
     J.mods = m;
-    J.pctEtoile = a('constellation2') ? 5 : a('constellation') ? 3 : 2;
+    J.pctEtoile = a('constellation3') ? 8 : a('constellation2') ? 5 : a('constellation') ? 3 : 2;
     J.multProgres = S.progres.length; J.multEtoiles = S.etoiles * J.pctEtoile;
     J.jalons = multJalons(S.etoiles);
-    J.forge = (a('forge1') ? 1.5 : 1) * (a('forge2') ? 2 : 1) * (a('forge3') ? 3 : 1) * (a('forge4') ? 5 : 1) * (a('forge5') ? 10 : 1);
-    J.mult = (1 + m.global / 100) * (1 + S.progres.length / 100) * (1 + J.multEtoiles / 100) * J.jalons * J.forge;
+    J.eclat = RG.multEclat(S.eclats);
+    J.forge = 1; D.POUVOIRS.forEach(function (p) { if (p.forge && a(p.id)) J.forge *= p.forge; });
     J.maitrise = 0; J.blocsMaitrises = 0;
     Object.keys(D.BLOCS).forEach(function (b) { var n = niveauMaitrise(S.collection[b] || 0); J.maitrise += n; if (n) J.blocsMaitrises++; });
-    J.multMaitrise = J.maitrise * (a('geologue') ? 2 : 1);
-    J.mult *= (1 + J.multMaitrise / 100) * (f('abeille') ? 1.1 : 1);
-    J.remise = (a('marchand') ? 0.9 : 1) * (a('grand-marchand') ? 0.9 : 1) * (a('maitre-marchand') ? 0.9 : 1);
-    J.remiseAmel = (a('bibliothecaire') ? 0.9 : 1) * (a('bibliothecaire2') ? 0.9 : 1);
+    J.multMaitrise = J.maitrise * (a('geologue2') ? 3 : a('geologue') ? 2 : 1);
+    // tous les bonus de production se multiplient ; au-delà de ×100 leur effet croît plus doucement (puissance 0,5), sans jamais s'arrêter
+    J.multBrut = (1 + m.global / 100) * (1 + S.progres.length / 100) * (1 + J.multEtoiles / 100) * J.jalons * J.eclat * J.forge * (1 + J.multMaitrise / 100) * (f('abeille') ? 1.1 : 1) * (f('phenix') ? 1.25 : 1);
+    J.mult = RG.doux(J.multBrut);
+    J.remise = (a('marchand') ? 0.9 : 1) * (a('grand-marchand') ? 0.9 : 1) * (a('maitre-marchand') ? 0.9 : 1) * (a('marchand4') ? 0.9 : 1) * (f('tortue') ? 0.9 : 1);
+    J.remiseAmel = (a('bibliothecaire') ? 0.9 : 1) * (a('bibliothecaire2') ? 0.9 : 1) * (a('bibliothecaire3') ? 0.9 : 1);
     J.parMachine = {}; J.cpsBase = 0;
     D.MACHINES.forEach(function (x) {
       J.parMachine[x.id] = x.cps * Math.pow(2, m.machine[x.id] || 0) * J.mult;
@@ -129,7 +134,7 @@
     J.frenesie = actif('frenesie'); J.ruee = actif('ruee'); J.eclair = actif('eclair'); J.hate = actif('hate'); J.cloche = actif('cloche'); J.pluie = actif('pluie');
     J.multFrenesie = a('dragon') ? 10 : 7;
     J.cps = J.cpsBase * (J.frenesie ? J.multFrenesie : 1) * (J.cloche ? 3 : 1);
-    var clicFixe = Math.pow(2, m.clic) * (a('gant') ? 2 : 1) * (a('gant2') ? 3 : 1) * (a('gant3') ? 5 : 1) * (f('loup') ? 1.5 : 1) * J.mult;
+    var clicFixe = Math.pow(2, m.clic) * (a('gant') ? 2 : 1) * (a('gant2') ? 3 : 1) * (a('gant3') ? 5 : 1) * (a('gant4') ? 10 : 1) * (f('loup') ? 1.5 : 1) * J.mult;
     J.clicBase = (clicFixe + J.cps * m.pct / 100) * (J.ruee ? 777 : 1) * (J.hate ? 10 : 1);
     J.clicRef = clicFixe + J.cpsBase * m.pct / 100; // sans effets temporaires : sert aux récompenses (boss, missions, coffres)
     J.pctCombo = 2 + m.combo;
@@ -139,9 +144,10 @@
     J.fenetreCombo = f('perroquet') ? 1000 : 650; J.comboMaxi = f('perroquet') ? 75 : 50;
     J.multBrillant = 10 * Math.pow(2, m.brillance);
     J.multRecharge = (a('recharge') ? 0.5 : 1) * Math.pow(0.75, m.recharge);
-    J.multDuree = a('sablier') ? 1.5 : 1;
+    J.multDuree = (a('sablier') ? 1.5 : 1) * (a('sablier2') ? 1.5 : 1);
+    J.multTresor = f('panda') ? 3 : 1;
   }
-  function multJalons(n) { var x = 1; D.JALONS.forEach(function (j) { if (n >= j[0]) x *= j[1]; }); return x; }
+  function multJalons(n) { return RG.multJalons(n); }
   function multCombo() { return 1 + Math.max(0, combo.n - 1) * (J.pctCombo || 2) / 100; }
   function gagner(n) { if (!(n > 0)) return; S.blocs += n; S.total += n; S.totalAll += n; }
   function prixMachine(m, n, q) { return Math.ceil(m.prix * Math.pow(1.15, n) * (Math.pow(1.15, q) - 1) / 0.15 * (J.remise || 1)); }
@@ -153,7 +159,7 @@
   }
   function qteVoulue(m) { return S.qte == 'max' ? Math.max(1, maxAchetable(m)) : S.qte; }
   function prixAmel(u) { return Math.ceil(u.prix * J.remiseAmel); }
-  function matierePioche() { var m = 'bois'; ['pierre', 'fer', 'or', 'diamant', 'netherite'].forEach(function (x) { if (S.amels.indexOf('pioche-' + x) >= 0) m = x; }); return m; }
+  function matierePioche() { var m = 'bois'; ['pierre', 'fer', 'or', 'diamant', 'netherite', 'amethyste', 'cosmique'].forEach(function (x) { if (S.amels.indexOf('pioche-' + x) >= 0) m = x; }); return m; }
   function saison() {
     if (window.MC_SAISON !== undefined) return window.MC_SAISON;
     var d = new Date(), mo = d.getMonth() + 1, j = d.getDate();
@@ -233,7 +239,10 @@
     coeur: [174.6, 207.7, 233.1, 261.6, 311.1, 349.2],
     nether: [146.8, 155.6, 196, 207.7, 233.1, 293.7],
     end: [220, 246.9, 277.2, 311.1, 349.2, 392, 440],
-    cite: [130.8, 155.6, 174.6, 196, 233.1]
+    cite: [130.8, 155.6, 174.6, 196, 233.1],
+    bedrock: [110, 130.8, 146.8, 164.8, 196],
+    cosmos: [246.9, 277.2, 329.6, 370, 415.3, 493.9],
+    infini: [174.6, 207.7, 261.6, 311.1, 392, 466.2]
   };
   var musique = { prochaine: 0, phrase: 0, pos: 3 };
   function jouerMusique(t) {
@@ -497,7 +506,10 @@
     coeur: { c: ['#7ff4fa', '#d18cff', '#5cf796'], vy: -8, n: 5 },
     nether: { c: ['#ff9a3c', '#f5d042', '#ff5a2a'], vy: -40, n: 12 },
     end: { c: ['#d18cff', '#8a2be2', '#ffffff'], vy: -14, n: 7 },
-    cite: { c: ['#2de0d9', '#c4fcff'], vy: -10, n: 6 }
+    cite: { c: ['#2de0d9', '#c4fcff'], vy: -10, n: 6 },
+    bedrock: { c: ['#2fd3c6', '#454545', '#c4fcff'], vy: 6, n: 4 },
+    cosmos: { c: ['#ffffff', '#fff6b0', '#8fb6ff', '#ff9a3c'], vy: -18, n: 9 },
+    infini: { c: ['#ffffff', '#d18cff', '#2de0d9', '#7a3fc4'], vy: -4, n: 10 }
   };
   var ambiance = [], ambAccu = 0;
   function dessinerAmbiance(dt) {
@@ -909,7 +921,7 @@
     planifier(false);
     if (ev.type == 'coffre' && clique) ouvrirCoffre(x, y, ev.saison);
     else if (ev.type == 'creeper' && clique) {
-      var g = (Math.max(J.clicRef * 60, Math.min(S.blocs * 0.3, J.cpsBase * 1800)) + 13) * (a('creeper') ? 2 : 1);
+      var g = (Math.max(J.clicRef * 60, Math.min(S.blocs * 0.3, J.cpsBase * 1800)) + 13) * (a('creeper') ? 2 : 1) * J.multTresor;
       gagner(g); S.creepers++; if (estNuit()) S.creepersNuit++;
       sons.coffre();
       eclats(x, y, 24, ['#3fbf4a', '#1d7a2c', '#555', '#888'], 1.5);
@@ -938,7 +950,7 @@
     eclats(x, y, 24, sai == 'noel' ? ['#c62828', '#3fbf4a', '#ffffff', '#f5d042'] : ['#f5d042', '#fff6b0', '#b8874a', '#3fd8e0'], 1.4);
     var quoi = sai == 'noel' ? 'Cadeau ! ' : '';
     if (choix.id == 'fortune') {
-      var g = Math.max(J.clicRef * 30, Math.min(S.blocs * 0.15, J.cpsBase * 900)) + 13;
+      var g = (Math.max(J.clicRef * 30, Math.min(S.blocs * 0.15, J.cpsBase * 900)) + 13) * J.multTresor;
       gagner(g);
       annonce(quoi + 'Trésor ! +' + blocs(g));
       flottant(x, y, '+' + nombre(g), 'gros');
@@ -960,8 +972,8 @@
   }
 
   /* ================= Renaissance, étoiles et pouvoirs ================= */
-  function seuil(k) { return Math.pow(k, 3) * SEUIL_ETOILE; }
-  function etoilesPossibles() { return Math.floor(Math.cbrt(S.totalAll / SEUIL_ETOILE) + 1e-9); }
+  function seuil(k) { return RG.seuil(k); }
+  function etoilesPossibles() { return RG.etoiles(S.totalAll); }
   function gainEtoiles() { return Math.max(0, etoilesPossibles() - S.etoiles); }
   function prochaineEtoile() { return seuil(Math.max(etoilesPossibles(), S.etoiles) + 1); }
   function demanderRenaissance() {
@@ -974,11 +986,11 @@
     dialogue('Renaître ?',
       '<p>Tu gagnes <b class="jaune">' + pluriel(g, 'étoile du Nether', 'étoiles du Nether') + '</b> et <b class="violet">' + pluriel(g, 'fragment d\'étoile', 'fragments d\'étoile') + '</b>.</p>' +
       '<ul class="liste-ren"><li>Production : <b>+' + S.etoiles * J.pctEtoile + ' % → +' + apres * J.pctEtoile + ' %</b>, pour toujours.</li>' +
-      (multJalons(apres) > multJalons(S.etoiles) ? '<li>Palier d\'étoiles atteint : <b>×' + nombre(multJalons(S.etoiles)) + ' → ×' + nombre(multJalons(apres)) + '</b>.</li>' : '') +
+      (multJalons(apres) > multJalons(S.etoiles) ? '<li>Palier d\'étoiles atteint : <b>×' + fois(multJalons(S.etoiles)) + ' → ×' + fois(multJalons(apres)) + '</b>.</li>' : '') +
       '<li>Fragments : <b>' + S.fragments + ' → ' + (S.fragments + g) + '</b>, à dépenser dans la boutique céleste.</li></ul>' +
       '<p class="perdu"><b>Tu perds :</b> tes ' + blocs(S.blocs) + ', tes ' + pluriel(D.MACHINES.reduce(function (s, m) { return s + (S.machines[m.id] || 0); }, 0), 'machine') + ' et tes ' + pluriel(S.amels.length, 'amélioration') + '.</p>' +
       '<p class="garde"><b>Tu gardes :</b> les progrès, les dimensions, les pouvoirs, les missions et les statistiques.</p>' +
-      (a('depart2') ? '<p>Ton sac de départ II te redonne 50 pioches, 25 mineurs, 10 golems et 5 wagonnets.</p>' : a('depart') ? '<p>Ton sac de départ te redonne 10 pioches et 5 mineurs.</p>' : ''),
+      (a('depart3') ? '<p>Ton sac de départ III te redonne 250 pioches, 150 mineurs, 75 golems, 40 wagonnets et 20 TNT.</p>' : a('depart2') ? '<p>Ton sac de départ II te redonne 50 pioches, 25 mineurs, 10 golems et 5 wagonnets.</p>' : a('depart') ? '<p>Ton sac de départ te redonne 10 pioches et 5 mineurs.</p>' : ''),
       [{ t: 'Annuler' }, { t: 'Renaître', cls: 'vert', f: renaitre }]);
   }
   function renaitre() {
@@ -987,6 +999,7 @@
     S.blocs = 0; S.total = 0; S.machines = {}; S.amels = []; S.debutVie = Date.now(); S.coups = 0;
     if (a('depart')) { S.machines.pioche = 10; S.machines.mineur = 5; }
     if (a('depart2')) { S.machines.pioche = 50; S.machines.mineur = 25; S.machines.golem = 10; S.machines.wagonnet = 5; }
+    if (a('depart3')) { S.machines.pioche = 250; S.machines.mineur = 150; S.machines.golem = 75; S.machines.wagonnet = 40; S.machines.tnt = 20; }
     S.historique = []; retenir();
     effets = [];
     recalculer(); appliquerCurseur(); cleAmels = null; majBoutique(); verifierProgres(); afficherProgres(); afficherEtoiles(); majCapacites(); sauver();
@@ -1004,11 +1017,31 @@
     afficherEtoiles(); majBoutique(); marquer();
     return true;
   }
+  // éclats stellaires : une boutique sans fond, chaque niveau coûte plus cher et multiplie l'effet des étoiles
+  function coutEclats(n) { var t = 0; for (var i = 0; i < n; i++) t += RG.prixEclat(S.eclats + i); return t; }
+  function eclatsAbordables() { var n = 0, t = 0; while (n < 1000) { t += RG.prixEclat(S.eclats + n); if (t > S.fragments) break; n++; } return n; }
+  function acheterEclat(n) {
+    n = n == 'max' ? eclatsAbordables() : Math.max(1, Math.floor(n || 1));
+    if (n < 1 || S.fragments < coutEclats(n)) { sons.non(); return false; }
+    S.fragments -= coutEclats(n); S.eclats += n;
+    sons.progres(); recalculer(); verifierProgres();
+    toast({ s: 'etoile', m: 'fragment' }, n > 1 ? n + ' éclats stellaires !' : 'Éclat stellaire !', 'Niveau ' + S.eclats + ' : effet des étoiles ×' + fois(J.eclat));
+    afficherEtoiles(); majBoutique(); marquer();
+    return true;
+  }
+  // paliers affichés : les paliers fixes, les derniers atteints au-delà de 1 000 et les trois suivants
+  function paliersAffiches() {
+    var base = [1, 2, 3, 5, 10, 25, 50, 100, 250, 500, 1000], pm = Math.max(etoilesPossibles(), S.etoiles);
+    var tous = RG.prochainsJalons(1000, 60).map(function (j) { return j[0]; });
+    var passes = tous.filter(function (e) { return e <= pm; }), futurs = tous.filter(function (e) { return e > pm; }).slice(0, 3);
+    return base.concat(passes.slice(-3), futurs);
+  }
   function afficherEtoiles() {
     var g = gainEtoiles(), poss = etoilesPossibles(), suiv = Math.max(poss, S.etoiles) + 1, base = seuil(suiv - 1), fin = seuil(suiv);
     var av = Math.max(0, Math.min(1, (S.totalAll - base) / (fin - base))), reste = Math.max(0, fin - S.totalAll);
     $('et-nb').textContent = pluriel(S.etoiles, 'étoile du Nether', 'étoiles du Nether');
     $('et-bonus').textContent = '+' + S.etoiles * J.pctEtoile + ' % de production (' + J.pctEtoile + ' % par étoile)';
+    $('et-mult').textContent = 'Tous tes bonus de production : ×' + fois(J.mult) + (J.multBrut > J.mult * 1.0001 ? ' (cumulés ×' + fois(J.multBrut) + ', adoucis au-delà de ×100)' : '');
     $('et-frag').textContent = pluriel(S.fragments, 'fragment d\'étoile', 'fragments d\'étoile') + ' à dépenser';
     $('et-gain').innerHTML = g >= 1
       ? 'Si tu renais maintenant : <b class="jaune">+' + pluriel(g, 'étoile', 'étoiles') + '</b> et <b class="violet">+' + pluriel(g, 'fragment', 'fragments') + '</b>. Ta production passera de +' + S.etoiles * J.pctEtoile + ' % à <b>+' + (S.etoiles + g) * J.pctEtoile + ' %</b>.'
@@ -1019,12 +1052,12 @@
     $('et-prochaine').textContent = 'Étoile n° ' + suiv + ' à ' + blocs(fin) + ' minés au total. Encore ' + blocs(reste) +
       (J.cps > 0 ? ', environ ' + duree(reste / J.cps) + ' à ta vitesse actuelle.' : '.');
     $('et-total').textContent = 'Minés au total (toutes vies) : ' + blocs(S.totalAll);
-    var paliers = [1, 2, 3, 5, 10, 25, 50, 100, 250, 500, 1000], html = paliers.map(function (k) {
+    var paliers = paliersAffiches(), html = paliers.map(function (k) {
       var ok = poss >= k, jl = multJalons(k), nouveau = jl > multJalons(k - 1);
-      return '<tr class="' + (ok ? 'ok' : '') + '"><td>' + k + ' ★</td><td>' + blocs(seuil(k)) + '</td><td>+' + k * J.pctEtoile + ' %' + (jl > 1 ? ' · ×' + nombre(jl) + (nouveau ? ' (palier !)' : '') : '') + '</td><td>' + (ok ? '✓' : '') + '</td></tr>';
-    }).join('');
+      return '<tr class="' + (ok ? 'ok' : '') + '"><td>' + nombre(k) + ' ★</td><td>' + blocs(seuil(k)) + '</td><td>+' + nombre(k * J.pctEtoile) + ' %' + (jl > 1 ? ' · ×' + fois(jl) + (nouveau ? ' (palier !)' : '') : '') + '</td><td>' + (ok ? '✓' : '') + '</td></tr>';
+    }).join('') + '<tr class="suite"><td colspan="4">… et ainsi de suite, <b>sans fin</b> : un nouveau palier tous les ×2 à ×2,5 étoiles.</td></tr>';
     if ($('et-paliers')._html != html) { $('et-paliers')._html = html; $('et-paliers').innerHTML = html; }
-    var box = $('pouvoirs'), cle = S.pouvoirs.join() + '|' + S.fragments;
+    var box = $('pouvoirs'), cle = S.pouvoirs.join() + '|' + S.fragments + '|' + S.eclats;
     if (box._cle != cle) {
       box._cle = cle;
       box.innerHTML = '';
@@ -1041,7 +1074,27 @@
         el.appendChild(b);
         box.appendChild(el);
       });
-      $('pouvoirs-txt').textContent = S.pouvoirs.length + ' / ' + D.POUVOIRS.length + ' pouvoirs · ' + pluriel(S.fragments, 'fragment disponible', 'fragments disponibles');
+      // la boutique sans fond : l'éclat stellaire
+      var pe = RG.prixEclat(S.eclats), okE = S.fragments >= pe, nMax = eclatsAbordables(), ee = document.createElement('div');
+      ee.className = 'pouvoir eclat' + (okE ? ' ok' : '');
+      ee.innerHTML = '<img alt="" src="' + T.sprite({ s: 'etoile', m: 'fragment' }) + '"><span class="po-txt"><b>Éclat stellaire · niveau ' + nombre(S.eclats) + '</b><small>Sans fin : chaque éclat multiplie l\'effet de tes étoiles par ' + fois(RG.multEclat(1)) + ' (×' + fois(J.eclat) + ' en ce moment), mais coûte un peu plus cher que le précédent.</small></span>';
+      var be = document.createElement('button');
+      be.type = 'button'; be.className = 'btn-mc po-btn'; be.textContent = nombre(pe) + ' ✦'; be.disabled = !okE;
+      be.setAttribute('aria-label', 'Acheter un éclat stellaire pour ' + pluriel(pe, 'fragment'));
+      be.onclick = function () { acheterEclat(1); };
+      var bs = document.createElement('span');
+      bs.className = 'po-btns'; bs.appendChild(be);
+      if (nMax > 1) {
+        var bm = document.createElement('button');
+        bm.type = 'button'; bm.className = 'btn-mc po-btn po-max'; bm.textContent = '×' + nMax;
+        bm.setAttribute('aria-label', 'Acheter ' + nMax + ' éclats stellaires pour ' + pluriel(coutEclats(nMax), 'fragment'));
+        bm.title = nMax + ' éclats pour ' + nombre(coutEclats(nMax)) + ' ✦';
+        bm.onclick = function () { acheterEclat('max'); };
+        bs.appendChild(bm);
+      }
+      ee.appendChild(bs);
+      box.appendChild(ee);
+      $('pouvoirs-txt').textContent = S.pouvoirs.length + ' / ' + D.POUVOIRS.length + ' pouvoirs · ' + pluriel(S.fragments, 'fragment disponible', 'fragments disponibles') + ' · ' + pluriel(S.eclats, 'éclat stellaire', 'éclats stellaires');
     }
   }
 
@@ -1065,8 +1118,8 @@
       ['Boss vaincus', nombre(S.bossTotal) + ' (' + S.bossVaincus.length + ' / ' + D.DIMENSIONS.length + ' différents)'],
       ['Collection', 'maîtrise ' + J.maitrise + ' / ' + Object.keys(D.BLOCS).length * 3 + ' (+' + J.multMaitrise + ' %)'],
       ['Familier', S.familier ? FAMILIER[S.familier].nom + ' (' + S.familiers.length + ' / ' + D.FAMILIERS.length + ' adoptés)' : 'aucun pour l\'instant'],
-      ['Multiplicateur de production', '×' + J.mult.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' (améliorations +' + J.mods.global + ' %, progrès +' + J.multProgres + ' %, étoiles +' + J.multEtoiles + ' %' + (J.jalons > 1 ? ', paliers ×' + nombre(J.jalons) : '') + (J.forge > 1 ? ', forge ×' + nombre(J.forge) : '') + ')'],
-      ['Renaissances', nombre(S.renaissances) + ' · ' + pluriel(S.etoiles, 'étoile') + ' · ' + S.pouvoirs.length + ' pouvoir' + (S.pouvoirs.length > 1 ? 's' : '')],
+      ['Multiplicateur de production', '×' + fois(J.mult) + (J.multBrut > J.mult * 1.0001 ? ' (cumulé ×' + fois(J.multBrut) + ', adouci au-delà de ×100)' : '') + ' · améliorations +' + J.mods.global + ' %, progrès +' + J.multProgres + ' %, étoiles +' + nombre(J.multEtoiles) + ' %' + (J.jalons > 1 ? ', paliers ×' + fois(J.jalons) : '') + (S.eclats ? ', éclats ×' + fois(J.eclat) : '') + (J.forge > 1 ? ', forge ×' + fois(J.forge) : '')],
+      ['Renaissances', nombre(S.renaissances) + ' · ' + pluriel(S.etoiles, 'étoile') + ' · ' + S.pouvoirs.length + ' pouvoir' + (S.pouvoirs.length > 1 ? 's' : '') + (S.eclats ? ' · ' + pluriel(S.eclats, 'éclat stellaire', 'éclats stellaires') : '')],
       ['Temps de jeu', duree(S.tempsJeu) + ' (cette vie : ' + duree((Date.now() - S.debutVie) / 1000) + ')'],
       ['Partie commencée le', new Date(S.debut).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })]
     ];
@@ -1133,18 +1186,20 @@
     S.derniere = Date.now(); S.cps = J.cpsBase; S.nbProgres = D.PROGRES.length;
     try { localStorage.setItem(CLE, JSON.stringify(S)); } catch (e) {}
   }
+  function limiteAbsence() { return a('absence2') ? 604800 : a('absence') ? 172800 : 86400; }
   function charger(d) {
     S = nettoyer(d);
     effets = []; combo.n = 0;
     recalculer();
-    var absent = (Date.now() - S.derniere) / 1000, gain = 0, plein = a('absence');
+    var absent = (Date.now() - S.derniere) / 1000, gain = 0, plein = a('absence'), maxi = limiteAbsence();
     if (d && absent > 60 && J.cpsBase > 0) {
-      gain = J.cpsBase * Math.min(absent, plein ? 172800 : 86400) * (plein ? 1 : 0.5);
+      gain = J.cpsBase * Math.min(absent, maxi) * (plein ? 1 : 0.5);
       gagner(gain);
     }
     S.derniere = Date.now();
     while (S.missions.length < nbMissions()) nouvelleMission();
-    return { absent: absent, gain: gain, plein: plein };
+    // une sauvegarde d'avant la grande mise à jour : le monde a changé pendant l'absence
+    return { absent: absent, gain: gain, plein: plein, maxi: maxi, ancienne: !!d && (+d.v || 1) < 3 };
   }
 
   /* ================= Boucles : logique (10 fois par seconde) et affichage ================= */
@@ -1158,7 +1213,7 @@
     // onglet en arrière-plan longtemps : au-delà d'une minute, production à moitié (comme hors ligne)
     gagner(dt <= 60 ? J.cps * dt : J.cps * 60 + J.cpsBase * (dt - 60) * (a('absence') ? 1 : 0.5));
     S.tempsJeu += Math.min(dt, 60);
-    if (a('fantome')) { var pas = a('fantome2') ? 0.2 : 0.5; fantome += Math.min(dt, 5); while (fantome >= pas) { fantome -= pas; frapperFantome(); } }
+    if (a('fantome')) { var pas = a('fantome3') ? 0.1 : a('fantome2') ? 0.2 : 0.5; fantome += Math.min(dt, 5); while (fantome >= pas) { fantome -= pas; frapperFantome(); } }
     if (combo.n && t - combo.dernier > J.fenetreCombo + 350) { combo.n = 0; recalculer(); majCombo(); }
     if (boss) { if (t >= boss.fin) fuiteBoss(); else if (tic % 2 == 0) majBoss(); }
     else if (bossDispo() && t >= prochainBoss && !document.hidden && !evenement) lancerBoss();
@@ -1309,8 +1364,9 @@
   verifierFamiliers();
   verifierProgres();
   if (retour.gain > 0) {
-    dialogue('Bon retour !', '<p>Pendant ton absence (' + duree(retour.absent) + (retour.absent > (retour.plein ? 172800 : 86400) ? ', compté jusqu\'à ' + (retour.plein ? 48 : 24) + ' h' : '') + '), tes machines ont continué à creuser ' + (retour.plein ? 'à pleine vitesse' : 'à moitié de leur vitesse') + '.</p><p class="gros-gain">+' + echappe(blocs(retour.gain)) + '</p>', [{ t: 'Super !', cls: 'vert' }]);
+    dialogue('Bon retour !', '<p>Pendant ton absence (' + duree(retour.absent) + (retour.absent > retour.maxi ? ', compté jusqu\'à ' + (retour.maxi >= 172800 ? Math.round(retour.maxi / 86400) + ' jours' : Math.round(retour.maxi / 3600) + ' h') : '') + '), tes machines ont continué à creuser ' + (retour.plein ? 'à pleine vitesse' : 'à moitié de leur vitesse') + '.</p><p class="gros-gain">+' + echappe(blocs(retour.gain)) + '</p>', [{ t: 'Super !', cls: 'vert' }]);
   } else if (SAISONS[saison()]) setTimeout(function () { annonce(SAISONS[saison()].annonce); }, 800);
+  if (retour.ancienne) setTimeout(function () { annonce('Le monde a changé pendant ton absence… va voir de plus près.'); }, retour.gain > 0 ? 4000 : 1500);
   sauver();
   setInterval(logique, 100);
   requestAnimationFrame(image);
@@ -1322,7 +1378,7 @@
     etat: function () { return S; }, calc: function () { return J; }, frapper: frapper, acheterMachine: acheterMachine, acheterAmel: acheterAmel, acheterTout: acheterTout,
     avancer: function (s) { gagner(J.cps * s); S.tempsJeu += s; verifierProgres(); majDimensions(); majBoutique(); majCapacites(); },
     apparaitre: apparaitre, finir: finir, renaitre: renaitre, gainEtoiles: gainEtoiles, seuil: seuil, sauver: sauver, choisirDim: choisirDim,
-    acheterPouvoir: acheterPouvoir, utiliserCapacite: utiliserCapacite, verifierMissions: verifierMissions, maxAchetable: function (id) { return maxAchetable(MACHINE[id]); },
+    acheterPouvoir: acheterPouvoir, acheterEclat: acheterEclat, utiliserCapacite: utiliserCapacite, verifierMissions: verifierMissions, maxAchetable: function (id) { return maxAchetable(MACHINE[id]); },
     recalculer: function () { recalculer(); majBoutique(); afficherProgres(); majCapacites(); }, nombre: nombre, blocs: blocs, prixMachine: prixMachine, lireCode: lireCode, codeSauvegarde: codeSauvegarde,
     nouveauBloc: nouveauBloc, combo: combo, lancerBoss: lancerBoss, boss: function () { return boss; }, blesserBoss: blesserBoss,
     choisirFamilier: choisirFamilier, verifierFamiliers: verifierFamiliers, estNuit: estNuit, majJourNuit: majJourNuit,
