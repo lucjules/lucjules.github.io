@@ -880,15 +880,89 @@ ${note('attention', 'L\'extension Go, ce n\'est pas ici', '<p>Ce que tu viens d\
 /* ---------- 8. Prompt git ---------- */
 addSec({
   id: 'prompt', group: 'Installer', title: 'Le prompt avec l\'état de git',
-  lead: "Faire afficher la branche et l'état du dépôt dans le prompt de bash, pour alice, bob et les futurs comptes.",
+  lead: "Faire afficher la branche git dans le terminal. Deux chemins séparés : tout à la main, pas à pas (pour comprendre), ou le script (pour aller vite).",
   body: () => R`
 <h2>Ce qu'on veut obtenir</h2>
-<p>Dans un dépôt git, le prompt montre la branche et ce qui a changé :</p>
-${term(R`bob@butgames-dev:~/projets/hello.sae4.but1.iut (langage_go)$ echo x >> test.sh
-bob@butgames-dev:~/projets/hello.sae4.but1.iut (langage_go *)$ git add test.sh
-bob@butgames-dev:~/projets/hello.sae4.but1.iut (langage_go +)$`)}
+<p>Le <strong>prompt</strong>, c'est le texte qui s'affiche avant chaque commande, par exemple <code>alice@butgames-dev:~$</code>. Le sujet demande qu'il indique aussi <strong>l'état du dépôt git</strong> du dossier où l'on se trouve. Résultat attendu :</p>
+${term(R`alice@butgames-dev:~$ cd projets/hello.sae4.but1.iut
+alice@butgames-dev:~/projets/hello.sae4.but1.iut (langage_go)$ echo x >> test.sh
+alice@butgames-dev:~/projets/hello.sae4.but1.iut (langage_go *)$`)}
+<p>Hors d'un dépôt git, rien de plus n'apparaît. Dans un dépôt, on voit entre parenthèses la <strong>branche</strong> (<code>langage_go</code>) et un symbole si quelque chose a changé (<code>*</code> = fichier modifié).</p>
+
+<h2>Comprendre en 4 idées</h2>
+<ol class="flow">
+  <li><strong>Le prompt est une variable</strong> nommée <code>PS1</code>. Bash la relit avant chaque commande.</li>
+  <li><strong>git fournit une fonction</strong>, <code>__git_ps1</code>, qui écrit la branche et l'état (ou rien hors d'un dépôt). Elle est dans le fichier <code>/usr/lib/git-core/git-sh-prompt</code>, qu'il faut « charger » avant de s'en servir.</li>
+  <li><strong>Le réglage se met dans <code>~/.bashrc</code></strong> : ce fichier est lu par bash à chaque ouverture de terminal, <em>pour chaque utilisateur</em>. Il faut donc le faire pour alice, pour bob, et pour les futurs comptes (<code>/etc/skel</code>).</li>
+  <li><strong>On range le réglage dans un seul fichier commun</strong>, <code>/etc/butgames.bashrc</code>, et chaque <code>.bashrc</code> ne contient qu'une ligne qui le charge. Pour modifier le prompt plus tard : un seul fichier à changer.</li>
+</ol>
+<details class="dt"><summary>Que veut dire la ligne PS1 ? (facultatif)</summary><div>
+${tbl(['Morceau', 'Effet'], [
+  [c('\\u'), 'nom de l\'utilisateur (alice, bob)'],
+  [c('\\h'), 'nom de la machine'],
+  [c('\\w'), 'dossier courant'],
+  [c('$(__git_ps1 " (%s)")'), 'appelle la fonction git : affiche « (branche état) », ou rien'],
+  [c('\\[\\033[01;32m\\]'), 'passe en vert gras ; ' + c('\\[\\033[00m\\]') + ' remet la couleur normale (vert = utilisateur, bleu = dossier, jaune = git)'],
+  [c('\\$'), 'affiche $ (ou # pour root)']
+], 'wrapc')}
+<p><strong>Les apostrophes sont obligatoires</strong> autour de la valeur de <code>PS1</code>. Avec des guillemets, bash calculerait <code>__git_ps1</code> une seule fois, tout de suite, et la branche ne se mettrait jamais à jour.</p></div></details>
+
+<hr>
+<h2>CHEMIN A : à la main, pas à pas</h2>
+<p>${who('alice')} Ouvre un terminal connecté en <strong>alice</strong>. Fais les étapes <strong>dans l'ordre</strong> ; après chacune, contrôle le résultat attendu avant de continuer. Aucun script n'est utilisé ici.</p>
+
+<h3>Étape A1 : vérifier que git est installé et fournit la fonction</h3>
+${sh(R`ls /usr/lib/git-core/git-sh-prompt`)}
+<p><strong>Attendu :</strong> la commande répète le chemin du fichier. Si elle répond « No such file or directory », installe git :</p>
+${sh(R`sudo apt install -y git`)}
+
+<h3>Étape A2 : créer le fichier commun /etc/butgames.bashrc</h3>
+<p>Cette commande crée le fichier et y écrit le contenu entre <code>&lt;&lt;'EOF'</code> et <code>EOF</code>. <strong>Copie le bloc entier d'un seul coup</strong> (bouton Copier) et colle-le dans le terminal.</p>
+${sh('sudo tee /etc/butgames.bashrc >/dev/null <<\'EOF\'\n' + bashrcTxt() + '\nEOF')}
+<p><strong>Attendu :</strong> aucun message (le terminal te rend simplement la main). Contrôle :</p>
+${sh(R`cat /etc/butgames.bashrc`)}
+<p>Tu dois voir ton contenu, avec la ligne <code>PS1='…'</code> entière sur une seule ligne.</p>
+${note('convention', 'Tu préfères un éditeur ?', '<p>Tu peux aussi faire <code>sudo nano /etc/butgames.bashrc</code>, coller le contenu (sans les lignes <code>sudo tee</code> et <code>EOF</code>), puis enregistrer avec ' + kbd('Ctrl+O') + ', ' + kbd('Entrée') + ' et quitter avec ' + kbd('Ctrl+X') + '.</p>')}
+
+<h3>Étape A3 : faire charger ce fichier par chaque compte</h3>
+<p>On ajoute <strong>une ligne</strong> à la fin du <code>.bashrc</code> d'alice, de bob et du modèle des futurs comptes :</p>
+${sh(R`for rc in /etc/skel/.bashrc /home/alice/.bashrc /home/bob/.bashrc; do
+  echo '[ -r /etc/butgames.bashrc ] && . /etc/butgames.bashrc' | sudo tee -a "$rc" >/dev/null
+done`)}
+<p><strong>Attendu :</strong> aucun message. Contrôle :</p>
+${sh(R`tail -n 2 ~/.bashrc`)}
+<p>La dernière ligne doit être <code>[ -r /etc/butgames.bashrc ] &amp;&amp; . /etc/butgames.bashrc</code>.</p>
+${note('attention', 'Ne lance cette étape qu\'une fois', '<p>Chaque exécution rajoute la ligne une fois de plus (sans danger, mais inutile). Si tu l\'as lancée deux fois, ce n\'est pas grave.</p>')}
+
+<h3>Étape A4 : recharger le terminal et contrôler</h3>
+${sh(R`source ~/.bashrc
+echo "$PS1"`)}
+<p><strong>Attendu :</strong> le prompt devient vert/bleu, et <code>echo "$PS1"</code> affiche une ligne qui contient <code>__git_ps1</code>. Si tu vois <code>(master)</code> à la place, c'est que <code>PS1</code> était entre guillemets : revois l'étape A2.</p>
+
+<h3>Étape A5 : tester dans un dépôt</h3>
+${sh(R`cd /tmp
+git init -q essai
+cd essai`)}
+<p><strong>Attendu :</strong> le prompt se termine par <code>(master #)</code> ou <code>(main #)</code>. Le <code>#</code> signifie « dépôt sans aucun commit ». Continue :</p>
+${sh(R`touch a.txt           # prompt : (master #%)   % = fichier non suivi
+git add a.txt        # prompt : (master #+)   + = ajouté à l'index
+cd ..                # prompt : plus rien de git, tu n'es plus dans le dépôt`)}
+
+<h3>Étape A6 : vérifier chez bob</h3>
+<p>Le <code>.bashrc</code> de bob a reçu la même ligne à l'étape A3. Contrôle sans te déconnecter :</p>
+${sh(R`su - bob`)}
+<p>Mot de passe <code>bob@but</code>. Le prompt doit être coloré. Teste comme à l'étape A5, puis tape <code>exit</code> pour revenir à alice.</p>
+
+<hr>
+<h2>CHEMIN B : avec le script (au choix, à la place du chemin A)</h2>
+<p>${who('alice')} Si tu as déjà téléchargé <code>sae-alice.sh</code> (étape « Scripts tout-en-un »), une seule commande fait les étapes A2 et A3 :</p>
+${sh(R`cd ~/Downloads
+sudo ONLY="prompt" bash sae-alice.sh`)}
+<p>Puis ouvre un <strong>nouveau terminal</strong> (ou <code>source ~/.bashrc</code>) et fais le test de l'étape A5. Le script ne rajoute la ligne qu'une fois par <code>.bashrc</code>, donc tu peux le relancer sans souci.</p>
+
+<h2>Les symboles du prompt</h2>
 ${tbl(['Symbole', 'Signification'], [
-  [c('(langage_go)'), 'branche courante, dépôt sans changement'],
+  [c('(langage_go)'), 'branche courante, rien à signaler'],
   [c('*'), 'fichiers suivis <strong>modifiés</strong>, pas encore ajoutés (<code>git add</code>)'],
   [c('+'), 'modifications <strong>ajoutées</strong> à l\'index, prêtes pour le commit'],
   [c('%'), 'fichiers <strong>non suivis</strong> par git'],
@@ -897,35 +971,19 @@ ${tbl(['Symbole', 'Signification'], [
   [c('<  >  <>  ='), 'en retard / en avance / divergent / à jour par rapport au dépôt distant']
 ])}
 
-<h2>Comment ça marche</h2>
-<ul>
-  <li>Le prompt est la variable <code>PS1</code>, relue par bash à chaque ligne.</li>
-  <li>git fournit une fonction <code>__git_ps1</code> dans le fichier <code>/usr/lib/git-core/git-sh-prompt</code> : elle affiche la branche et l'état, ou rien si on n'est pas dans un dépôt.</li>
-  <li>Des variables <code>GIT_PS1_SHOW…</code> choisissent ce qui est affiché.</li>
-  <li><strong>Piège classique</strong> : <code>PS1</code> doit être entre <strong>apostrophes</strong>. Entre guillemets, <code>$(__git_ps1)</code> serait calculé une seule fois, à la définition, et le prompt ne changerait jamais de branche.</li>
-</ul>
-
-<h2>Où l'écrire : un fichier commun</h2>
-<p>Plutôt que de copier le même bloc dans chaque <code>~/.bashrc</code>, on le met dans <strong>un seul fichier système</strong>, <code>/etc/butgames.bashrc</code>, que chaque <code>.bashrc</code> charge. Une modification, un seul endroit. Il règle aussi le PATH de Go.</p>
-${file('/etc/butgames.bashrc', bashrcTxt())}
-<p>Puis, pour chaque utilisateur existant et pour les futurs (<code>/etc/skel</code>), une ligne dans le <code>.bashrc</code> :</p>
-${sh(R`for rc in /etc/skel/.bashrc /home/alice/.bashrc /home/bob/.bashrc; do
-  echo '[ -r /etc/butgames.bashrc ] && . /etc/butgames.bashrc' | sudo tee -a "$rc" >/dev/null
-done`)}
-<p>Crée le fichier avec <code>sudo nano /etc/butgames.bashrc</code> (copie le bloc ci-dessus) ou laisse le <a href="#scripts">script</a> le faire : il n'ajoute la ligne qu'une fois dans chaque <code>.bashrc</code>.</p>
-
-<h2>Tester</h2>
-${term(R`$ source ~/.bashrc
-$ cd /tmp && git init -q essai && cd essai
-alice@butgames-dev:/tmp/essai (master #)$ touch a && git add a
-alice@butgames-dev:/tmp/essai (master #+)$ cd ..
-alice@butgames-dev:/tmp$`)}
-<p>Le prompt change aussi dans le terminal intégré de VS Code. Les couleurs : vert pour <code>utilisateur@machine</code>, bleu pour le dossier, jaune pour git.</p>
-${note('attention', 'Si le prompt n\'a pas changé', '<ul><li>Ouvre un <strong>nouveau</strong> terminal (ou <code>source ~/.bashrc</code>) : un shell déjà ouvert garde l\'ancien.</li><li>Affiche <code>echo "$PS1"</code> : il doit contenir <code>__git_ps1</code>, pas du texte déjà calculé comme <code>(master)</code>.</li><li>Un prompt avec <code>$(__git_ps1 ...)</code> écrit tel quel signifie que <code>PS1</code> est entre guillemets, ou que <code>git-sh-prompt</code> n\'a pas été chargé.</li></ul>')}`,
+<h2>Ça ne marche pas ?</h2>
+${tbl(['Ce que tu vois', 'Cause', 'Solution'], [
+  ['Le prompt n\'a pas changé', 'Le terminal ouvert garde l\'ancien prompt', 'Ouvre un nouveau terminal, ou ' + c('source ~/.bashrc')],
+  ['Le prompt affiche le texte ' + c('$(__git_ps1 " (%s)")') + ' tel quel', 'PS1 est entre guillemets, ou la fonction n\'est pas chargée', 'Refais A2 (apostrophes) ; vérifie A1'],
+  ['Le prompt affiche ' + c('(master)') + ' et ne change jamais de branche', 'PS1 entre guillemets', 'Refais A2 : tout le bloc, tel quel'],
+  [c('tee: /etc/butgames.bashrc: Permission denied'), 'Tu as oublié sudo', 'Relance la commande avec ' + c('sudo')],
+  ['Après A2, le terminal attend (">" à l\'écran)', 'La ligne ' + c('EOF') + ' finale n\'a pas été collée', 'Tape ' + c('EOF') + ' seul sur une ligne, puis Entrée (ou ' + kbd('Ctrl+C') + ' et recommence)'],
+  ['Pas de couleurs / prompt basique chez bob', 'Le .bashrc de bob n\'a pas la ligne', 'Refais A3, puis ' + c('su - bob')]
+], 'wrapc')}`,
   check: [
     ['prompt-1', "Le fichier /etc/butgames.bashrc existe et contient __git_ps1."],
     ['prompt-2', "Le ~/.bashrc d'alice et celui de bob chargent ce fichier."],
-    ['prompt-3', "Dans un dépôt de test, le prompt affiche la branche et change avec * et +."],
+    ['prompt-3', "Dans un dépôt de test, le prompt affiche la branche et change avec % et +."],
     ['prompt-4', "Je sais expliquer pourquoi PS1 est entre apostrophes."]
   ]
 });
