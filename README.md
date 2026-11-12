@@ -15,7 +15,7 @@ Mon site, en deux espaces choisis depuis l'accueil (`index.html`) :
 | Matière | Chapitres |
 | --- | --- |
 | [Algorithmique](algo/index.html) (ExAlgo · Java) | Cycle 1 (les bases), Cycle 2 (les boucles), Cycle 3 (les tableaux : cours, mémo Java du TP, ExosTP, entraînement chronométré, projet de gestion de notes, un outil « Vérifier mon projet » qui teste ton code phase par phase, et un outil « Comparer avec un code » qui montre les différences fonction par fonction ; le mémo propose le projet Java en 3 fichiers avec leurs tests JUnit) |
-| [Système](systeme/index.html) (Linux) | Le terminal et les permissions |
+| [Système](systeme/index.html) (Linux) | Le terminal et les permissions ; **SAE 1.03** : guide complet pour installer la VM BUTGAMES (Debian ou Xubuntu, XFCE, Go, VS Code, comptes alice et bob), avec scripts, vérifications, rapport et soutenance |
 | [Bases de données](sql/index.html) (R1.05 · SQL) | Modèle relationnel et requêtes simples, 1 bis : exercices de requêtes simples, ACSI : le modèle conceptuel des données (MCD) |
 | [Management](management/index.html) (R1.08) | Introduction à la gestion, Stratégie |
 | [Mathématiques](maths/index.html) (maths discrètes) | Logique, Arithmétique dans ℤ, Récurrence, Second degré, Révision générale |
@@ -49,6 +49,7 @@ jeux/mine-clic/        jeu Mine Clic : index.html, style.css, et dans js/ trois 
                        polices/ (Pixelify Sans, licence SIL OFL 1.1) et icones/
 <matière>/index.html   accueil d'une matière, avec une carte par chapitre
 <matière>/*.html       un fichier par chapitre (application complète)
+systeme/sae-103.html   guide de la SAE 1.03 (une page-application : étapes, cases à cocher, scripts bash intégrés, générateur de rapport, minuteur) ; son style est dans assets/sae103.css
 maths/app.js           code commun aux 5 pages de maths
 sql/exercices-requetes.js   bases et exercices du chapitre 1 bis (voir « Ajouter un exercice SQL »)
 assets/sql-moteur.js   moteur SQL commun aux pages de la matière Bases de données

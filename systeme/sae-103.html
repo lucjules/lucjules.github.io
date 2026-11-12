@@ -1,0 +1,1901 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>SAE 1.03 · Installation de poste</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="SAE 1.03 : tout pour fabriquer la machine virtuelle BUTGAMES (Debian ou Xubuntu, XFCE, Go, VS Code, git, alice et bob) : analyse du sujet, installation pas à pas, scripts, vérifications, rapport et soutenance.">
+<meta name="color-scheme" content="light dark">
+<link rel="manifest" href="../manifest.webmanifest">
+<meta name="theme-color" content="#1f4fd8">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="../assets/fonts/fonts.css">
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/systeme.css">
+<link rel="stylesheet" href="../assets/sae103.css">
+<script src="../assets/common.js"></script>
+</head>
+<body data-distro="debian">
+<div id="app"></div>
+
+<!-- Les trois scripts : une seule source, utilisée pour l'affichage, la copie et le téléchargement -->
+<script type="text/plain" id="src-alice">
+#!/usr/bin/env bash
+# SAE 1.03 - Installation de poste BUTGAMES : préparation de la machine
+# Debian 12/13 ou Xubuntu/Ubuntu LTS, bureau XFCE.
+#
+# À lancer depuis le compte d'alice (administratrice) :   sudo bash sae-alice.sh
+#
+# Options (variables d'environnement, à placer avant la commande) :
+#   GO_SOURCE=tarball|apt   origine de Go (défaut : tarball = dernière version officielle de go.dev)
+#   UPGRADE=0|1             mettre à jour tout le système d'abord (défaut : 1)
+#   BOB_TOOLS=0|1           installer l'extension Go et les outils Go dans le compte de bob (défaut : 1)
+#   ONLY="comptes prompt"   ne lancer que ces étapes (liste en bas du script)
+# Exemple :   sudo GO_SOURCE=apt UPGRADE=0 bash sae-alice.sh
+set -euo pipefail
+
+GO_SOURCE=${GO_SOURCE:-tarball}
+UPGRADE=${UPGRADE:-1}
+BOB_TOOLS=${BOB_TOOLS:-1}
+ONLY=${ONLY:-}
+
+LOCALE=en_US.UTF-8        # système en anglais
+KB_LAYOUT=fr              # clavier français
+TZONE=Europe/Paris
+ALICE_PW='alice@but'      # mots de passe imposés par le sujet
+BOB_PW='bob@but'
+SHARED_RC=/etc/butgames.bashrc
+MARK='# >>> butgames >>>'
+APT="apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+export DEBIAN_FRONTEND=noninteractive
+
+log()  { printf '\n\033[1;34m==>\033[0m \033[1m%s\033[0m\n' "$*"; }
+ok()   { printf '  \033[32m✔\033[0m %s\n' "$*"; }
+warn() { printf '  \033[33m!\033[0m %s\n' "$*" >&2; }
+die()  { printf '\033[31mErreur :\033[0m %s\n' "$*" >&2; exit 1; }
+
+[ "$(id -u)" -eq 0 ] || die "lance ce script avec sudo :  sudo bash $0"
+# shellcheck disable=SC1091
+. /etc/os-release
+case "${ID:-}" in
+  debian|ubuntu) ;;
+  *) die "distribution non prévue : ${ID:-inconnue} (Debian ou Ubuntu/Xubuntu attendues)" ;;
+esac
+
+step_paquets() {
+  log "Paquets de base (git, curl, outils VMware...)"
+  # Debian installée depuis un CD/ISO : une ligne « deb cdrom: » bloque apt update
+  [ -f /etc/apt/sources.list ] && sed -i 's/^deb cdrom:/# deb cdrom:/' /etc/apt/sources.list
+  $APT update
+  if [ "$UPGRADE" = 1 ]; then $APT full-upgrade; fi
+  $APT install sudo git curl wget ca-certificates gpg apt-transport-https \
+      bash-completion locales open-vm-tools open-vm-tools-desktop
+  ok "$(git --version)"
+}
+
+step_locale() {
+  log "Langue du système : anglais ($LOCALE)"
+  if [ "$ID" = ubuntu ]; then $APT install language-pack-en; fi
+  if [ -f /etc/locale.gen ]; then sed -i "s/^# *\($LOCALE UTF-8\)/\1/" /etc/locale.gen; fi
+  locale-gen >/dev/null
+  update-locale LANG="$LOCALE"
+  ok "LANG=$LOCALE dans /etc/default/locale"
+}
+
+step_clavier() {
+  log "Clavier : disposition française ($KB_LAYOUT)"
+  cat > /etc/default/keyboard <<EOF
+# Fichier lu par la console et par le serveur graphique (Xorg)
+XKBMODEL="pc105"
+XKBLAYOUT="$KB_LAYOUT"
+XKBVARIANT=""
+XKBOPTIONS=""
+
+BACKSPACE="guess"
+EOF
+  if command -v localectl >/dev/null 2>&1; then
+    localectl set-x11-keymap "$KB_LAYOUT" pc105 >/dev/null 2>&1 || warn "localectl indisponible : /etc/default/keyboard suffit après redémarrage"
+  fi
+  ok "XKBLAYOUT=\"$KB_LAYOUT\" dans /etc/default/keyboard (effectif après reconnexion)"
+}
+
+step_fuseau() {
+  log "Fuseau horaire : $TZONE"
+  if ! timedatectl set-timezone "$TZONE" >/dev/null 2>&1; then
+    ln -sf "/usr/share/zoneinfo/$TZONE" /etc/localtime
+    echo "$TZONE" > /etc/timezone
+  fi
+  ok "$TZONE"
+}
+
+step_comptes() {
+  log "Comptes : alice (administratrice) et bob (développeur)"
+  local u
+  for u in alice bob; do
+    id "$u" >/dev/null 2>&1 || useradd -m -s /bin/bash -c "${u^}" "$u"
+  done
+  echo "alice:$ALICE_PW" | chpasswd
+  echo "bob:$BOB_PW" | chpasswd
+  usermod -aG sudo alice                       # alice administre : sudo
+  gpasswd -d bob sudo >/dev/null 2>&1 || true   # bob n'est PAS administrateur
+  gpasswd -d bob admin >/dev/null 2>&1 || true
+  ok "alice : $(id -nG alice)"
+  ok "bob   : $(id -nG bob)"
+}
+
+step_go() {
+  log "Go (source : $GO_SOURCE)"
+  if [ "$GO_SOURCE" = apt ]; then
+    $APT install golang-go
+  else
+    local arch json ver file sha tmp
+    arch=$(dpkg --print-architecture)           # amd64 ou arm64, comme chez go.dev
+    case "$arch" in amd64|arm64) ;; *) die "architecture non prise en charge : $arch" ;; esac
+    json=$(curl -fsSL 'https://go.dev/dl/?mode=json')
+    ver=$(printf '%s' "$json" | grep -m1 -o '"version": *"go[0-9.]*"' | grep -o 'go[0-9.]*')
+    file="$ver.linux-$arch.tar.gz"
+    sha=$(printf '%s' "$json" | grep -A6 -F "\"filename\": \"$file\"" | grep -m1 -o '"sha256": *"[0-9a-f]*"' | grep -o '[0-9a-f]\{64\}')
+    { [ -n "$ver" ] && [ -n "$sha" ]; } || die "version ou empreinte de Go introuvable sur go.dev"
+    tmp=$(mktemp -d)
+    curl -fsSL -o "$tmp/$file" "https://go.dev/dl/$file"
+    echo "$sha  $tmp/$file" | sha256sum -c -         # vérifie l'intégrité du téléchargement
+    rm -rf /usr/local/go
+    tar -C /usr/local -xzf "$tmp/$file"
+    rm -rf "$tmp"
+    ln -sf /usr/local/go/bin/go /usr/local/bin/go         # `go` visible dans tous les shells
+    ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+  fi
+  cat > /etc/profile.d/go.sh <<'EOF'
+case ":$PATH:" in *:/usr/local/go/bin:*) ;; *) PATH="$PATH:/usr/local/go/bin" ;; esac
+export PATH
+EOF
+  ok "$(go version)"
+}
+
+step_vscode() {
+  log "Visual Studio Code (dépôt apt officiel de Microsoft)"
+  curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor --yes -o /usr/share/keyrings/microsoft.gpg
+  chmod 644 /usr/share/keyrings/microsoft.gpg
+  rm -f /etc/apt/sources.list.d/vscode.list     # évite un doublon si le .deb a déjà ajouté le dépôt
+  cat > /etc/apt/sources.list.d/vscode.sources <<EOF
+Types: deb
+URIs: https://packages.microsoft.com/repos/code
+Suites: stable
+Components: main
+Architectures: $(dpkg --print-architecture)
+Signed-By: /usr/share/keyrings/microsoft.gpg
+EOF
+  $APT update
+  $APT install code
+  ok "$(code --version --user-data-dir=/tmp/vscode-root 2>/dev/null | head -1 || echo installé)"
+}
+
+step_lisezmoi() {
+  log "Fichier LISEZMOI sur le bureau d'alice et de bob"
+  local u
+  for u in alice bob; do
+    install -d -o "$u" -g "$u" "/home/$u/Desktop"
+    cat > "/home/$u/Desktop/LISEZMOI.txt" <<'EOF'
+BUTGAMES - poste de développement Go
+
+Comptes
+  alice / alice@but   administratrice (sudo) : installe et met à jour les logiciels
+  bob   / bob@but     développeur : écrit, compile et lance les programmes Go
+
+Premiers pas, en tant que bob
+  1. Ouvrir un terminal : le prompt affiche la branche git, par exemple (langage_go *)
+  2. git clone --branch langage_go https://gitlab-ce.iut.u-bordeaux.fr/rgiot/hello.sae4.but1.iut.git
+  3. cd hello.sae4.but1.iut && ./test.sh
+  4. Nouveau projet Go : mkdir mon-projet && cd mon-projet && go mod init mon-projet && code .
+
+Besoin d'un logiciel ? bob n'a pas sudo : demander à alice (sudo apt install ...).
+EOF
+    chown "$u:$u" "/home/$u/Desktop/LISEZMOI.txt"
+  done
+  ok "LISEZMOI.txt créé"
+}
+
+step_prompt() {
+  log "Prompt bash avec l'état du dépôt git (+ PATH de Go)"
+  cat > "$SHARED_RC" <<'EOF'
+# /etc/butgames.bashrc - chargé par le ~/.bashrc de chaque utilisateur (shells interactifs)
+
+# PATH : Go, et les outils Go installés par l'utilisateur (gopls, dlv...)
+case ":$PATH:" in *:/usr/local/go/bin:*) ;; *) PATH="$PATH:/usr/local/go/bin" ;; esac
+case ":$PATH:" in *":$HOME/go/bin:"*) ;; *) PATH="$PATH:$HOME/go/bin" ;; esac
+export PATH
+
+# Prompt : utilisateur@machine:dossier (branche état-du-dépôt)$
+if [ -r /usr/lib/git-core/git-sh-prompt ]; then
+  . /usr/lib/git-core/git-sh-prompt
+  GIT_PS1_SHOWDIRTYSTATE=1       # * = modifications non indexées, + = modifications indexées
+  GIT_PS1_SHOWUNTRACKEDFILES=1   # % = fichiers non suivis
+  GIT_PS1_SHOWSTASHSTATE=1       # $ = du travail mis de côté (git stash)
+  GIT_PS1_SHOWUPSTREAM=auto      # < en retard, > en avance, = à jour, <> divergent
+  # Apostrophes : $(__git_ps1) doit être évalué à CHAQUE affichage du prompt, pas une fois pour toutes
+  PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\[\033[01;33m\]$(__git_ps1 " (%s)")\[\033[00m\]\$ '
+fi
+EOF
+  local rc
+  for rc in /etc/skel/.bashrc /home/alice/.bashrc /home/bob/.bashrc; do
+    [ -f "$rc" ] || continue
+    if ! grep -qF "$MARK" "$rc"; then
+      printf '\n%s\n[ -r %s ] && . %s\n# <<< butgames <<<\n' "$MARK" "$SHARED_RC" "$SHARED_RC" >> "$rc"
+    fi
+  done
+  ok "prompt et PATH définis dans $SHARED_RC, chargés par alice, bob et les futurs comptes (/etc/skel)"
+}
+
+step_bob() {
+  if [ "$BOB_TOOLS" != 1 ]; then warn "BOB_TOOLS=$BOB_TOOLS : étape ignorée"; return 0; fi
+  log "Compte de bob : identité git, extension Go de VS Code, outils Go (dans son home, sans droits admin)"
+  runuser -l bob -c 'git config --global user.name "Bob" && git config --global user.email "bob@butgames.local" && git config --global init.defaultBranch main'
+  runuser -l bob -c 'code --install-extension golang.go --force' \
+    || warn "extension non installée : refais « code --install-extension golang.go » depuis la session de bob"
+  runuser -l bob -c 'go install golang.org/x/tools/gopls@latest'            || warn "gopls non installé (réseau ?)"
+  runuser -l bob -c 'go install github.com/go-delve/delve/cmd/dlv@latest'  || warn "dlv non installé (réseau ?)"
+  runuser -l bob -c 'go install honnef.co/go/tools/cmd/staticcheck@latest' || warn "staticcheck non installé (réseau ?)"
+  ok "extensions de bob : $(runuser -l bob -c 'code --list-extensions' 2>/dev/null | tr '\n' ' ')"
+}
+
+run() { if [ -z "$ONLY" ] || [[ " $ONLY " == *" $1 "* ]]; then "step_$1"; fi; }
+# Ordre : paquets locale clavier fuseau comptes go vscode lisezmoi prompt bob
+for s in paquets locale clavier fuseau comptes go vscode lisezmoi prompt bob; do run "$s"; done
+
+log "Terminé"
+echo "  1. Redémarre la machine (clavier et langue pris en compte)  :  sudo reboot"
+echo "  2. Ouvre la session de bob et lance :  bash sae-bob.sh"
+</script>
+<script type="text/plain" id="src-bob">
+#!/usr/bin/env bash
+# SAE 1.03 - côté bob (développeur) : cloner le dépôt de validation et lancer test.sh
+# À lancer depuis le compte de bob, SANS sudo :   bash sae-bob.sh
+set -uo pipefail
+
+REPO=https://gitlab-ce.iut.u-bordeaux.fr/rgiot/hello.sae4.but1.iut.git
+BRANCH=langage_go
+DIR=$HOME/projets
+LOG=$HOME/preuve-test.txt
+
+[ "$(id -u)" -ne 0 ] || { echo "Ne lance pas ce script en root : utilise le compte de bob."; exit 1; }
+[ "$(id -un)" = bob ] || echo "(attention : tu es « $(id -un) », pas bob)"
+command -v git >/dev/null || { echo "git n'est pas installé : demande à alice (sudo apt install git)."; exit 1; }
+
+mkdir -p "$DIR" && cd "$DIR" || exit 1
+name=$(basename "$REPO" .git)
+if [ -d "$name/.git" ]; then
+  echo "Dépôt déjà cloné : mise à jour de la branche $BRANCH"
+  git -C "$name" fetch origin "$BRANCH" && git -C "$name" checkout "$BRANCH" && git -C "$name" pull --ff-only
+else
+  git clone --branch "$BRANCH" "$REPO" || { echo "Clone impossible : voir la page Dépannage (réseau, identifiants, nom de branche)."; exit 1; }
+fi
+cd "$name" || exit 1
+
+echo; echo "Branche : $(git branch --show-current)"
+echo "---- début de test.sh (lis-le avant de le lancer) ----"
+head -n 40 test.sh
+echo "-------------------------------------------------------"
+
+{
+  date
+  echo "machine : $(hostname) | utilisateur : $(id -un) | $(go version 2>&1)"
+} | tee "$LOG"
+if [ -x test.sh ]; then ./test.sh 2>&1 | tee -a "$LOG"; else bash test.sh 2>&1 | tee -a "$LOG"; fi
+code=${PIPESTATUS[0]}
+echo "code retour de test.sh : $code   (0 = aucune erreur)" | tee -a "$LOG"
+echo "Trace enregistrée dans $LOG"
+exit "$code"
+</script>
+<script type="text/plain" id="src-verif">
+#!/usr/bin/env bash
+# SAE 1.03 - vérifie chaque exigence du sujet et affiche [ OK ] / [FAIL]
+# À lancer dans la VM, depuis le compte d'alice :   sudo bash sae-verif.sh
+# Pour lancer aussi test.sh dans le compte de bob :  sudo RUN_TEST=1 bash sae-verif.sh
+set -uo pipefail
+RUN_TEST=${RUN_TEST:-0}
+REPO_DIR=/home/bob/projets/hello.sae4.but1.iut
+[ "$(id -u)" -eq 0 ] || { echo "Lance : sudo bash $0"; exit 1; }
+
+ok=0; ko=0
+check() {   # check "libellé" commande [arguments...]
+  local label=$1; shift
+  if "$@" >/dev/null 2>&1; then printf '  \033[32m[ OK ]\033[0m %s\n' "$label"; ok=$((ok+1))
+  else printf '  \033[31m[FAIL]\033[0m %s\n' "$label"; ko=$((ko+1)); fi
+}
+as_bob() { runuser -l bob -c "$1"; }
+in_group()     { id -nG "$1" 2>/dev/null | tr ' ' '\n' | grep -qx "$2"; }
+not_admin()    { ! id -nG "$1" 2>/dev/null | tr ' ' '\n' | grep -Eqx 'sudo|admin|wheel'; }
+prompt_works() { local d; d=$(mktemp -d); git -C "$d" init -q -b langage_go && [ "$(bash -c '. /usr/lib/git-core/git-sh-prompt; cd "$1" && __git_ps1 "(%s)"' _ "$d")" = "(langage_go)" ]; local r=$?; rm -rf "$d"; return $r; }
+bob_prompt()   { as_bob 'bash -ic "echo \$PS1" 2>/dev/null' | grep -q __git_ps1; }
+bob_ext()      { as_bob 'code --list-extensions 2>/dev/null' | grep -qix 'golang.go'; }
+bob_branch()   { [ "$(as_bob "git -C $REPO_DIR branch --show-current")" = langage_go ]; }
+bob_test()     { as_bob "cd $REPO_DIR && if [ -x test.sh ]; then ./test.sh; else bash test.sh; fi"; }
+bob_hello()    { as_bob 'd=$(mktemp -d) && cd "$d" && go mod init essai >/dev/null 2>&1 && printf "package main\nimport \"fmt\"\nfunc main(){ fmt.Println(\"ok\") }\n" > main.go && [ "$(go run .)" = ok ]'; }
+
+echo; echo "SAE 1.03 - vérification ($(. /etc/os-release; echo "$PRETTY_NAME"))"
+echo; echo "Système"
+check "Bureau XFCE installé"                         command -v xfce4-session
+check "Langue du système : anglais (en_US.UTF-8)"    grep -Eq '^LANG="?en_US' /etc/default/locale
+check "Clavier : disposition française (fr)"         grep -q '^XKBLAYOUT="fr"' /etc/default/keyboard
+check "Outils VMware (presse-papiers, résolution)"   systemctl is-enabled --quiet open-vm-tools
+echo; echo "Comptes"
+check "alice existe"                                 id alice
+check "alice est administratrice (groupe sudo)"      in_group alice sudo
+check "bob existe"                                   id bob
+check "bob n'est PAS administrateur"                 not_admin bob
+echo; echo "Logiciels"
+check "git installé"                                 command -v git
+check "Go installé (go version)"                     go version
+check "Visual Studio Code installé (code)"           command -v code
+check "Extension Go dans le compte de bob"           bob_ext
+check "gopls (outil Go) dans le home de bob"         test -x /home/bob/go/bin/gopls
+check "bob compile et lance un programme Go"         bob_hello
+echo; echo "Prompt bash"
+check "Fichier /etc/butgames.bashrc présent"         grep -q __git_ps1 /etc/butgames.bashrc
+check "__git_ps1 affiche la branche d'un dépôt"      prompt_works
+check "Le ~/.bashrc d'alice charge ce prompt"        grep -q butgames /home/alice/.bashrc
+check "Le ~/.bashrc de bob charge ce prompt"         grep -q butgames /home/bob/.bashrc
+check "Le shell de bob utilise __git_ps1"            bob_prompt
+echo; echo "Projet de validation"
+check "Dépôt cloné dans le compte de bob"            test -d "$REPO_DIR/.git"
+check "Branche courante : langage_go"                bob_branch
+if [ "$RUN_TEST" = 1 ]; then check "test.sh se termine sans erreur (code 0)" bob_test
+else echo "  (test.sh non lancé ici : ajoute RUN_TEST=1, ou lance-le dans la session de bob)"; fi
+
+echo; printf 'Bilan : \033[32m%d OK\033[0m, \033[31m%d échec(s)\033[0m\n' "$ok" "$ko"
+[ "$ko" -eq 0 ]
+</script>
+
+<script>
+/* ===== Outils communs ===== */
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => [...(r || document).querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const R = String.raw; // les contenus contiennent beaucoup de \ (prompt, scripts) : on les garde tels quels
+const Store = {
+  key: 'sae-103-v1',
+  data: { distro: 'debian', chk: {}, gen: {} },
+  load() {
+    try {
+      const s = localStorage.getItem(this.key);
+      if (s) { const d = JSON.parse(s); if (d && typeof d === 'object') Object.assign(this.data, d); }
+    } catch (e) { /* stockage indisponible */ }
+    if (this.data.distro !== 'xubuntu') this.data.distro = 'debian';
+    if (!this.data.chk || typeof this.data.chk !== 'object') this.data.chk = {};
+    if (!this.data.gen || typeof this.data.gen !== 'object') this.data.gen = {};
+  },
+  save() { try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) { /* stockage indisponible */ } }
+};
+Store.load();
+
+const c = s => `<code>${esc(s)}</code>`;
+const kbd = s => `<kbd>${esc(s)}</kbd>`;
+const note = (kind, title, html) => `<aside class="note ${kind}"><div class="note-h">${title}</div><div class="note-b">${html}</div></aside>`;
+const tbl = (head, rows, cls) => `<div class="tbl-wrap"><table class="tbl ${cls || ''}"><thead><tr>${head.map(h => `<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+const WHO = { hote: 'sur l\'hôte', alice: 'alice', bob: 'bob', root: 'root' };
+const who = w => `<span class="who ${w}">${WHO[w]}</span>`;
+/* Contenu propre à une distribution : seul le parcours choisi est visible (voir sae103.css) */
+const D = (deb, xub) => `<div class="dv dv-debian">${deb}</div><div class="dv dv-xubuntu">${xub}</div>`;
+const Di = (deb, xub) => `<span class="dv dv-debian">${deb}</span><span class="dv dv-xubuntu">${xub}</span>`;
+
+/* Bloc de code : le texte est copié tel quel. Une ligne entièrement en commentaire, ou la fin de ligne après « # », est atténuée. */
+function colorLine(l) {
+  const e = esc(l);
+  const m = e.match(/^(\s*)(#.*)$/);
+  if (m) return m[1] + '<span class="c-com">' + m[2] + '</span>';
+  const k = e.search(/\s#\s/);
+  if (k > 0 && !/['"][^'"]*$/.test(e.slice(0, k))) return e.slice(0, k) + '<span class="c-com">' + e.slice(k) + '</span>';
+  return e;
+}
+function code(text, o) {
+  o = o || {};
+  const t = text.replace(/^\n+|\s+$/g, '');
+  const html = t.split('\n').map(colorLine).join('\n');
+  const name = o.name ? `<figcaption class="cb-name">${esc(o.name)}</figcaption>` : '';
+  return `<figure class="cb">${name}<pre class="cb-code"><code>${html}</code></pre><div class="cb-bar"><span class="cb-lang">${esc(o.lang || 'bash')}</span><div class="cb-actions"><button type="button" class="btn mini" data-act="copy">Copier</button></div></div></figure>`;
+}
+const sh = text => code(text, { lang: 'bash' });
+const file = (name, text) => code(text, { lang: 'fichier', name });
+/* Transcription : les lignes « $ commande » sont des commandes (seules copiées), les autres sont la réponse du système */
+function term(block) {
+  const lines = block.replace(/^\n+|\s+$/g, '').split('\n');
+  const cmds = lines.filter(l => l.startsWith('$ ')).map(l => l.slice(2));
+  const html = lines.map(l => l.startsWith('$ ')
+    ? `<span class="sh-p">$</span> <span class="sh-c">${esc(l.slice(2))}</span>`
+    : `<span class="sh-o">${esc(l)}</span>`).join('\n');
+  return `<figure class="cb" data-copy="${esc(cmds.join('\n'))}"><pre class="cb-code"><code>${html}</code></pre><div class="cb-bar"><span class="cb-lang">terminal</span><div class="cb-actions"><button type="button" class="btn mini" data-act="copy">Copier les commandes</button></div></div></figure>`;
+}
+/* Script complet (texte dans un <script type="text/plain">), affiché replié, copiable et téléchargeable */
+function scriptBlock(srcId, fname, summary) {
+  const t = $('#' + srcId).textContent.replace(/^\n+/, '');
+  const n = t.split('\n').length;
+  return `<details class="dt"><summary>${esc(summary)} <span class="pill">${n} lignes</span></summary><div>
+  <div class="gen-bar"><button type="button" class="btn" data-act="copy-src" data-src="${srcId}">Copier le script</button><button type="button" class="btn ghost" data-act="dl-src" data-src="${srcId}" data-name="${fname}">Télécharger ${fname}</button></div>
+  <figure class="cb"><figcaption class="cb-name">${fname}</figcaption><pre class="cb-code"><code>${t.split('\n').map(colorLine).join('\n')}</code></pre></figure></div></details>`;
+}
+
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; } catch (e) { /* page en file:// ou presse-papiers refusé : repli ci-dessous */ }
+  const ta = document.createElement('textarea');
+  ta.value = t; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove(); return ok;
+}
+function download(name, text, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: (mime || 'text/plain') + ';charset=utf-8' }));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function flash(btn, msg) {
+  const old = btn.dataset.old || btn.textContent; btn.dataset.old = old;
+  btn.textContent = msg; btn.classList.add('is-ok');
+  clearTimeout(btn._t); btn._t = setTimeout(() => { btn.textContent = old; btn.classList.remove('is-ok'); }, 1600);
+}
+
+/* Cases à cocher de fin d'étape */
+function checkBox(secId, items) {
+  const done = items.filter(([id]) => Store.data.chk[id]).length;
+  return `<section class="ck-box${done === items.length ? ' is-done' : ''}" data-sec="${secId}"><div class="ck-h"><span>Avant de passer à la suite</span><span class="ck-n">${done}/${items.length}</span></div>
+  <ul class="ck-list">${items.map(([id, t]) => `<li><label><input type="checkbox" data-ck="${id}"${Store.data.chk[id] ? ' checked' : ''}><i aria-hidden="true"></i><span>${t}</span></label></li>`).join('')}</ul></section>`;
+}
+
+/* ===== Contenu : étapes du guide ===== */
+const GIT_URL = 'https://gitlab-ce.iut.u-bordeaux.fr/rgiot/hello.sae4.but1.iut.git';
+const SECTIONS = [];
+const addSec = s => SECTIONS.push(s);
+
+/* ---------- 1. Analyse du sujet ---------- */
+addSec({
+  id: 'analyse', group: 'Comprendre', title: 'Analyse du sujet',
+  lead: "Ce que le sujet demande vraiment, ce qu'il laisse libre, les pièges cachés, et comment prouver chaque exigence.",
+  body: () => R`
+<h2>Le sujet en une phrase</h2>
+<p>Tu es administrateur système chez <strong>BUTGAMES</strong> : tu fabriques une <strong>machine virtuelle VMware</strong> Linux, prête à l'emploi, pour une équipe qui va développer en <strong>Go</strong> (langage que tu n'as pas à apprendre). Tu rends un <strong>rapport papier</strong> et tu présentes ton travail en <strong>15 minutes</strong>.</p>
+<div class="cols2">
+  <div class="card-s is-imp"><h4>1. La machine virtuelle</h4><p>Linux + bureau léger, deux comptes, Go, VS Code, git, prompt git. Elle doit marcher « toute seule » : tu ne pourras pas joindre l'équipe pour expliquer.</p></div>
+  <div class="card-s is-imp"><h4>2. Le rapport</h4><p>Dossier d'étude et de choix, schéma d'architecture, configuration de la VM, installation reproductible, notice d'utilisation, portfolio. Papier relié ou agrafé.</p></div>
+  <div class="card-s is-imp"><h4>3. La soutenance</h4><p>15 minutes en tout : installation, présentation et questions. Le jury n'a pas lu le rapport avant : tout doit se comprendre vite.</p></div>
+</div>
+
+<h2>Les exigences, une par une</h2>
+<p>Chaque ligne du sujet devient une exigence vérifiable. La dernière colonne donne la commande qui sert de <strong>preuve</strong> (le script de l'étape « Vérifier » les enchaîne toutes).</p>
+${tbl(['Le sujet dit…', 'Concrètement', 'Preuve'], [
+  ['« un bureau léger tel que XFCE »', 'Debian ou Xubuntu avec Xfce', c('echo $XDG_CURRENT_DESKTOP') + ' → XFCE'],
+  ['« installée en anglais »', 'Langue du système : en_US.UTF-8', c('locale') + ' → LANG=en_US.UTF-8'],
+  ['« clavier configuré en français »', 'Disposition fr (AZERTY), indépendante de la langue', c('localectl status') + ' → X11 Layout: fr'],
+  ['« vscode associé aux extensions pour go »', 'VS Code + extension golang.go (+ gopls, dlv)', c('code --list-extensions') + ' (dans le compte de bob)'],
+  ['« le gestionnaire de source est git »', 'git installé', c('git --version')],
+  ['« le prompt de bash indique l\'état du dépôt git »', 'Branche et état (modifié, indexé…) dans le prompt', 'Dans un dépôt : ' + c('(langage_go *)')],
+  ['« deux utilisateurs : alice / alice@but, bob / bob@but »', 'Deux comptes avec ces mots de passe', c('getent passwd alice bob') + ', puis ' + c('su - bob')],
+  ['« alice a les droits d\'administration »', 'Groupe sudo', c('groups alice') + ' contient sudo'],
+  ['« c\'est bob qui est développeur »', 'bob compile et lance du Go, sans droits admin', c('sudo -l -U bob') + ' → not allowed'],
+  ['« cloner la branche langage_go »', 'Clone du dépôt de validation', c('git clone --branch langage_go …')],
+  ['« si test.sh tourne sans erreur… »', 'Code de retour 0', c('./test.sh; echo $?') + ' → 0'],
+  ['« créer une machine virtuelle avec VMware »', 'VM VMware, distribuable', 'Dossier de la VM ou export OVF']
+], 'wrapc')}
+
+<h2>Ce qui est imposé, ce qui est libre</h2>
+<div class="cols2">
+  <div class="card-s"><h4>Imposé</h4><ul>
+    <li>Linux avec bureau léger</li><li>Système en anglais, clavier français</li><li>VS Code + extensions Go, git</li>
+    <li>Prompt bash avec l'état du dépôt git</li><li>Comptes alice (admin) et bob (développeur) et leurs mots de passe</li>
+    <li>Clone et test de la branche <code>langage_go</code></li></ul></div>
+  <div class="card-s"><h4>Libre (et à justifier dans le rapport)</h4><ul>
+    <li>La distribution : Debian ou Xubuntu, quelle version</li><li>CPU, RAM, disque de la VM</li>
+    <li>Go : paquet de la distribution ou version officielle</li><li>VS Code : dépôt apt, .deb ou snap</li>
+    <li>Comment tu automatises (à la main ou par script)</li><li>Comment tu distribues la VM</li></ul></div>
+</div>
+
+<h2>Les pièges cachés du sujet</h2>
+<ul class="pieges">
+  <li><strong>Langue ≠ clavier.</strong> « En anglais » et « clavier français » sont deux réglages différents (<code>LANG</code> d'un côté, <code>XKBLAYOUT</code> de l'autre). Il faut aussi les vérifier dans la session de bob, pas seulement celle d'alice.</li>
+  <li><strong>Les extensions VS Code sont par utilisateur.</strong> Installer le plugin Go avec le compte d'alice ne donne rien à bob : l'extension (et ses outils <code>gopls</code>, <code>dlv</code> dans <code>~/go/bin</code>) va dans le dossier personnel de celui qui l'installe. C'est ce que le sujet appelle « installer certains composants localement sur son compte ».</li>
+  <li><strong>Debian et sudo.</strong> Si tu donnes un mot de passe à root pendant l'installation, l'utilisateur normal n'est <em>pas</em> mis dans le groupe sudo : alice ne serait pas administratrice.</li>
+  <li><strong>Le prompt est propre à chaque utilisateur.</strong> Il se règle dans le <code>~/.bashrc</code> de chacun (et dans <code>/etc/skel</code> pour les futurs comptes), pas globalement.</li>
+  <li><strong>Le PATH de Go.</strong> Un <code>go</code> installé dans <code>/usr/local/go/bin</code> n'est visible que si ce dossier est dans le PATH de <em>chaque</em> shell, y compris ceux de bob.</li>
+  <li><strong><code>test.sh</code> n'est pas exhaustif.</strong> Le sujet le dit : « insuffisant pour déterminer la qualité de l'installation » et il peut évoluer. Réussir le test ne suffit pas : vérifie aussi toi-même (créer et lancer un projet Go).</li>
+  <li><strong>Accès réseau.</strong> Le dépôt est sur le GitLab de l'IUT : il peut n'être joignable que depuis le réseau de l'IUT (ou en VPN). Teste le clone tôt, pas la veille.</li>
+  <li><strong>Autonomie de la VM.</strong> L'équipe ne peut pas te poser de question : ajoute un fichier <code>LISEZMOI</code> sur le bureau (le script s'en charge).</li>
+</ul>
+
+<h2>Planning</h2>
+<div data-widget="timeline"></div>
+<p class="muted-s">Le rapport partiel est vérifié à la séance de suivi (semaine du 09/11). Rapport complet : version papier le jour de la soutenance.</p>
+
+<h2>Comment c'est noté</h2>
+<ul>
+  <li>Le <strong>rapport</strong> et la <strong>présentation</strong> sont notés séparément, puis pondérés (poids annoncés plus tard).</li>
+  <li>L'auditoire doit comprendre : <strong>les choix logiciels</strong>, <strong>l'adéquation</strong> entre la demande de l'équipe et ce que tu as obtenu, et <strong>les difficultés rencontrées</strong>.</li>
+  <li>Le jury garde un œil sur le temps et peut t'interrompre : prévois 5 minutes de questions sur les 15.</li>
+</ul>
+${note('retenir', 'À retenir', '<p>Le projet est évalué sur ta <strong>capacité à justifier et à reproduire</strong>, pas seulement sur le résultat. Chaque choix doit avoir une raison écrite, et chaque étape doit pouvoir être rejouée par quelqu\'un d\'autre à partir de ton rapport.</p>')}`,
+  check: [
+    ['analyse-1', "J'ai relu le sujet en entier avec le tableau des exigences."],
+    ['analyse-2', "Je connais la date de ma soutenance et le format (15 min, 5 min de questions)."],
+    ['analyse-3', "Mon binôme et moi savons qui fait quoi (VM, rapport, présentation)."],
+    ['analyse-4', "J'ai vérifié que le GitLab de l'IUT est joignable depuis ma connexion."]
+  ]
+});
+
+/* ---------- 2. Choix et dimensionnement ---------- */
+addSec({
+  id: 'choix', group: 'Comprendre', title: 'Choix et dimensionnement',
+  lead: "Debian ou Xubuntu ? Combien de CPU, de RAM, de disque ? Ce sont des décisions libres que le rapport doit justifier.",
+  body: () => R`
+<h2>Debian ou Xubuntu ?</h2>
+<p>Les deux marchent très bien pour cette SAE. Aucune n'est « la bonne » : l'important est de savoir pourquoi tu as choisi.</p>
+${tbl(['Critère', 'Debian (stable) + Xfce', 'Xubuntu (LTS)'], [
+  ['Principe', 'Distribution communautaire, très stable, paquets anciens mais éprouvés.', 'Dérivée d\'Ubuntu (elle-même dérivée de Debian), bureau Xfce par défaut.'],
+  ['Bureau XFCE', 'À cocher à l\'installation (« Xfce »).', 'Déjà le bureau par défaut.'],
+  ['Installateur', 'Plus de questions (langue, pays, clavier, réseau, miroir, logiciels), plus de contrôle.', 'Court et guidé, quelques écrans.'],
+  ['Droits admin', 'Attention : mot de passe root vide = sudo pour le premier utilisateur.', 'Le premier utilisateur est automatiquement dans sudo.'],
+  ['Go dans les dépôts', 'Version selon la release (' + c('apt policy golang-go') + ' pour voir).', 'Idem, souvent un peu plus ancienne que la dernière version de go.dev.'],
+  ['Snaps', 'Non, tout vient d\'apt.', 'Oui pour certains logiciels (Firefox) : plus lourd, plus de processus.'],
+  ['Taille après installation', 'Plus légère (environ 5 à 7 Go avec Xfce).', 'Un peu plus lourde (environ 7 à 10 Go).'],
+  ['Durée du support', 'Environ 5 ans par version (avec le support à long terme).', '5 ans pour une LTS.']
+], 'wrapc')}
+<p class="muted-s">Les tailles sont des ordres de grandeur : mesure sur ta machine avec <code>df -h /</code> une fois installée, et cite <em>ta</em> mesure dans le rapport.</p>
+${note('convention', 'Que choisir ?', '<p><strong>Debian</strong> si tu veux la machine la plus légère et la plus « propre » (et que tu acceptes un installateur plus long). <strong>Xubuntu</strong> si tu veux une installation rapide, sans piège sur sudo. Dans les deux cas, le guide donne les étapes : bouton <strong>Debian / Xubuntu</strong> en haut de la page.</p>')}
+
+<h2>Dimensionner la machine virtuelle</h2>
+<p>Le rapport doit dire « comment la machine virtuelle a été définie (nombre de CPU, quantité de RAM, …) ». Voici des valeurs et leur justification. Règle d'or : une VM ne doit jamais prendre plus de la <strong>moitié</strong> des ressources de l'hôte, sinon l'hôte rame et la VM aussi.</p>
+${tbl(['Ressource', 'Minimum', 'Recommandé', 'Pourquoi'], [
+  ['vCPU', '1', '2', 'Le bureau, VS Code et la compilation Go tournent en parallèle ; 2 cœurs évitent les à-coups sans pénaliser l\'hôte.'],
+  ['RAM', '2 Go', '4 Go', 'Xfce seul consomme moins d\'1 Go ; VS Code, gopls et un navigateur montent vite à 2 ou 3 Go.'],
+  ['Disque', '25 Go', '40 Go (dynamique)', 'Système 5 à 10 Go + Go, VS Code, outils, projets. Un disque dynamique ne prend sur l\'hôte que ce qui est utilisé.'],
+  ['Réseau', '-', 'NAT', 'La VM partage la connexion de l\'hôte : aucune configuration, accès au GitLab de l\'IUT et aux dépôts.'],
+  ['Affichage', '-', 'Accélération 3D désactivée', 'Moins de problèmes d\'affichage avec VS Code (basé sur Electron) dans une VM.']
+])}
+<div class="widget" data-widget="calc"></div>
+
+<h2>Les décisions à documenter</h2>
+<p>Pour chaque ligne, le rapport donne <strong>ce que tu as choisi, les alternatives, et pourquoi</strong>. Le générateur de l'étape « Rapport » préremplit ce tableau.</p>
+${tbl(['Décision', 'Choix proposé', 'Alternatives', 'Argument'], [
+  ['Distribution', 'Debian stable ou Xubuntu LTS', 'Lubuntu, Linux Mint Xfce, Fedora Xfce', 'Stabilité, support long, bureau Xfce léger, documentation abondante.'],
+  ['Go', 'Archive officielle go.dev (vérifiée par empreinte SHA-256)', 'Paquet ' + c('golang-go') + ' de la distribution', 'Version récente, identique pour toute l\'équipe. Le paquet de la distribution est plus simple mais souvent en retard.'],
+  ['VS Code', 'Dépôt apt officiel de Microsoft', 'Paquet .deb téléchargé, snap, VSCodium', 'Mises à jour avec le reste du système, installation scriptable, aucun snap.'],
+  ['Extension Go', 'golang.go (extension officielle de l\'équipe Go) + gopls, dlv', 'Autres éditeurs (GoLand, Vim…)', 'Sujet imposé : VS Code. L\'extension officielle apporte complétion, débogage, tests.'],
+  ['Prompt git', ' ' + c('__git_ps1') + ' fourni avec git, dans un fichier commun', 'oh-my-bash, starship', 'Aucune installation en plus, un seul fichier à maintenir, léger.'],
+  ['Droits', 'alice dans sudo, bob sans', 'bob aussi dans sudo', 'Moindre privilège : le développeur n\'a pas besoin d\'être administrateur.'],
+  ['Automatisation', 'Script bash idempotent', 'Ansible, Packer, cloud-init', 'Aucun outil à installer, lisible par tous, rejouable en quelques minutes.'],
+  ['Distribution de la VM', 'Dossier de la VM compressé, ou export OVF', 'Image ISO préconfigurée', 'Autonome : l\'équipe ouvre la VM et c\'est prêt.']
+], 'wrapc')}
+
+<h2>Go : paquet de la distribution ou version officielle ?</h2>
+<div class="cols2">
+  <div class="card-s"><h4>Paquet <code>golang-go</code> (apt)</h4><ul><li>Une commande : <code>sudo apt install golang-go</code></li><li>Mis à jour avec le système</li><li>Version parfois ancienne : si le projet demande plus récent, ça bloque</li></ul></div>
+  <div class="card-s"><h4>Archive go.dev (tar.gz)</h4><ul><li>Dernière version stable, même pour tous</li><li>Quelques lignes en plus (télécharger, vérifier, extraire)</li><li>Mise à jour à refaire à la main</li></ul></div>
+</div>
+<p>Avec Go 1.21 ou plus, la commande <code>go</code> sait aussi télécharger toute seule la version demandée par le fichier <code>go.mod</code> d'un projet (variable <code>GOTOOLCHAIN</code>, nécessite Internet). Le script du guide propose les deux : <code>GO_SOURCE=tarball</code> (défaut) ou <code>GO_SOURCE=apt</code>.</p>`,
+  check: [
+    ['choix-1', "J'ai choisi ma distribution (Debian ou Xubuntu) et noté 2 arguments."],
+    ['choix-2', "J'ai décidé du nombre de vCPU, de la RAM et du disque, avec la justification."],
+    ['choix-3', "J'ai choisi comment installer Go et VS Code (et pourquoi)."],
+    ['choix-4', "J'ai téléchargé l'ISO et vérifié son empreinte (sha256sum)."]
+  ]
+});
+
+/* ---------- 3. VMware ---------- */
+addSec({
+  id: 'vmware', group: 'Installer', title: 'Créer la VM dans VMware',
+  lead: "Assistant « Nouvelle machine virtuelle » de VMware Workstation : les réglages qui évitent les ennuis.",
+  body: () => R`
+<h2>Récupérer l'ISO</h2>
+${D(
+  R`<p>Télécharge sur <strong>debian.org</strong> l'image d'installation <strong>netinst</strong> pour PC 64 bits (<em>amd64</em>), environ 700 Mo. Elle télécharge le reste pendant l'installation : il faut donc du réseau dans la VM.</p>
+  <p>Variante : l'image <strong>live Xfce</strong> (plus grosse, installateur graphique différent). Le guide suit la <strong>netinst</strong>.</p>`,
+  R`<p>Télécharge sur <strong>xubuntu.org</strong> l'ISO d'une version <strong>LTS</strong> (support long), environ 4 Go.</p>`
+)}
+<p>Vérifie l'empreinte du fichier (elle est publiée à côté du téléchargement, dans un fichier <code>SHA256SUMS</code>) : un ISO corrompu donne des erreurs d'installation incompréhensibles.</p>
+${sh(R`# Linux / macOS
+sha256sum nom-de-l-iso.iso
+# Windows (PowerShell)
+Get-FileHash .\nom-de-l-iso.iso -Algorithm SHA256`)}
+
+<h2>L'assistant, étape par étape</h2>
+<ol class="flow">
+  <li><strong>Nouvelle machine virtuelle</strong> : menu <em>File → New Virtual Machine</em> (${kbd('Ctrl+N')}), mode <strong>Typical</strong>.</li>
+  <li><strong>« I will install the operating system later »</strong>. Ne donne <em>pas</em> l'ISO ici : l'« Easy Install » de VMware préremplit un utilisateur, la langue et le clavier à ta place, ce qui entre en conflit avec ce que le sujet impose (alice, clavier français). On garde la main.</li>
+  <li><strong>Système invité</strong> : <em>Linux</em>, version ${Di('<em>Debian 12.x 64-bit</em> (ou la plus récente de la liste)', '<em>Ubuntu 64-bit</em>')}.</li>
+  <li><strong>Nom</strong> : <code>BUTGAMES-DEV</code> (le nom sera le dossier de la VM). Choisis un emplacement avec assez de place.</li>
+  <li><strong>Disque</strong> : <strong>40 Go</strong>, <em>Store virtual disk as a single file</em> ou <em>Split into multiple files</em> (le second est plus pratique à copier et compresser). <strong>Ne coche pas</strong> « Allocate all disk space now » : le disque reste dynamique.</li>
+  <li><strong>Customize Hardware…</strong> avant de terminer :
+    <ul>
+      <li><strong>Memory</strong> : 4096 Mo.</li>
+      <li><strong>Processors</strong> : 1 processeur, 2 cœurs.</li>
+      <li><strong>Network Adapter</strong> : <strong>NAT</strong>.</li>
+      <li><strong>New CD/DVD</strong> : <em>Use ISO image file</em> → ton ISO.</li>
+      <li><strong>Display</strong> : décoche <em>Accelerate 3D graphics</em>.</li>
+      <li>Facultatif : supprime <em>Printer</em> et <em>Sound Card</em> si tu n'en as pas besoin.</li>
+    </ul></li>
+  <li><strong>Finish</strong>, puis <strong>Power on this virtual machine</strong>.</li>
+</ol>
+${tbl(['Réglage', 'Valeur', 'Où le trouver dans le fichier .vmx'], [
+  ['RAM', '4096 Mo', c('memsize = "4096"')],
+  ['Processeurs', '2 cœurs', c('numvcpus = "2"')],
+  ['Réseau', 'NAT', c('ethernet0.connectionType = "nat"')],
+  ['Disque', '40 Go dynamique', 'fichier ' + c('.vmdk') + ' qui grandit au fil de l\'usage']
+], 'wrapc')}
+<p class="muted-s">Pour le rapport, tu peux citer ces lignes du fichier <code>.vmx</code> (ouvre-le avec un éditeur de texte, VM éteinte).</p>
+
+<h2>Utiliser la VM</h2>
+<ul>
+  <li>${kbd('Ctrl+Alt')} rend la souris à Windows ou Linux quand la VM la « capture ».</li>
+  <li>${kbd('Ctrl+Alt+Entrée')} : plein écran.</li>
+  <li>Le copier-coller et le redimensionnement automatique ne marchent qu'avec les outils VMware dans l'invité (paquets <code>open-vm-tools</code>, installés plus tard).</li>
+  <li>Message « VT-x is disabled » ou « virtualization » ? La virtualisation est désactivée dans le BIOS de l'hôte : sur une machine de l'IUT, demande à l'enseignant.</li>
+</ul>
+${note('attention', 'À savoir', '<p>Selon ta version, <strong>VMware Workstation Player</strong> n\'offre ni instantanés (snapshots) ni clonage : pense à copier le dossier de la VM (VM éteinte) à des moments clés, par exemple après l\'installation du système avant les scripts.</p>')}`,
+  check: [
+    ['vmware-1', "La VM est créée avec « install the operating system later »."],
+    ['vmware-2', "4096 Mo de RAM, 2 cœurs, disque de 40 Go dynamique, réseau NAT."],
+    ['vmware-3', "L'ISO est branché dans le lecteur CD/DVD de la VM."],
+    ['vmware-4', "J'ai noté ces valeurs pour le rapport (ou copié les lignes du .vmx)."]
+  ]
+});
+
+/* ---------- 4. Installer l'OS ---------- */
+addSec({
+  id: 'install', group: 'Installer', title: 'Installer Debian ou Xubuntu',
+  lead: "Les écrans de l'installateur et les valeurs à saisir. Les choix de langue, de clavier et de mot de passe se font ici.",
+  body: () => R`
+<p>Allume la VM : elle démarre sur l'ISO. Ton parcours (Debian ou Xubuntu) est celui choisi avec le bouton en haut de la page.</p>
+${D(
+R`<h2>Debian : installation « Graphical install »</h2>
+${tbl(['Écran', 'Ce que tu choisis'], [
+  ['Menu de démarrage', c('Graphical install')],
+  ['Select a language', c('English') + ' : le système sera en anglais, comme demandé'],
+  ['Select your location', c('other → Europe → France') + '. Si l\'installateur demande ensuite la locale par défaut, prends ' + c('United States - en_US.UTF-8')],
+  ['Configure the keyboard', c('French') + ' : le clavier est en français, <strong>indépendamment</strong> de la langue'],
+  ['Hostname / Domain name', c('butgames-dev') + ' ; domaine vide'],
+  ['Root password', '<strong>Laisse les deux champs VIDES.</strong> Le compte root est alors désactivé et le premier utilisateur reçoit sudo'],
+  ['Full name / username', c('Alice') + ' puis ' + c('alice')],
+  ['User password', c('alice@but') + ' (deux fois). Si l\'installateur signale un mot de passe faible, continue : il est imposé par le sujet'],
+  ['Partition disks', c('Guided - use entire disk') + ' → le disque de 40 Go → ' + c('All files in one partition') + ' → ' + c('Finish partitioning') + ' → ' + c('Yes') + ' pour écrire. Pas de chiffrement (la VM sera distribuée)'],
+  ['Package manager', 'Scanner d\'autres supports : <strong>No</strong>. Pays du miroir : <strong>France</strong>, ' + c('deb.debian.org') + '. Proxy : vide'],
+  ['Popularity contest', c('No')],
+  ['Software selection', 'Coche ' + c('Debian desktop environment') + ', ' + c('Xfce') + ' et ' + c('standard system utilities') + '. <strong>Décoche GNOME</strong>. Facultatif : ' + c('SSH server')],
+  ['GRUB', c('Yes') + ', installer sur ' + c('/dev/sda')],
+  ['Finish', c('Continue') + ' : la VM redémarre sur le bureau de connexion']
+], 'wrapc')}
+${note('attention', 'Le piège du mot de passe root', '<p>Si tu as donné un mot de passe à root, alice <strong>n\'est pas</strong> dans le groupe sudo et la commande <code>sudo</code> peut même être absente. Rattrapage : <code>su -</code> (mot de passe root), puis <code>apt install sudo</code> et <code>usermod -aG sudo alice</code>, puis reconnexion.</p>')}
+<p class="muted-s">Variante « image live Xfce » : l'installateur (Calamares) réunit langue, fuseau, clavier, utilisateur ; coche l'option d'utiliser le même mot de passe pour l'administrateur ou laisse-le vide selon ce qui est proposé, puis contrôle <code>groups</code> après installation.</p>`,
+R`<h2>Xubuntu : installateur graphique</h2>
+<p>Démarre l'ISO, puis lance <strong>Install Xubuntu</strong> (et non « Try »).</p>
+${tbl(['Écran', 'Ce que tu choisis'], [
+  ['Welcome / Language', c('English') + ' : système en anglais'],
+  ['Keyboard layout', c('French') + ' puis ' + c('French') + ' (la variante standard). Tape quelques accents dans la zone de test'],
+  ['Updates and other software', c('Normal installation') + ' (ou Minimal, plus léger). Coche le téléchargement des mises à jour si le réseau marche. Logiciels tiers : inutile'],
+  ['Installation type', c('Erase disk and install Xubuntu') + ' : il s\'agit du disque virtuel de 40 Go. Ni LVM ni chiffrement (la VM sera distribuée)'],
+  ['Where are you?', c('Paris')],
+  ['Who are you?', 'Nom ' + c('Alice') + ', ordinateur ' + c('butgames-dev') + ', identifiant ' + c('alice') + ', mot de passe ' + c('alice@but') + '. <strong>Ne coche pas</strong> la connexion automatique'],
+  ['Installation', 'Attends la fin, puis ' + c('Restart now') + ' ; si on te demande de retirer le support, appuie sur ' + kbd('Entrée')]
+], 'wrapc')}
+${note('convention', 'Selon la version', '<p>Les libellés et l\'ordre des écrans changent un peu d\'une version à l\'autre (Ubiquity ou Calamares selon la version de Xubuntu). Les <strong>valeurs</strong> à saisir, elles, ne changent pas : anglais, clavier français, utilisateur alice, mot de passe alice@but, disque entier.</p>')}`
+)}
+
+<h2>Au premier démarrage</h2>
+<ol class="flow">
+  <li>L'écran de connexion (LightDM) s'affiche : connecte-toi avec <code>alice</code> / <code>alice@but</code>.</li>
+  <li>Le bureau Xfce apparaît. Si le clavier tape en QWERTY, pas de panique : l'étape suivante règle ça.</li>
+  <li>Ouvre un terminal : ${Di('menu <em>Applications → Terminal Emulator</em>', kbd('Ctrl+Alt+T') + ' ou menu <em>Applications → Terminal Emulator</em>')}.</li>
+  <li>Vérifie le réseau : ${c('ping -c 2 deb.debian.org')} ${Di('', '(ou ' + c('ping -c 2 archive.ubuntu.com') + ')')}.</li>
+</ol>`,
+  check: [
+    ['install-1', "Le système est installé et démarre sur le bureau Xfce."],
+    ['install-2', "J'ai installé en anglais, avec le clavier français."],
+    ['install-3', "Je me connecte en alice avec alice@but."],
+    ['install-4', "Dans un terminal, " + "<code>sudo whoami</code> répond <code>root</code>."],
+    ['install-5', "Le réseau fonctionne dans la VM (ping ou navigateur)."]
+  ]
+});
+
+/* ---------- 5. Régler le système ---------- */
+addSec({
+  id: 'systeme', group: 'Installer', title: 'Régler le système',
+  lead: "Mises à jour, outils VMware, langue anglaise, clavier français, fuseau horaire : tout se fait avec le compte d'alice.",
+  body: () => R`
+<p>${who('alice')} Toutes les commandes de cette étape se tapent dans un terminal, connecté en alice. <code>sudo</code> demande son mot de passe (<code>alice@but</code>), les lettres ne s'affichent pas quand tu tapes : c'est normal.</p>
+${note('convention', 'Raccourci', '<p>Tout cela est fait par le <a href="#scripts">script tout-en-un</a>. Lis quand même cette étape : le rapport doit expliquer ce que chaque commande change.</p>')}
+
+<h2>1. Mettre à jour</h2>
+${sh(R`sudo apt update
+sudo apt full-upgrade -y`)}
+${D(
+  R`<p>Si <code>apt update</code> se plaint d'un dépôt <code>cdrom:</code>, l'installateur a laissé le CD dans la liste des sources : ouvre <code>/etc/apt/sources.list</code> (<code>sudo nano /etc/apt/sources.list</code>) et mets un <code>#</code> devant la ligne qui commence par <code>deb cdrom:</code>.</p>`,
+  R`<p>Si on te répond « Could not get lock », une mise à jour automatique est en cours : attends une ou deux minutes et recommence.</p>`
+)}
+
+<h2>2. Les outils VMware</h2>
+<p>Ils activent le copier-coller entre l'hôte et la VM, le redimensionnement automatique de l'écran et l'arrêt propre depuis VMware.</p>
+${sh(R`sudo apt install -y open-vm-tools open-vm-tools-desktop
+sudo reboot`)}
+${term(R`$ systemctl is-active open-vm-tools
+active`)}
+
+<h2>3. La langue du système : anglais</h2>
+<p>La langue est la variable <code>LANG</code>. Les messages, les menus et les noms de dossiers (<code>Desktop</code>, <code>Documents</code>) sont en anglais.</p>
+${term(R`$ locale | head -3
+LANG=en_US.UTF-8
+LANGUAGE=
+LC_CTYPE="en_US.UTF-8"`)}
+<p>Si ce n'est pas le cas, génère la langue et fais-en la langue par défaut :</p>
+${D(
+  sh(R`sudo sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
+sudo locale-gen
+sudo update-locale LANG=en_US.UTF-8`),
+  sh(R`sudo apt install -y language-pack-en
+sudo locale-gen en_US.UTF-8
+sudo update-locale LANG=en_US.UTF-8`)
+)}
+<p>Le réglage est écrit dans <code>/etc/default/locale</code> et pris en compte à la prochaine connexion.</p>
+
+<h2>4. Le clavier : français</h2>
+<p>Le clavier est un réglage <strong>distinct</strong> de la langue : <code>XKBLAYOUT</code>. Il est lu par la console et par l'interface graphique.</p>
+${sh(R`sudo localectl set-x11-keymap fr pc105
+setxkbmap fr                   # applique tout de suite dans la session graphique`)}
+${term(R`$ cat /etc/default/keyboard
+XKBMODEL="pc105"
+XKBLAYOUT="fr"
+XKBVARIANT=""
+XKBOPTIONS=""
+$ setxkbmap -query | grep layout
+layout:     fr`)}
+<p>Si <code>localectl</code> n'est pas disponible, écris le fichier <code>/etc/default/keyboard</code> à la main (voir ci-dessus) et reconnecte-toi.</p>
+${note('attention', 'Dans la session de bob aussi', '<p>Une préférence enregistrée dans le compte (<em>Paramètres → Clavier → Disposition</em>, case « Utiliser les paramètres par défaut du système ») peut garder un clavier différent. Vérifie dans la session de bob, plus tard.</p>')}
+
+<h2>5. Fuseau horaire et nom de machine</h2>
+${sh(R`sudo timedatectl set-timezone Europe/Paris
+sudo hostnamectl set-hostname butgames-dev`)}
+<p>Une heure fausse provoque des erreurs de certificats HTTPS (clone git, téléchargements) : vérifie avec <code>date</code>.</p>`,
+  check: [
+    ['systeme-1', "Le système est à jour (apt full-upgrade) et redémarré."],
+    ['systeme-2', "open-vm-tools est actif : copier-coller et redimensionnement fonctionnent."],
+    ['systeme-3', "<code>locale</code> affiche LANG=en_US.UTF-8."],
+    ['systeme-4', "Le clavier est français : <code>setxkbmap -query</code> affiche layout: fr."],
+    ['systeme-5', "L'heure et le fuseau horaire sont corrects (<code>date</code>)."]
+  ]
+});
+
+/* ---------- 6. Comptes ---------- */
+addSec({
+  id: 'comptes', group: 'Installer', title: 'Les comptes alice et bob',
+  lead: "Deux utilisateurs, deux rôles : alice administre (sudo), bob développe (sans sudo).",
+  body: () => R`
+<p>${who('alice')} Les commandes se tapent avec <code>sudo</code> depuis le compte d'alice.</p>
+<h2>Pourquoi deux comptes ?</h2>
+<p>C'est le principe du <strong>moindre privilège</strong> : on ne travaille pas avec plus de droits que nécessaire. <strong>alice</strong> installe et met à jour (via <code>sudo</code>) ; <strong>bob</strong> écrit, compile et lance du code, mais ne peut pas modifier le système. S'il lui manque un logiciel, il le demande à alice. Si bob se trompe, il ne casse que son compte.</p>
+${tbl(['', 'alice', 'bob'], [
+  ['Rôle', 'Administration du poste', 'Développement en Go'],
+  ['Mot de passe', c('alice@but'), c('bob@but')],
+  ['Groupe sudo', '<strong>Oui</strong>', '<strong>Non</strong>'],
+  ['Installe des logiciels pour tous', 'Oui (apt, archive Go)', 'Non'],
+  ['Installe dans son compte', 'Possible', 'Oui : extension VS Code, outils Go dans ~/go/bin']
+])}
+
+<h2>Créer les comptes</h2>
+<p>alice existe déjà (créée par l'installateur). On crée bob, on fixe les mots de passe, et on règle les groupes :</p>
+${sh(R`# bob : compte avec dossier personnel et shell bash
+sudo useradd -m -s /bin/bash -c "Bob" bob
+# mots de passe imposés par le sujet
+echo 'alice:alice@but' | sudo chpasswd
+echo 'bob:bob@but'     | sudo chpasswd
+# alice administre : groupe sudo (bob n'y est pas)
+sudo usermod -aG sudo alice`)}
+<p>Variante interactive : <code>sudo adduser bob</code> pose des questions (mot de passe, nom) au lieu de tout prendre en arguments.</p>
+${note('retenir', 'Pourquoi des apostrophes autour du mot de passe', '<p>Dans <code>\'alice:alice@but\'</code>, les apostrophes empêchent le shell d\'interpréter les caractères spéciaux. Ici <code>@</code> serait sans danger, mais c\'est le bon réflexe pour tout mot de passe (un <code>$</code> ou un <code>!</code> serait interprété).</p>')}
+
+<h2>Vérifier</h2>
+${term(R`$ id alice
+uid=1000(alice) gid=1000(alice) groups=1000(alice),27(sudo),...
+$ id bob
+uid=1001(bob) gid=1001(bob) groups=1001(bob)
+$ sudo -l -U bob
+User bob is not allowed to run sudo on butgames-dev.
+$ getent passwd alice bob`)}
+<p>Teste aussi les mots de passe pour de vrai en changeant d'utilisateur : <code>su - bob</code> (mot de passe <code>bob@but</code>), puis <code>whoami</code>, puis <code>exit</code>. Et dans la session de bob, <code>sudo ls</code> doit être refusé.</p>
+${note('attention', 'Pas de connexion automatique', '<p>N\'active la connexion automatique pour aucun des deux comptes : l\'équipe doit pouvoir choisir son utilisateur à l\'écran de connexion. Si la liste des utilisateurs n\'apparaît pas, tape simplement le nom.</p>')}`,
+  check: [
+    ['comptes-1', "bob existe, avec le mot de passe bob@but."],
+    ['comptes-2', "alice est dans le groupe sudo (<code>id alice</code>)."],
+    ['comptes-3', "bob n'est pas dans sudo (<code>sudo -l -U bob</code> refuse)."],
+    ['comptes-4', "Je me suis connecté en bob dans l'interface graphique."]
+  ]
+});
+
+/* ---------- 7. git, Go, VS Code ---------- */
+addSec({
+  id: 'logiciels', group: 'Installer', title: 'git, Go et VS Code',
+  lead: "Les logiciels installés pour tout le monde par alice, avec sudo.",
+  body: () => R`
+<p>${who('alice')} Installation système : le dossier d'installation et les droits en écriture restent à root, donc bob peut les <em>utiliser</em> sans pouvoir les <em>modifier</em>.</p>
+<h2>1. git</h2>
+${sh(R`sudo apt install -y git curl wget ca-certificates gpg apt-transport-https bash-completion`)}
+${term(R`$ git --version
+git version 2.xx.x`)}
+
+<h2>2. Go</h2>
+<p>Deux méthodes (voir le comparatif de l'étape « Choix »). La version officielle est conseillée.</p>
+<h3>Méthode A : l'archive officielle de go.dev (conseillée)</h3>
+${sh(R`# 1. Trouver la dernière version stable et l'archive de ta machine (amd64 ou arm64)
+ARCH=$(dpkg --print-architecture)
+VER=$(curl -fsSL 'https://go.dev/dl/?mode=json' | grep -m1 -o '"version": *"go[0-9.]*"' | grep -o 'go[0-9.]*')
+echo "$VER pour $ARCH"
+# 2. Télécharger
+curl -fLO "https://go.dev/dl/$VER.linux-$ARCH.tar.gz"
+# 3. Vérifier l'intégrité : comparer avec l'empreinte SHA-256 affichée sur https://go.dev/dl/
+sha256sum "$VER.linux-$ARCH.tar.gz"
+# 4. Installer dans /usr/local/go (en remplaçant une éventuelle ancienne version)
+sudo rm -rf /usr/local/go
+sudo tar -C /usr/local -xzf "$VER.linux-$ARCH.tar.gz"
+# 5. Rendre la commande visible pour tout le monde
+sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
+sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt`)}
+<p>Le <strong>script</strong> du guide fait exactement cela, et compare lui-même l'empreinte SHA-256 avant d'installer. Les deux liens dans <code>/usr/local/bin</code> rendent <code>go</code> disponible dans tous les shells ; le fichier <code>/etc/butgames.bashrc</code> (étape suivante) ajoute aussi <code>/usr/local/go/bin</code> et <code>~/go/bin</code> au PATH.</p>
+<h3>Méthode B : le paquet de la distribution</h3>
+${sh(R`apt policy golang-go    # voir la version proposée
+sudo apt install -y golang-go`)}
+<h3>Vérifier</h3>
+${term(R`$ go version
+go version go1.xx.x linux/amd64
+$ go env GOROOT GOPATH
+/usr/local/go
+/home/alice/go`)}
+
+<h2>3. Visual Studio Code</h2>
+<p>On ajoute le <strong>dépôt apt officiel de Microsoft</strong> : VS Code se met ensuite à jour avec le système.</p>
+${sh(R`# clé de signature du dépôt
+curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor --yes -o /usr/share/keyrings/microsoft.gpg
+# déclaration du dépôt
+sudo tee /etc/apt/sources.list.d/vscode.sources >/dev/null <<EOF
+Types: deb
+URIs: https://packages.microsoft.com/repos/code
+Suites: stable
+Components: main
+Architectures: $(dpkg --print-architecture)
+Signed-By: /usr/share/keyrings/microsoft.gpg
+EOF
+sudo apt update
+sudo apt install -y code`)}
+${term(R`$ code --version
+1.xx.x
+...`)}
+<p>Le logiciel apparaît dans le menu <em>Applications → Development</em> et se lance avec la commande <code>code</code>.</p>
+${D(
+  '<p class="muted-s">Sur Debian, le paquet <code>code</code> du dépôt Microsoft est la voie normale : ni snap ni flatpak nécessaires.</p>',
+  '<p class="muted-s">Sur Xubuntu, <code>sudo snap install code --classic</code> marche aussi, mais le snap est plus lourd et démarre plus lentement : le dépôt apt est préférable pour une VM distribuée.</p>'
+)}
+${note('attention', 'L\'extension Go, ce n\'est pas ici', '<p>Ce que tu viens d\'installer est <strong>VS Code lui-même</strong>, pour tout le monde. L\'<strong>extension Go</strong> et les outils de développement (<code>gopls</code>, <code>dlv</code>) s\'installent <strong>dans le compte de bob</strong> : étape « Côté bob ».</p>')}`,
+  check: [
+    ['logiciels-1', "<code>git --version</code> répond."],
+    ['logiciels-2', "<code>go version</code> répond (dans le compte d'alice puis dans celui de bob)."],
+    ['logiciels-3', "<code>code --version</code> répond et VS Code s'ouvre."],
+    ['logiciels-4', "Je sais expliquer pourquoi Go est dans /usr/local et pas dans le dossier de bob."]
+  ]
+});
+
+/* ---------- 8. Prompt git ---------- */
+addSec({
+  id: 'prompt', group: 'Installer', title: 'Le prompt avec l\'état de git',
+  lead: "Faire afficher la branche et l'état du dépôt dans le prompt de bash, pour alice, bob et les futurs comptes.",
+  body: () => R`
+<h2>Ce qu'on veut obtenir</h2>
+<p>Dans un dépôt git, le prompt montre la branche et ce qui a changé :</p>
+${term(R`bob@butgames-dev:~/projets/hello.sae4.but1.iut (langage_go)$ echo x >> test.sh
+bob@butgames-dev:~/projets/hello.sae4.but1.iut (langage_go *)$ git add test.sh
+bob@butgames-dev:~/projets/hello.sae4.but1.iut (langage_go +)$`)}
+${tbl(['Symbole', 'Signification'], [
+  [c('(langage_go)'), 'branche courante, dépôt sans changement'],
+  [c('*'), 'fichiers suivis <strong>modifiés</strong>, pas encore ajoutés (<code>git add</code>)'],
+  [c('+'), 'modifications <strong>ajoutées</strong> à l\'index, prêtes pour le commit'],
+  [c('%'), 'fichiers <strong>non suivis</strong> par git'],
+  [c('$'), 'du travail mis de côté avec <code>git stash</code>'],
+  [c('#'), 'dépôt neuf, <strong>sans aucun commit</strong>'],
+  [c('<  >  <>  ='), 'en retard / en avance / divergent / à jour par rapport au dépôt distant']
+])}
+
+<h2>Comment ça marche</h2>
+<ul>
+  <li>Le prompt est la variable <code>PS1</code>, relue par bash à chaque ligne.</li>
+  <li>git fournit une fonction <code>__git_ps1</code> dans le fichier <code>/usr/lib/git-core/git-sh-prompt</code> : elle affiche la branche et l'état, ou rien si on n'est pas dans un dépôt.</li>
+  <li>Des variables <code>GIT_PS1_SHOW…</code> choisissent ce qui est affiché.</li>
+  <li><strong>Piège classique</strong> : <code>PS1</code> doit être entre <strong>apostrophes</strong>. Entre guillemets, <code>$(__git_ps1)</code> serait calculé une seule fois, à la définition, et le prompt ne changerait jamais de branche.</li>
+</ul>
+
+<h2>Où l'écrire : un fichier commun</h2>
+<p>Plutôt que de copier le même bloc dans chaque <code>~/.bashrc</code>, on le met dans <strong>un seul fichier système</strong>, <code>/etc/butgames.bashrc</code>, que chaque <code>.bashrc</code> charge. Une modification, un seul endroit. Il règle aussi le PATH de Go.</p>
+${file('/etc/butgames.bashrc', bashrcTxt())}
+<p>Puis, pour chaque utilisateur existant et pour les futurs (<code>/etc/skel</code>), une ligne dans le <code>.bashrc</code> :</p>
+${sh(R`for rc in /etc/skel/.bashrc /home/alice/.bashrc /home/bob/.bashrc; do
+  echo '[ -r /etc/butgames.bashrc ] && . /etc/butgames.bashrc' | sudo tee -a "$rc" >/dev/null
+done`)}
+<p>Crée le fichier avec <code>sudo nano /etc/butgames.bashrc</code> (copie le bloc ci-dessus) ou laisse le <a href="#scripts">script</a> le faire : il n'ajoute la ligne qu'une fois dans chaque <code>.bashrc</code>.</p>
+
+<h2>Tester</h2>
+${term(R`$ source ~/.bashrc
+$ cd /tmp && git init -q essai && cd essai
+alice@butgames-dev:/tmp/essai (master #)$ touch a && git add a
+alice@butgames-dev:/tmp/essai (master #+)$ cd ..
+alice@butgames-dev:/tmp$`)}
+<p>Le prompt change aussi dans le terminal intégré de VS Code. Les couleurs : vert pour <code>utilisateur@machine</code>, bleu pour le dossier, jaune pour git.</p>
+${note('attention', 'Si le prompt n\'a pas changé', '<ul><li>Ouvre un <strong>nouveau</strong> terminal (ou <code>source ~/.bashrc</code>) : un shell déjà ouvert garde l\'ancien.</li><li>Affiche <code>echo "$PS1"</code> : il doit contenir <code>__git_ps1</code>, pas du texte déjà calculé comme <code>(master)</code>.</li><li>Un prompt avec <code>$(__git_ps1 ...)</code> écrit tel quel signifie que <code>PS1</code> est entre guillemets, ou que <code>git-sh-prompt</code> n\'a pas été chargé.</li></ul>')}`,
+  check: [
+    ['prompt-1', "Le fichier /etc/butgames.bashrc existe et contient __git_ps1."],
+    ['prompt-2', "Le ~/.bashrc d'alice et celui de bob chargent ce fichier."],
+    ['prompt-3', "Dans un dépôt de test, le prompt affiche la branche et change avec * et +."],
+    ['prompt-4', "Je sais expliquer pourquoi PS1 est entre apostrophes."]
+  ]
+});
+
+/* ---------- 9. Côté bob ---------- */
+addSec({
+  id: 'bob', group: 'Installer', title: 'Côté bob : extension, clone et test',
+  lead: "Ce que fait le développeur dans son propre compte : extension Go, outils Go, clone de la branche langage_go, lancement de test.sh.",
+  body: () => R`
+<p>${who('bob')} Ouvre une session en bob : menu <em>Applications → Log Out → Switch User</em> (ou déconnecte alice), puis connexion avec <code>bob</code> / <code>bob@but</code>. Vérifie que le clavier tape bien en français.</p>
+
+<h2>1. Identité git</h2>
+<p>git étiquette chaque commit avec un nom et un email, à régler une fois par utilisateur.</p>
+${sh(R`git config --global user.name "Bob"
+git config --global user.email "bob@butgames.local"
+git config --global init.defaultBranch main`)}
+
+<h2>2. L'extension Go de VS Code</h2>
+${sh(R`code --install-extension golang.go`)}
+<p>ou, dans VS Code : <em>Extensions</em> (${kbd('Ctrl+Shift+X')}) → chercher « Go » → l'extension de <strong>Go Team at Google</strong> (identifiant <code>golang.go</code>) → Install. Vérifie :</p>
+${term(R`$ code --list-extensions
+golang.go`)}
+<p>Les extensions vont dans <code>~/.vscode/extensions</code>, <strong>dans le compte de bob</strong> : elles n'existent pas pour alice tant qu'elle ne les installe pas elle aussi.</p>
+
+<h2>3. Les outils Go (gopls, dlv…)</h2>
+<p>L'extension s'appuie sur des programmes Go : <code>gopls</code> (complétion, navigation, erreurs), <code>dlv</code> (débogueur), <code>staticcheck</code>. Ils s'installent <strong>sans sudo</strong> dans <code>~/go/bin</code>.</p>
+${sh(R`go install golang.org/x/tools/gopls@latest
+go install github.com/go-delve/delve/cmd/dlv@latest
+go install honnef.co/go/tools/cmd/staticcheck@latest
+ls ~/go/bin`)}
+<p>Autre méthode : ouvre un fichier <code>.go</code> dans VS Code, accepte « Install All » dans la fenêtre qui apparaît, ou lance la palette de commandes (${kbd('Ctrl+Shift+P')}) → <em>Go: Install/Update Tools</em>.</p>
+${note('retenir', 'Pourquoi ça se passe chez bob', '<p><code>go install</code> écrit dans <code>$GOPATH/bin</code>, soit <code>~/go/bin</code> : le dossier personnel de celui qui lance la commande. C\'est exactement le « il est possible que ce soit lui qui installe certains composants localement sur son compte » du sujet. Et <code>/etc/butgames.bashrc</code> met ce dossier dans le PATH.</p>')}
+
+<h2>4. Cloner le projet de validation</h2>
+${sh(R`mkdir -p ~/projets && cd ~/projets
+git clone --branch langage_go ${GIT_URL}
+cd hello.sae4.but1.iut`)}
+<p>Le dossier créé prend le nom du dépôt sans <code>.git</code>. Le prompt affiche maintenant <code>(langage_go)</code>. <code>--branch langage_go</code> récupère et place directement sur la bonne branche.</p>
+${term(R`$ git branch
+* langage_go
+$ ls -l
+...`)}
+
+<h2>5. Lire puis lancer test.sh</h2>
+<p>Lis toujours un script avant de l'exécuter, ne serait-ce que pour savoir ce qu'il vérifie :</p>
+${sh(R`cat test.sh`)}
+<p>Puis lance-le, en gardant une <strong>trace</strong> pour le rapport (la preuve que le test passe) :</p>
+${sh(R`./test.sh 2>&1 | tee ~/preuve-test.txt
+echo "code retour : ${'$'}{PIPESTATUS[0]}"`)}
+<p>Un code retour de <code>0</code> signifie « aucune erreur ». Si le fichier n'est pas exécutable (« Permission denied ») : <code>bash test.sh</code>, ou <code>chmod +x test.sh</code> (git verra alors une modification : le prompt affichera <code>*</code>).</p>
+${note('attention', 'Si test.sh réclame un logiciel absent', '<p>Message du type « command not found » ? bob ne peut pas installer lui-même (pas de sudo) : <strong>alice</strong> installe le paquet manquant (<code>sudo apt install …</code>) et bob relance le test. C\'est le fonctionnement voulu des deux rôles. Note ce cas dans le rapport, c\'est une difficulté rencontrée.</p>')}
+
+<h2>6. Vérifier avec un vrai projet Go</h2>
+<p>Comme le test n'est pas exhaustif, vérifie toi-même qu'on peut créer, compiler et lancer un programme (détails dans la <a href="#notice">notice</a>) :</p>
+${sh(R`mkdir -p ~/projets/bonjour && cd ~/projets/bonjour
+go mod init bonjour
+cat > main.go <<'EOF'
+package main
+
+import "fmt"
+
+func main() { fmt.Println("Bonjour BUTGAMES !") }
+EOF
+go run .
+code .`)}`,
+  check: [
+    ['bob-1', "L'extension golang.go est installée chez bob (<code>code --list-extensions</code>)."],
+    ['bob-2', "gopls et dlv sont dans ~/go/bin et VS Code ne signale aucun outil manquant."],
+    ['bob-3', "Le dépôt est cloné sur la branche langage_go et le prompt affiche (langage_go)."],
+    ['bob-4', "<code>./test.sh</code> se termine avec le code retour 0, et j'ai gardé la trace."],
+    ['bob-5', "Je compile et lance un mini-programme Go depuis le terminal et depuis VS Code."]
+  ]
+});
+
+/* ---------- 10. Scripts ---------- */
+addSec({
+  id: 'scripts', group: 'Automatiser', title: 'Scripts tout-en-un',
+  lead: "Trois scripts bash : préparer la machine (alice), cloner et tester (bob), tout vérifier. Reproductible en quelques minutes, idéal pour la soutenance.",
+  body: () => R`
+<h2>Pourquoi un script ?</h2>
+<p>Le sujet demande de « répliquer l'environnement » et de pouvoir « le reproduire » à partir du rapport. Un script <strong>idempotent</strong> (on peut le relancer sans dégât) est la meilleure preuve : il <em>est</em> la liste des commandes. Il détecte lui-même Debian ou Ubuntu/Xubuntu.</p>
+${tbl(['Script', 'Qui le lance', 'Ce qu\'il fait'], [
+  [c('sae-alice.sh'), who('alice') + ' avec <code>sudo</code>', 'Paquets, langue anglaise, clavier français, fuseau, comptes, Go, VS Code, LISEZMOI, prompt git, et prépare bob (extension Go, outils Go, identité git).'],
+  [c('sae-bob.sh'), who('bob') + ' sans sudo', 'Clone la branche <code>langage_go</code>, affiche et lance <code>test.sh</code>, enregistre la preuve dans <code>~/preuve-test.txt</code>.'],
+  [c('sae-verif.sh'), who('alice') + ' avec <code>sudo</code>', 'Vérifie chaque exigence du sujet et affiche [ OK ] ou [FAIL].']
+], 'wrapc')}
+
+<h2>Mettre les scripts dans la VM</h2>
+<ol class="flow">
+  <li>Dans la VM, ouvre Firefox sur cette page : <code>https://lucjules.github.io/systeme/sae-103.html</code>.</li>
+  <li>Clique sur <strong>Télécharger</strong> sous chaque script (ils vont dans <code>~/Downloads</code>).</li>
+  <li>Autre possibilité : copier-coller depuis l'hôte (marche avec <code>open-vm-tools</code>), un dossier partagé VMware, ou une clé USB.</li>
+</ol>
+
+<h2>1. Préparer la machine</h2>
+${sh(R`cd ~/Downloads
+sudo bash sae-alice.sh`)}
+<p>Durée : quelques minutes selon le réseau (mises à jour comprises). Le script affiche chaque étape en bleu et un ✔ à chaque réussite. Si une étape échoue, il s'arrête ; corrige, puis relance : rien n'est refait inutilement de façon dangereuse.</p>
+<p>À la fin, <strong>redémarre</strong> : <code>sudo reboot</code> (la langue et le clavier sont pris en compte à la reconnexion).</p>
+${tbl(['Option', 'Effet', 'Exemple'], [
+  [c('GO_SOURCE=apt'), 'Go via le paquet de la distribution (défaut : archive officielle)', c('sudo GO_SOURCE=apt bash sae-alice.sh')],
+  [c('UPGRADE=0'), 'saute la mise à jour complète : bien plus rapide (soutenance)', c('sudo UPGRADE=0 bash sae-alice.sh')],
+  [c('BOB_TOOLS=0'), 'ne touche pas au compte de bob (extension, outils Go)', c('sudo BOB_TOOLS=0 bash sae-alice.sh')],
+  [c('ONLY="…"'), 'ne lance que certaines étapes', c('sudo ONLY="comptes prompt" bash sae-alice.sh')]
+], 'wrapc')}
+<p>Étapes disponibles pour <code>ONLY</code> : <code>paquets locale clavier fuseau comptes go vscode lisezmoi prompt bob</code>.</p>
+
+<h2>2. Côté bob</h2>
+<p>${who('bob')} Dans la session de bob (<code>~/Downloads</code> de bob : copie-y le script ou récupère-le dans Firefox), <strong>sans sudo</strong> :</p>
+${sh(R`bash sae-bob.sh`)}
+
+<h2>3. Tout vérifier</h2>
+<p>${who('alice')}</p>
+${sh(R`cd ~/Downloads
+sudo bash sae-verif.sh              # vérifie tout
+sudo RUN_TEST=1 bash sae-verif.sh   # relance aussi test.sh dans le compte de bob`)}
+
+<h2>Le code des scripts</h2>
+<p>Lis-les : tu devras en expliquer chaque bloc. Chaque commande y est commentée.</p>
+${scriptBlock('src-alice', 'sae-alice.sh', 'sae-alice.sh : préparer la machine')}
+${scriptBlock('src-bob', 'sae-bob.sh', 'sae-bob.sh : cloner et tester')}
+${scriptBlock('src-verif', 'sae-verif.sh', 'sae-verif.sh : vérifier toutes les exigences')}
+${note('attention', 'Un script n\'est pas magique', '<ul><li>Il télécharge des fichiers sur Internet : il ne marchera pas sans réseau.</li><li>Les mots de passe imposés par le sujet y sont écrits en clair : acceptable ici, <strong>jamais</strong> dans un vrai projet.</li><li>Si tu le présentes, sois capable de dire ce que fait chaque fonction (<code>step_…</code>). Le jury interroge.</li></ul>')}`,
+  check: [
+    ['scripts-1', "J'ai lancé sae-alice.sh jusqu'au bout, sans erreur."],
+    ['scripts-2', "J'ai redémarré la VM après le script."],
+    ['scripts-3', "J'ai lancé sae-bob.sh dans la session de bob."],
+    ['scripts-4', "Je sais expliquer les étapes du script avec mes mots."]
+  ]
+});
+
+/* ---------- 11. Vérifier ---------- */
+addSec({
+  id: 'verif', group: 'Automatiser', title: 'Vérifier toutes les exigences',
+  lead: "Un script qui teste chaque exigence du sujet, et la liste de ce qu'un script ne peut pas voir.",
+  body: () => R`
+<h2>Le contrôle automatique</h2>
+<p>${who('alice')} Après le redémarrage :</p>
+${sh(R`sudo bash sae-verif.sh`)}
+${term(R`SAE 1.03 - vérification (Debian GNU/Linux 13 (trixie))
+
+Système
+  [ OK ] Bureau XFCE installé
+  [ OK ] Langue du système : anglais (en_US.UTF-8)
+  [ OK ] Clavier : disposition française (fr)
+  [ OK ] Outils VMware (presse-papiers, résolution)
+
+Comptes
+  [ OK ] alice existe
+  [ OK ] alice est administratrice (groupe sudo)
+  [ OK ] bob existe
+  [ OK ] bob n'est PAS administrateur
+...
+Bilan : 21 OK, 0 échec(s)`)}
+<p>Le script rend un code de sortie non nul s'il y a au moins un échec, ce qui permet de l'enchaîner dans d'autres scripts.</p>
+
+<h2>Ce qu'un script ne voit pas : la vérification à la main</h2>
+<p>Déconnecte-toi puis refais ces contrôles <strong>comme un utilisateur de l'équipe</strong>, dans l'interface graphique :</p>
+<ul class="pieges">
+  <li><strong>Mots de passe.</strong> Connexion à l'écran de login avec <code>alice</code> / <code>alice@but</code>, puis <code>bob</code> / <code>bob@but</code>.</li>
+  <li><strong>Clavier réellement français.</strong> Tape <code>azerty 1234 é è à ç</code> dans un terminal, <em>dans la session de bob aussi</em>.</li>
+  <li><strong>Interface en anglais.</strong> Menus Xfce, dossiers <code>Desktop</code> et <code>Documents</code>, messages d'erreur en anglais.</li>
+  <li><strong>Terminal de bob.</strong> Le prompt est vert, bleu, et jaune dans un dépôt ; <code>go version</code> répond ; <code>sudo ls</code> est refusé.</li>
+  <li><strong>VS Code de bob.</strong> Ouvre le dépôt cloné (<code>code ~/projets/hello.sae4.but1.iut</code>), ouvre un fichier <code>.go</code> : coloration, complétion et survol d'une fonction fonctionnent, aucune fenêtre « tools missing ».</li>
+  <li><strong>Exécuter et déboguer.</strong> Dans le projet « bonjour », ${kbd('F5')} lance le débogueur (<code>dlv</code>).</li>
+  <li><strong>Copier-coller et redimensionnement.</strong> Redimensionne la fenêtre de VMware : le bureau s'adapte.</li>
+  <li><strong>test.sh.</strong> <code>./test.sh; echo $?</code> affiche <code>0</code> chez bob.</li>
+  <li><strong>Premier démarrage « à froid ».</strong> Éteins puis rallume la VM : tout marche sans rien refaire.</li>
+</ul>
+${tbl(['Si le test échoue', 'Où regarder'], [
+  ['Langue', 'étape « Régler le système » §3, fichier ' + c('/etc/default/locale')],
+  ['Clavier', 'étape « Régler le système » §4, fichier ' + c('/etc/default/keyboard') + ', paramètres Xfce'],
+  ['Comptes, sudo', 'étape « Comptes » et ' + c('id alice')],
+  ['Prompt', 'étape « Prompt » : ' + c('echo "$PS1"')],
+  ['Extension, outils Go', 'étape « Côté bob » (installation faite chez alice par erreur ?)'],
+  ['Clone, test.sh', 'étape « Dépannage » : réseau, identifiants, droits']
+], 'wrapc')}`,
+  check: [
+    ['verif-1', "sae-verif.sh affiche 0 échec."],
+    ['verif-2', "Je me suis connecté en alice puis en bob avec les bons mots de passe."],
+    ['verif-3', "Le clavier est français dans la session de bob (accents compris)."],
+    ['verif-4', "VS Code de bob ouvre un fichier Go sans message d'outils manquants."],
+    ['verif-5', "J'ai éteint puis rallumé la VM : tout fonctionne encore."]
+  ]
+});
+
+/* ---------- 12. Distribuer ---------- */
+addSec({
+  id: 'distribuer', group: 'Automatiser', title: 'Distribuer la VM',
+  lead: "Nettoyer la machine, l'éteindre proprement et la livrer à l'équipe (« la distribuer à l'équipe », dit le sujet).",
+  body: () => R`
+<h2>1. Nettoyer</h2>
+<p>${who('alice')} Avant de figer la VM : on enlève ce qui ne sert à personne et ce qui est propre à ta session de travail.</p>
+${sh(R`sudo apt autoremove --purge -y
+sudo apt clean
+history -c                  # efface l'historique de ce terminal
+rm -f ~/Downloads/sae-*.sh  # facultatif : retire les scripts de travail (ou garde-les, ils documentent)
+rm -f ~/.bash_history`)}
+<p>Fais de même côté bob si tu as laissé des traces (<code>~/.bash_history</code>, essais dans <code>~/projets</code>), tout en gardant le clone du dépôt si tu veux que l'équipe le trouve prêt.</p>
+
+<h2>2. Éteindre complètement</h2>
+<p>Arrête la VM avec <strong>Power off / Shut down</strong> depuis le système (<code>sudo poweroff</code>). Pas de <em>Suspend</em> : une VM suspendue contient l'état de la mémoire et ne se copie pas proprement. Dans <em>VM → Settings</em>, déconnecte l'ISO du lecteur CD/DVD.</p>
+
+<h2>3. Livrer</h2>
+${tbl(['Méthode', 'Comment', 'Pour qui'], [
+  ['Dossier de la VM compressé', 'VM éteinte, compresse le dossier <code>BUTGAMES-DEV</code> (fichiers <code>.vmx</code>, <code>.vmdk</code>, <code>.nvram</code>…) en .zip ou .7z, puis donne l\'archive avec son empreinte (<code>sha256sum</code>).', 'Marche avec Workstation Player et Pro'],
+  ['Export OVF / OVA', 'Menu <em>File → Export to OVF…</em> (Workstation Pro, ou l\'outil en ligne de commande <code>ovftool</code>) : un fichier unique, importable dans VMware et VirtualBox.', 'Si ta version le propose'],
+  ['Clone', 'Menu <em>VM → Manage → Clone</em> (Pro) pour en garder une copie de référence.', 'Pro uniquement']
+], 'wrapc')}
+<p>Quand l'équipe ouvre la VM copiée, VMware demande si elle a été <em>déplacée</em> ou <em>copiée</em> : répondre <strong>I copied it</strong> évite les conflits d'identifiant réseau.</p>
+${note('retenir', 'Joins un mode d\'emploi à la VM', '<p>L\'équipe ne peut pas te joindre : le fichier <code>LISEZMOI.txt</code> sur le bureau (créé par le script) contient les comptes, les mots de passe et les premiers pas. Mets aussi dans le livrable : les ressources recommandées (2 vCPU, 4 Go de RAM) et la version de VMware.</p>')}
+<h2>4. Quand on a un doute</h2>
+<ul>
+  <li>Ouvre la copie livrée comme si tu étais l'équipe : tout démarre, tout marche.</li>
+  <li>Garde une copie du dossier de la VM de côté jusqu'à la fin de la SAE.</li>
+  <li>Pour la soutenance, prépare <strong>deux</strong> VM : une « finie », et une installée seulement jusqu'au système (avant le script), pour montrer l'automatisation en direct.</li>
+</ul>`,
+  check: [
+    ['distribuer-1', "J'ai nettoyé (apt clean, historique) et éteint la VM complètement."],
+    ['distribuer-2', "L'ISO n'est plus branché dans le lecteur CD/DVD."],
+    ['distribuer-3', "J'ai produit l'archive du dossier de la VM (ou l'export OVF)."],
+    ['distribuer-4', "J'ai ouvert la copie pour vérifier qu'elle démarre."]
+  ]
+});
+
+/* ---------- 13. Dépannage ---------- */
+const DEPANNAGE = [
+  ['Le clavier tape en QWERTY', 'Le réglage de disposition n\'est pas appliqué à la session.', 'Dans la session : <code>setxkbmap fr</code>. Puis <code>sudo localectl set-x11-keymap fr pc105</code>, et vérifie <code>/etc/default/keyboard</code> (XKBLAYOUT="fr"). Dans Xfce : <em>Settings → Keyboard → Layout</em>, décoche « Use system defaults » et ajoute French.'],
+  ['<code>alice is not in the sudoers file</code>', 'Debian : un mot de passe root a été donné à l\'installation, alice n\'est pas dans sudo.', '<code>su -</code> (mot de passe root), <code>usermod -aG sudo alice</code>, puis déconnexion/reconnexion d\'alice.'],
+  ['<code>sudo: command not found</code>', 'Debian installée avec un mot de passe root : sudo n\'est pas installé.', '<code>su -</code> puis <code>apt install sudo</code>, puis <code>usermod -aG sudo alice</code>.'],
+  ['<code>apt update</code> : dépôt <code>cdrom:</code> sans fichier Release', 'Debian a gardé le CD d\'installation comme source.', 'Édite <code>/etc/apt/sources.list</code> : commente (<code>#</code>) la ligne <code>deb cdrom:…</code>. Le script le fait déjà.'],
+  ['<code>Could not get lock /var/lib/dpkg/lock</code>', 'Une mise à jour automatique tourne en arrière-plan.', 'Attends quelques minutes puis recommence. Ne supprime pas le fichier de verrou.'],
+  ['Pas de copier-coller / écran qui ne se redimensionne pas', 'Les outils VMware ne sont pas installés ou pas démarrés.', '<code>sudo apt install open-vm-tools open-vm-tools-desktop</code>, puis redémarre. Contrôle : <code>systemctl status open-vm-tools</code>.'],
+  ['VMware : « VT-x is disabled »', 'La virtualisation matérielle est coupée dans le BIOS de l\'hôte.', 'Active VT-x / AMD-V dans le BIOS, ou change de poste.'],
+  ['<code>go: command not found</code> chez bob', 'Go n\'est pas dans le PATH de son shell.', '<code>ls /usr/local/go/bin</code> ; <code>which go</code>. Vérifie le lien <code>/usr/local/bin/go</code> et que le <code>~/.bashrc</code> de bob charge <code>/etc/butgames.bashrc</code>. Ouvre un nouveau terminal.'],
+  ['<code>code: command not found</code>', 'VS Code n\'est pas installé (dépôt Microsoft ajouté mais <code>apt install code</code> échoué).', '<code>apt policy code</code> pour voir ; relance <code>sudo apt update</code> puis <code>sudo apt install code</code>.'],
+  ['VS Code : fenêtre blanche ou noire, scintillements', 'Problème d\'accélération graphique dans la VM.', '<code>code --disable-gpu</code>. Dans VMware, désactive « Accelerate 3D graphics » (VM éteinte).'],
+  ['L\'extension Go se plaint : « gopls / dlv not found »', 'Les outils Go ne sont pas dans le compte de bob (ou pas dans le PATH).', 'En bob : <code>go install golang.org/x/tools/gopls@latest</code> (idem <code>dlv</code>), ou palette → <em>Go: Install/Update Tools</em>. Vérifie <code>ls ~/go/bin</code>.'],
+  ['L\'extension Go est absente dans le compte d\'alice', 'Les extensions sont <strong>par utilisateur</strong>.', 'Installe-la dans chaque compte qui en a besoin : <code>code --install-extension golang.go</code>.'],
+  ['<code>git clone</code> : « Could not resolve host »', 'Pas de réseau, DNS, ou GitLab de l\'IUT non joignable de chez toi.', 'Teste <code>ping 1.1.1.1</code> puis <code>ping gitlab-ce.iut.u-bordeaux.fr</code>. Réseau en NAT ? VPN de l\'IUT ? Proxy à renseigner (<code>git config --global http.proxy</code>) ?'],
+  ['<code>git clone</code> : « SSL certificate problem »', 'Certificats absents ou heure de la VM fausse.', '<code>sudo apt install ca-certificates</code> ; contrôle <code>date</code> (fuseau, synchronisation).'],
+  ['<code>git clone</code> : « Authentication failed » / « HTTP Basic: Access denied »', 'Le dépôt demande une authentification.', 'Utilise tes identifiants du GitLab de l\'IUT. Si le dépôt devait être public, signale-le à l\'enseignant.'],
+  ['<code>Remote branch langage_go not found</code>', 'Nom de branche mal écrit, ou autre dépôt.', '<code>git ls-remote --heads ' + GIT_URL + '</code> liste les branches existantes.'],
+  ['<code>./test.sh: Permission denied</code>', 'Le fichier n\'est pas exécutable.', '<code>bash test.sh</code> ou <code>chmod +x test.sh</code>.'],
+  ['<code>/bin/bash^M: bad interpreter</code>', 'Fins de ligne Windows (CRLF) dans le script.', '<code>sed -i \'s/\\r$//\' test.sh</code> (ou <code>dos2unix test.sh</code>).'],
+  ['<code>test.sh</code> : « command not found » sur un outil', 'Un logiciel manque, et bob ne peut pas l\'installer.', 'alice installe : <code>sudo apt install le-paquet</code>, bob relance le test.'],
+  ['Le prompt affiche littéralement <code>$(__git_ps1 …)</code>', 'PS1 est entre guillemets, ou git-sh-prompt n\'est pas chargé.', 'Mets <code>PS1</code> entre <strong>apostrophes</strong> ; vérifie que <code>/usr/lib/git-core/git-sh-prompt</code> existe (paquet git).'],
+  ['Le prompt ne change pas dans un nouveau terminal', 'Le <code>.bashrc</code> ne charge pas le fichier commun.', '<code>tail ~/.bashrc</code> doit montrer la ligne <code>. /etc/butgames.bashrc</code>. Sinon relance l\'étape : <code>sudo ONLY="prompt" bash sae-alice.sh</code>.'],
+  ['<code>Setting locale failed</code> / <code>Cannot set LC_ALL</code>', 'La langue demandée n\'est pas générée.', '<code>sudo locale-gen en_US.UTF-8</code> (Debian : décommente la ligne dans <code>/etc/locale.gen</code> avant <code>sudo locale-gen</code>), puis <code>sudo update-locale LANG=en_US.UTF-8</code>.'],
+  ['La VM est lente', 'Pas assez de RAM, ou trop de ressources prises à l\'hôte.', 'Regarde <code>free -h</code> et <code>top</code>. Augmente la RAM (VM éteinte) sans dépasser la moitié de l\'hôte.'],
+  ['« No space left on device »', 'Disque virtuel plein.', '<code>df -h /</code> ; <code>sudo apt clean</code> ; supprime les téléchargements. Sinon agrandis le disque dans VMware puis la partition.'],
+  ['Le script s\'arrête avec « version ou empreinte de Go introuvable »', 'go.dev injoignable ou format de réponse modifié.', 'Réessaie plus tard, ou <code>sudo GO_SOURCE=apt bash sae-alice.sh</code>.']
+];
+addSec({
+  id: 'depannage', group: 'Automatiser', title: 'Dépannage',
+  lead: "Les erreurs classiques de cette SAE, avec la cause et le remède. Tape un mot pour filtrer.",
+  body: () => R`
+<div class="dep-search"><label for="dep-q" class="sr-only">Filtrer le dépannage</label><input id="dep-q" class="tool-in" type="search" placeholder="Filtrer : clavier, sudo, clone, prompt, code…" autocomplete="off" spellcheck="false" aria-controls="dep-t"></div>
+<p id="dep-n" class="dep-n" role="status"></p>
+<div class="tbl-wrap" id="dep-t"><table class="tbl wrapc"><thead><tr><th scope="col">Symptôme</th><th scope="col">Cause probable</th><th scope="col">Que faire</th></tr></thead>
+<tbody>${DEPANNAGE.map(r => `<tr data-t="${esc(r.join(' ').replace(/<[^>]+>/g, ' ').toLowerCase())}">${r.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+${note('convention', 'Garde une trace de tes pannes', '<p>Chaque panne résolue est une <strong>difficulté rencontrée</strong> à raconter en soutenance (« j\'avais… j\'ai compris que… j\'ai corrigé en… »). Note-les au fur et à mesure.</p>')}`,
+  check: [
+    ['depannage-1', "J'ai noté au moins deux difficultés rencontrées pour la soutenance."]
+  ]
+});
+
+/* ---------- Schéma d'architecture logicielle (SVG) ---------- */
+function archSVG(standalone) {
+  const css = standalone ? `<style>
+.a-host{fill:#f1f5fb;stroke:#46526c;stroke-width:2;stroke-dasharray:7 5}.a-vm{fill:#fbfcfe;stroke:#16213a;stroke-width:2.5}
+.a-os{fill:#e3ebff;stroke:#16213a;stroke-width:1.5}.a-box{fill:#fbfcfe;stroke:#16213a;stroke-width:1.5}
+.a-alice{fill:#e3ebff;stroke:#1f4fd8;stroke-width:2}.a-bob{fill:#fff3d6;stroke:#b4570c;stroke-width:2}
+.a-ext{fill:#f1f5fb;stroke:#16213a;stroke-width:1.5}.a-line{stroke:#16213a;stroke-width:2;fill:none}.a-line.dash{stroke-dasharray:6 4}
+.a-t{fill:#16213a;font-size:14px}.a-b{fill:#16213a;font-size:14px;font-weight:700}.a-s{fill:#46526c;font-size:12px}
+.a-m{font-family:monospace;font-size:12px;fill:#16213a}.a-h{fill:#16213a;font-size:13px;font-weight:700}
+text{font-family:Arial,Helvetica,sans-serif}.a-m{font-family:monospace}marker path{fill:#16213a}
+</style><rect width="1020" height="600" fill="#ffffff"/>` : '';
+  const T = (x, y, cls, s) => `<text x="${x}" y="${y}" class="${cls}">${esc(s)}</text>`;
+  return `<svg viewBox="0 0 1020 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="arch-t arch-d">
+<title id="arch-t">Architecture logicielle de la machine virtuelle BUTGAMES</title>
+<desc id="arch-d">Le poste hôte exécute VMware ; dans la VM, le système Linux avec Xfce héberge git, Go, VS Code et le prompt git pour tous ; alice administre ; bob développe avec l'extension Go et les outils Go ; alice télécharge depuis go.dev, Microsoft et les dépôts apt ; bob clone depuis le GitLab de l'IUT et installe ses outils depuis proxy.golang.org.</desc>
+${css}
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs>
+<rect class="a-host" x="10" y="10" width="700" height="582" rx="14"/>
+${T(26, 34, 'a-h', 'POSTE HÔTE (Windows ou Linux) · VMware Workstation')}
+<rect class="a-vm" x="30" y="48" width="660" height="530" rx="12"/>
+${T(46, 74, 'a-b', 'Machine virtuelle BUTGAMES-DEV')}
+${T(46, 92, 'a-s', '2 vCPU · 4 Go de RAM · disque de 40 Go dynamique · réseau NAT')}
+<rect class="a-os" x="50" y="104" width="620" height="54" rx="8"/>
+${T(64, 127, 'a-b', 'Système : Debian ou Xubuntu (noyau Linux) · bureau Xfce · LightDM')}
+${T(64, 146, 'a-s', 'langue en_US.UTF-8 · clavier fr · open-vm-tools (presse-papiers, écran)')}
+<rect class="a-box" x="50" y="172" width="620" height="124" rx="8" stroke-dasharray="5 4"/>
+${T(64, 192, 'a-h', 'INSTALLÉ POUR TOUS (par alice, avec sudo)')}
+<rect class="a-box" x="62" y="204" width="112" height="76" rx="8"/>${T(74, 228, 'a-b', 'git')}${T(74, 248, 'a-m', '/usr/bin/git')}${T(74, 266, 'a-s', 'gestion de code')}
+<rect class="a-box" x="186" y="204" width="150" height="76" rx="8"/>${T(198, 228, 'a-b', 'Go (compilateur)')}${T(198, 248, 'a-m', '/usr/local/go')}${T(198, 266, 'a-s', 'go build · run · test')}
+<rect class="a-box" x="348" y="204" width="150" height="76" rx="8"/>${T(360, 228, 'a-b', 'VS Code')}${T(360, 248, 'a-m', 'paquet « code »')}${T(360, 266, 'a-s', 'éditeur (dépôt Microsoft)')}
+<rect class="a-box" x="510" y="204" width="148" height="76" rx="8"/>${T(522, 228, 'a-b', 'bash + prompt')}${T(522, 248, 'a-m', 'butgames.bashrc')}${T(522, 266, 'a-s', 'dans /etc : prompt, PATH')}
+<rect class="a-alice" x="50" y="326" width="300" height="236" rx="10"/>
+${T(64, 350, 'a-b', 'alice · administratrice')}${T(64, 368, 'a-s', 'mot de passe alice@but')}
+${T(64, 396, 'a-t', '• groupe sudo (droits admin)')}
+${T(64, 418, 'a-t', '• installe et met à jour :')}${T(78, 436, 'a-m', 'apt · archive Go · dépôt VS Code')}
+${T(64, 462, 'a-t', '• prépare les comptes et le prompt')}
+${T(64, 484, 'a-t', '• LISEZMOI.txt sur le bureau')}
+${T(64, 510, 'a-s', 'scripts : sae-alice.sh · sae-verif.sh')}
+<rect class="a-bob" x="370" y="326" width="300" height="236" rx="10"/>
+${T(384, 350, 'a-b', 'bob · développeur (sans sudo)')}${T(384, 368, 'a-s', 'mot de passe bob@but')}
+${T(384, 396, 'a-t', '• extension VS Code golang.go')}${T(398, 414, 'a-m', '~/.vscode/extensions')}
+${T(384, 438, 'a-t', '• outils Go : gopls, dlv')}${T(398, 456, 'a-m', '~/go/bin')}
+${T(384, 480, 'a-t', '• projets : clone de la branche')}${T(398, 498, 'a-m', 'langage_go → test.sh')}
+${T(384, 522, 'a-t', '• prompt : (langage_go *)')}${T(384, 546, 'a-s', 'script : sae-bob.sh')}
+<path class="a-line" d="M200 326V298" marker-end="url(#ar)"/>${T(210, 316, 'a-s', 'installe')}
+<path class="a-line" d="M520 298V324" marker-end="url(#ar)"/>${T(530, 316, 'a-s', 'utilise')}
+<rect class="a-ext" x="790" y="100" width="220" height="112" rx="8"/>
+${T(802, 124, 'a-b', 'Sources de téléchargement')}${T(802, 146, 'a-m', 'go.dev (archive Go)')}${T(802, 164, 'a-m', 'packages.microsoft.com')}${T(802, 182, 'a-m', 'dépôts apt Debian/Ubuntu')}
+<rect class="a-ext" x="790" y="326" width="220" height="92" rx="8"/>
+${T(802, 350, 'a-b', 'GitLab de l\'IUT')}${T(802, 370, 'a-m', 'hello.sae4.but1.iut')}${T(802, 388, 'a-s', 'branche langage_go')}
+<rect class="a-ext" x="790" y="448" width="220" height="78" rx="8"/>
+${T(802, 472, 'a-b', 'proxy.golang.org')}${T(802, 492, 'a-s', 'outils Go (go install)')}
+<path class="a-line" d="M670 190L790 158" marker-end="url(#ar)"/>${T(716, 160, 'a-s', 'apt · curl')}
+<path class="a-line dash" d="M670 372L790 372" marker-end="url(#ar)"/>${T(716, 362, 'a-s', 'git clone')}
+<path class="a-line dash" d="M670 488L790 488" marker-end="url(#ar)"/>${T(716, 478, 'a-s', 'go install')}
+</svg>`;
+}
+
+/* ---------- Mémo : la liste minimale des actions et commandes (aussi utilisée par le générateur du rapport) ---------- */
+function bashrcTxt() {
+  const m = $('#src-alice').textContent.match(/cat > "\$SHARED_RC" <<'EOF'\n([\s\S]*?)\nEOF\n/);
+  return m ? m[1] : '';
+}
+const GO_CMDS = R`ARCH=$(dpkg --print-architecture)
+VER=$(curl -fsSL 'https://go.dev/dl/?mode=json' | grep -m1 -o '"version": *"go[0-9.]*"' | grep -o 'go[0-9.]*')
+curl -fLO "https://go.dev/dl/$VER.linux-$ARCH.tar.gz"
+sha256sum "$VER.linux-$ARCH.tar.gz"      # comparer avec l'empreinte de https://go.dev/dl/
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf "$VER.linux-$ARCH.tar.gz"
+sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
+sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt`;
+const CODE_CMDS = R`curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor --yes -o /usr/share/keyrings/microsoft.gpg
+sudo tee /etc/apt/sources.list.d/vscode.sources >/dev/null <<EOF
+Types: deb
+URIs: https://packages.microsoft.com/repos/code
+Suites: stable
+Components: main
+Architectures: $(dpkg --print-architecture)
+Signed-By: /usr/share/keyrings/microsoft.gpg
+EOF
+sudo apt update && sudo apt install -y code`;
+const MEMO = (distro, goSrc) => [
+  { who: 'hote', t: 'Créer la machine virtuelle', steps: [
+    { x: 'VMware : New Virtual Machine, « I will install the operating system later », Linux ' + (distro === 'debian' ? '(Debian 12.x 64-bit)' : '(Ubuntu 64-bit)') + ', nom BUTGAMES-DEV, disque de 40 Go dynamique.' },
+    { x: 'Customize Hardware : 4096 Mo de RAM, 1 processeur à 2 cœurs, réseau NAT, accélération 3D désactivée, ISO dans le lecteur CD/DVD.' }
+  ] },
+  { who: 'hote', t: 'Installer le système', steps: distro === 'debian' ? [
+    { x: 'Graphical install : langue English, pays France, clavier French, nom de machine butgames-dev.' },
+    { x: 'Mot de passe root : laisser VIDE. Utilisateur alice, mot de passe alice@but.' },
+    { x: 'Partitionnement : disque entier, une seule partition. Miroir France. Logiciels : Debian desktop environment + Xfce + standard system utilities (sans GNOME).' }
+  ] : [
+    { x: 'Install Xubuntu : langue English, clavier French, effacer le disque et installer, fuseau Paris.' },
+    { x: 'Utilisateur alice, ordinateur butgames-dev, mot de passe alice@but, sans connexion automatique.' }
+  ] },
+  { who: 'alice', t: 'Système : mises à jour, outils VMware, langue, clavier, fuseau', steps: [
+    { c: 'sudo apt update && sudo apt full-upgrade -y' },
+    { c: 'sudo apt install -y git curl wget ca-certificates gpg apt-transport-https bash-completion locales open-vm-tools open-vm-tools-desktop' },
+    distro === 'debian'
+      ? { x: 'Langue anglaise :', c: "sudo sed -i 's/^# *\\(en_US.UTF-8 UTF-8\\)/\\1/' /etc/locale.gen\nsudo locale-gen\nsudo update-locale LANG=en_US.UTF-8" }
+      : { x: 'Langue anglaise :', c: 'sudo apt install -y language-pack-en\nsudo locale-gen en_US.UTF-8\nsudo update-locale LANG=en_US.UTF-8' },
+    { x: 'Clavier français et fuseau horaire :', c: 'sudo localectl set-x11-keymap fr pc105\nsudo timedatectl set-timezone Europe/Paris' }
+  ] },
+  { who: 'alice', t: 'Comptes', steps: [
+    { c: 'sudo useradd -m -s /bin/bash -c "Bob" bob\necho \'alice:alice@but\' | sudo chpasswd\necho \'bob:bob@but\' | sudo chpasswd\nsudo usermod -aG sudo alice' }
+  ] },
+  { who: 'alice', t: 'Go', steps: [ goSrc === 'apt'
+    ? { x: 'Paquet de la distribution :', c: 'sudo apt install -y golang-go' }
+    : { x: 'Archive officielle go.dev :', c: GO_CMDS } ] },
+  { who: 'alice', t: 'Visual Studio Code', steps: [ { x: 'Dépôt apt officiel de Microsoft :', c: CODE_CMDS } ] },
+  { who: 'alice', t: 'Prompt git et PATH (un fichier commun)', steps: [
+    { x: 'Créer /etc/butgames.bashrc (contenu : voir l\'étape « Prompt ») puis le charger depuis chaque .bashrc :', c: 'for rc in /etc/skel/.bashrc /home/alice/.bashrc /home/bob/.bashrc; do\n  echo \'[ -r /etc/butgames.bashrc ] && . /etc/butgames.bashrc\' | sudo tee -a "$rc" >/dev/null\ndone' }
+  ] },
+  { who: 'bob', t: 'Environnement de développement (dans le compte de bob)', steps: [
+    { c: 'git config --global user.name "Bob"\ngit config --global user.email "bob@butgames.local"' },
+    { c: 'code --install-extension golang.go' },
+    { c: 'go install golang.org/x/tools/gopls@latest\ngo install github.com/go-delve/delve/cmd/dlv@latest\ngo install honnef.co/go/tools/cmd/staticcheck@latest' }
+  ] },
+  { who: 'bob', t: 'Valider l\'installation', steps: [
+    { c: 'mkdir -p ~/projets && cd ~/projets\ngit clone --branch langage_go ' + GIT_URL + '\ncd hello.sae4.but1.iut\n./test.sh 2>&1 | tee ~/preuve-test.txt; echo "code retour : ${PIPESTATUS[0]}"' }
+  ] }
+];
+function memoText(distro, goSrc) {
+  const out = [];
+  let n = 0;
+  MEMO(distro, goSrc).forEach(g => {
+    out.push(`${++n}. [${WHO[g.who]}] ${g.t}`);
+    g.steps.forEach(s => {
+      if (s.x) out.push('   ' + s.x);
+      if (s.c) out.push(s.c.split('\n').map(l => '       ' + l).join('\n'));
+    });
+  });
+  return out.join('\n');
+}
+
+addSec({
+  id: 'memo', group: 'Outils', title: 'Commandes minimales',
+  lead: "La liste minimale des actions et commandes pour recréer la machine, dans l'ordre : c'est ce que le rapport doit contenir.",
+  body: () => {
+    const g = MEMO(Store.data.distro, 'tarball');
+    return R`
+<p>Le sujet demande « la liste <strong>minimale</strong> des actions/commandes réalisées pour créer la machine », que le lecteur peut rejouer. La voici dans l'ordre, pour ${Di('<strong>Debian</strong>', '<strong>Xubuntu</strong>')}. Elle suit exactement ce que fait le script.</p>
+<div class="gen-bar"><button type="button" class="btn" data-act="copy-memo">Copier toute la liste</button><button type="button" class="btn ghost" data-act="dl-memo">Télécharger (.txt)</button></div>
+${note('retenir', 'Version courte avec les scripts', '<p>Avec les trois scripts de l\'étape « Scripts », la liste se réduit à : (1) créer la VM et installer le système (actions graphiques ci-dessous), (2) <code>sudo bash sae-alice.sh</code>, (3) redémarrer, puis <code>bash sae-bob.sh</code> en bob. Dans le rapport, donne <strong>les deux versions</strong> : la liste détaillée (ce qui est fait) et la version script (comment le refaire vite).</p>')}
+${g.map((blk, i) => `<h2>${i + 1}. ${esc(blk.t)}${who(blk.who)}</h2>${blk.steps.map(s => (s.x ? `<p>${esc(s.x)}</p>` : '') + (s.c ? sh(s.c) : '')).join('')}`).join('')}
+<h2>Annexe : /etc/butgames.bashrc</h2>
+${file('/etc/butgames.bashrc', bashrcTxt())}`;
+  },
+  check: [
+    ['memo-1', "Ma liste de commandes est dans le rapport, dans l'ordre, et chaque ligne est expliquée."],
+    ['memo-2', "Un camarade pourrait refaire l'installation en suivant seulement ma liste."]
+  ]
+});
+
+/* ---------- 14. Rapport ---------- */
+addSec({
+  id: 'rapport', group: 'Rendre', title: 'Le rapport',
+  lead: "Ce que le sujet exige, un plan page par page, le schéma d'architecture et un générateur de dossier d'étude à reformuler.",
+  body: () => R`
+<h2>Ce que le rapport doit contenir</h2>
+<p>Version <strong>papier</strong> (reliée ou agrafée), remise au jury le jour de la soutenance. Le jury ne l'a pas lu avant : il doit comprendre en quelques minutes ce que tu as fait et pourquoi.</p>
+${tbl(['Partie', 'Ce qu\'il faut montrer', 'Dans ce guide', 'Taille conseillée'], [
+  ['<strong>1. Dossier d\'étude et de choix</strong>', 'Comment la VM est définie (CPU, RAM, disque…), quels choix logiciels et <strong>pourquoi</strong>.', 'Étape « Choix » + générateur ci-dessous', '1 à 2 pages'],
+  ['<strong>2. Schéma de l\'architecture logicielle</strong>', 'Le lien entre les composants installés.', 'Schéma ci-dessous', '1 page'],
+  ['<strong>3. Configuration de la VM</strong>', 'Les réglages VMware, en lisible.', 'Étape « Créer la VM »', 'une demi-page'],
+  ['<strong>4. Installation de la machine</strong>', 'La liste <strong>minimale</strong> des actions et commandes, rejouable par le lecteur, en cohérence avec le dossier d\'étude.', 'Étape « Commandes minimales »', '1 à 2 pages'],
+  ['<strong>5. Notice d\'utilisation</strong>', 'Créer un projet go, vérifier le test (preuve), et le portfolio.', 'Étape « Notice et portfolio »', '1 à 2 pages']
+], 'wrapc')}
+<p class="muted-s">Les tailles sont des repères pour rester lisible, pas des règles du sujet.</p>
+
+<h2>Le schéma d'architecture</h2>
+<p>Il montre <strong>qui utilise quoi</strong> : le poste hôte et VMware, la VM, les composants communs installés par alice, ce qui vit dans le compte de bob, et les sources externes. Refais-en une version à toi (draw.io, LibreOffice Draw, ou à la main et scannée) : tu dois pouvoir l'expliquer en 30 secondes.</p>
+<div class="arch">${archSVG(false)}</div>
+<div class="gen-bar"><button type="button" class="btn ghost" data-act="dl-arch">Télécharger le schéma (.svg)</button></div>
+${note('convention', 'Lire le schéma', '<ul><li><strong>Pointillés larges</strong> : le poste hôte ; <strong>trait plein</strong> : la VM.</li><li><strong>Bleu</strong> : ce qui appartient à alice ; <strong>orange</strong> : ce qui appartient à bob.</li><li>Les flèches « installe » et « utilise » résument la répartition : alice installe pour tous, bob utilise et complète dans son compte.</li></ul>')}
+
+<h2>Générateur de dossier d'étude (brouillon)</h2>
+<p>Renseigne ta configuration : le brouillon se met à jour. Il écrit les décisions et leurs raisons dans la forme attendue.</p>
+<div class="widget" data-widget="gen"></div>
+${note('attention', 'Ce n\'est qu\'un brouillon', '<p>Reformule avec <strong>tes mots</strong> et ajoute <strong>tes mesures</strong> (taille réelle du disque, temps d\'installation, version de Go obtenue). Le jury cherche à voir que tu as compris tes choix, pas un texte standard.</p>')}
+
+<h2>Avant d'imprimer</h2>
+<ul class="pieges">
+  <li><strong>Autonome.</strong> Quelqu'un qui n'a pas suivi le projet comprend chaque partie.</li>
+  <li><strong>Cohérent.</strong> Ce que dit le dossier d'étude est bien ce que fait la liste de commandes (même Go, même VS Code, mêmes ressources).</li>
+  <li><strong>Reproductible.</strong> Chaque commande est complète et dans l'ordre ; on précise <em>qui</em> la lance (alice ou bob).</li>
+  <li><strong>Sourcé et justifié.</strong> Chaque choix a une raison, pas seulement « parce que c'est le plus simple ».</li>
+  <li><strong>Lisible sur papier.</strong> Pagination, titres, captures nettes ; pas de pages entières de sortie de terminal.</li>
+  <li><strong>Relié ou agrafé.</strong> Une version papier par binôme, à remettre le jour de la soutenance.</li>
+</ul>`,
+  check: [
+    ['rapport-1', "J'ai écrit le dossier d'étude et de choix (CPU, RAM, disque, logiciels, raisons)."],
+    ['rapport-2', "J'ai mon propre schéma d'architecture, que je sais expliquer."],
+    ['rapport-3', "La liste minimale des commandes est dans le rapport et cohérente avec le dossier."],
+    ['rapport-4', "Un camarade a relu le rapport et a compris sans explication orale."],
+    ['rapport-5', "Le rapport est imprimé, relié ou agrafé."]
+  ]
+});
+
+/* ---------- 15. Notice et portfolio ---------- */
+addSec({
+  id: 'notice', group: 'Rendre', title: 'Notice et portfolio',
+  lead: "Créer un projet Go, apporter la preuve du test d'installation, rédiger le texte du portfolio.",
+  body: () => R`
+<p>La notice d'utilisation s'adresse à l'équipe de développeurs : elle doit leur permettre de <strong>créer un projet Go</strong>, de <strong>vérifier le test d'installation</strong>, et contient ton texte de <strong>portfolio</strong>.</p>
+
+<h2>1. Créer un nouveau projet Go</h2>
+<p>${who('bob')} Un projet Go est un <strong>module</strong> : un dossier avec un fichier <code>go.mod</code>.</p>
+${sh(R`mkdir -p ~/projets/mon-projet && cd ~/projets/mon-projet
+git init                       # le prompt affiche maintenant (main)
+go mod init mon-projet         # crée go.mod : le nom du module
+code .                         # ouvre le dossier dans VS Code`)}
+<p>Crée le fichier <code>main.go</code> (dans VS Code : <em>Nouveau fichier</em>) :</p>
+${file('main.go', R`package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Bonjour BUTGAMES !")
+}`)}
+${sh(R`go run .          # compile et lance, sans garder de fichier
+go build -o jeu    # produit l'exécutable ./jeu
+./jeu`)}
+<p>Un test se place dans un fichier qui finit par <code>_test.go</code> :</p>
+${file('main_test.go', R`package main
+
+import "testing"
+
+func TestAddition(t *testing.T) {
+	if 2+2 != 4 {
+		t.Fatal("les maths sont cassées")
+	}
+}`)}
+${sh(R`go test ./...    # lance tous les tests du projet`)}
+${tbl(['Commande', 'Rôle'], [
+  [c('go mod init nom'), 'crée un nouveau module (fichier go.mod)'],
+  [c('go run .'), 'compile et exécute le programme du dossier'],
+  [c('go build'), 'compile et produit un exécutable'],
+  [c('go test ./...'), 'lance les tests de tous les paquets'],
+  [c('go fmt ./...'), 'met le code au format officiel'],
+  [c('go vet ./...'), 'repère des erreurs probables'],
+  [c('go mod tidy'), 'met à jour les dépendances du go.mod'],
+  [c('go get paquet'), 'ajoute une dépendance']
+])}
+<p>Dans VS Code, avec l'extension Go : complétion et erreurs en direct (gopls), ${kbd('F5')} pour exécuter et déboguer, et un bouton « run test » au-dessus de chaque test.</p>
+
+<h2>2. Vérifier le test d'installation</h2>
+<p>${who('bob')} Dans le dépôt cloné :</p>
+${sh(R`cd ~/projets/hello.sae4.but1.iut
+./test.sh 2>&1 | tee ~/preuve-test.txt
+echo "code retour : ${'$'}{PIPESTATUS[0]}"`)}
+<p>La <strong>preuve de lancement</strong> doit montrer : la commande lancée, le prompt avec <code>(langage_go)</code>, la sortie du test, et le <strong>code retour 0</strong>. Prends-la en capture d'écran du terminal, et garde le fichier <code>preuve-test.txt</code>. Rappelle que le test <strong>n'est pas exhaustif</strong> : ajoute la création et le lancement de ton projet Go comme second contrôle.</p>
+${note('attention', 'Où mettre quoi', '<p>La <strong>trace du test</strong> va dans la <strong>notice</strong>. Le <strong>portfolio</strong>, lui, n\'accepte <strong>pas de trace d\'exécution shell</strong> : seulement du texte et au plus deux captures « propres » (par exemple le bureau avec VS Code ouvert sur un projet Go).</p>')}
+
+<h2>3. Le portfolio</h2>
+<p>Cinq lignes au maximum et deux captures d'écran au maximum. Décris ton travail en insistant sur ce que tu as <strong>découvert</strong> et sur ce que tu as <strong>réussi</strong>, sans parler de « ce qui t'a plu ».</p>
+<div class="cols2">
+  <div class="card-s"><h4>À faire</h4><ul><li>« J'ai découvert que… » (langue ≠ clavier, droits par utilisateur, PS1…)</li><li>« J'ai réussi à… » (automatiser, vérifier, distribuer)</li><li>Une difficulté <em>précise</em> et comment tu l'as comprise</li><li>Des faits : version, durée, résultat du test</li></ul></div>
+  <div class="card-s"><h4>À éviter</h4><ul><li>« Ça m'a plu », « c'était intéressant »</li><li>Une liste de commandes</li><li>Plus de 5 lignes, plus de 2 captures</li><li>Une capture de terminal avec sortie d'exécution</li></ul></div>
+</div>
+<p>Un modèle à adapter (remplace tout ce qui est entre crochets par <em>ta</em> réalité) :</p>
+${file('portfolio.txt', R`SAE 1.03 - Installation de poste : j'ai conçu une machine virtuelle Linux (Xfce) livrée clé en main à une équipe de développeurs Go.
+J'ai découvert [la différence entre la langue du système et la disposition du clavier ; que les extensions VS Code et les outils Go s'installent par utilisateur].
+J'ai réussi à [automatiser l'installation en un script rejouable en quelques minutes] et à [vérifier chaque exigence du sujet avec un script de contrôle].
+Difficulté surmontée : [décris UNE vraie panne : ce que tu voyais, ce que tu as compris, ce que tu as corrigé].
+Résultat : le test.sh du projet de validation se termine sans erreur (code retour 0).`)}
+<p class="muted-s">Captures conseillées : (1) le bureau Xfce de bob avec VS Code ouvert sur un projet Go ; (2) ton schéma d'architecture. Aucune capture de sortie shell.</p>`,
+  check: [
+    ['notice-1', "Je sais créer, lancer et tester un projet Go avec bob."],
+    ['notice-2', "J'ai la preuve du test (capture + preuve-test.txt) avec le code retour 0."],
+    ['notice-3', "Mon texte de portfolio fait 5 lignes maximum et parle de ce que j'ai réussi."],
+    ['notice-4', "J'ai au plus 2 captures d'écran, sans trace d'exécution shell."]
+  ]
+});
+
+/* ---------- 16. Soutenance ---------- */
+const PHASES = [
+  { t: 'Contexte et équipe', s: 45, tip: "Qui es-tu, que demandait BUTGAMES, ce que tu livres." },
+  { t: 'Choix logiciels et dimensionnement', s: 120, tip: "3 choix et leurs raisons : distribution, Go/VS Code, ressources de la VM." },
+  { t: 'Architecture', s: 75, tip: "Le schéma : qui installe, qui utilise, d'où ça vient." },
+  { t: 'Installation en direct', s: 210, tip: "Lance le script pendant que tu parles ; montre bob, le prompt, test.sh." },
+  { t: 'Adéquation demande / résultat', s: 75, tip: "Le tableau des exigences avec leur preuve (sae-verif.sh)." },
+  { t: 'Difficultés rencontrées', s: 75, tip: "Une ou deux pannes réelles : symptôme, compréhension, correction." },
+  { t: 'Questions du jury', s: 300, tip: "Réponds court, appuie-toi sur le schéma et sur le script." }
+];
+const QR = [
+  ['Pourquoi Xfce et pas GNOME ?', "Xfce est un bureau léger : il consomme peu de RAM et de CPU, ce qui laisse les ressources de la VM à VS Code et à la compilation. Le sujet le suggère (« bureau léger tel que XFCE »)."],
+  ['Pourquoi alice est dans sudo et bob non ?', "Moindre privilège : bob développe, il n'a pas besoin de modifier le système. Alice administre. Si bob se trompe, il ne casse que son compte, pas la machine de l'équipe."],
+  ['Que fait <code>sudo</code> exactement ?', "Il exécute une commande avec les droits de root, pour les utilisateurs autorisés (groupe <code>sudo</code>), après avoir demandé leur propre mot de passe."],
+  ['Pourquoi l\'extension Go est installée chez bob, pas pour tout le monde ?', "VS Code range ses extensions dans le dossier personnel de l'utilisateur (<code>~/.vscode/extensions</code>), et les outils Go dans <code>~/go/bin</code>. Chaque développeur a donc les siens, sans droits administrateur."],
+  ['Pourquoi Go est dans <code>/usr/local/go</code> ?', "Convention pour un logiciel installé à la main (hors du gestionnaire de paquets). Root en reste propriétaire : tous les comptes l'utilisent, personne d'autre que l'administrateur ne le modifie."],
+  ['Archive officielle ou paquet apt pour Go ?', "L'archive donne la dernière version stable, la même pour toute l'équipe, vérifiée par SHA-256. Le paquet est plus simple et se met à jour avec le système, mais souvent plus ancien. J'ai choisi selon la version demandée par les projets."],
+  ['Comment fonctionne le prompt avec la branche ?', "Le prompt est la variable <code>PS1</code>. Elle contient <code>$(__git_ps1)</code>, une fonction fournie par git qui affiche la branche et l'état. PS1 est entre apostrophes pour que la commande soit relue à chaque prompt, pas seulement à la définition."],
+  ['Que signifient *, + et % dans le prompt ?', "<code>*</code> : fichiers suivis modifiés ; <code>+</code> : modifications ajoutées à l'index ; <code>%</code> : fichiers non suivis ; <code>$</code> : un stash ; <code>#</code> : dépôt sans commit."],
+  ['Quelle est la différence entre langue et clavier ?', "La langue (<code>LANG</code>) décide des messages, formats et noms de dossiers : ici anglais. La disposition du clavier (<code>XKBLAYOUT</code>) décide de ce que produit chaque touche : ici français. Ce sont deux réglages indépendants."],
+  ['Que vérifie <code>test.sh</code> ? Suffit-il ?', "Il contrôle que l'environnement sait cloner, construire et lancer le projet fourni. Le sujet précise qu'il n'est pas exhaustif et qu'il peut évoluer : je fais donc aussi mes propres contrôles (script de vérification, projet Go créé à la main)."],
+  ['NAT ou pont (bridged) pour le réseau ?', "NAT : la VM partage l'adresse de l'hôte, aucune configuration et pas de conflit avec le réseau de l'IUT. Le pont donne une adresse propre à la VM, utile pour être joignable depuis le réseau, ce dont l'équipe n'a pas besoin ici."],
+  ['Pourquoi 2 vCPU, 4 Go de RAM et 40 Go de disque ?', "Moins de la moitié des ressources de l'hôte ; 4 Go pour Xfce + VS Code + gopls ; 40 Go dynamiques, dont environ 10 à 15 Go réellement utilisés. Je donne les mesures réelles sur ma machine."],
+  ['Comment as-tu distribué la VM ?', "VM éteinte (pas suspendue), nettoyée (apt clean, historique), dossier compressé avec son empreinte ou export OVF ; un fichier LISEZMOI sur le bureau donne comptes et premiers pas."],
+  ['Que se passe-t-il si bob a besoin d\'un logiciel ?', "Il demande à alice, qui l'installe avec <code>sudo apt install</code>. Pour des outils de développement Go, bob peut les installer seul dans son compte avec <code>go install</code>."],
+  ['Quelles faiblesses de sécurité vois-tu ?', "Mots de passe imposés et faibles, écrits dans les scripts. Dans un vrai projet : mots de passe changés au premier login (<code>chage -d 0</code>), authentification par clé, pas de secrets dans les scripts."],
+  ['Que ferais-tu pour déployer sur 50 postes ?', "Un script ne suffit plus : j'utiliserais un outil de gestion de configuration (Ansible) ou une image système préparée (Packer), avec un contrôle automatique après installation."]
+];
+addSec({
+  id: 'soutenance', group: 'Rendre', title: 'La soutenance',
+  lead: "15 minutes en tout : installation, présentation et questions. Un plan chronométré, un minuteur, les questions probables.",
+  body: () => R`
+<h2>Le format</h2>
+<ul>
+  <li><strong>15 minutes en tout</strong>, installation, présentation et questions comprises.</li>
+  <li><strong>5 minutes de questions</strong> à garder : il reste donc environ <strong>10 minutes</strong> pour présenter et installer.</li>
+  <li>Le jury veille au temps et peut t'interrompre. L'auditoire doit comprendre : <strong>les choix logiciels</strong>, <strong>l'adéquation</strong> demande/résultat, <strong>les difficultés</strong>.</li>
+</ul>
+${note('attention', 'Installation en direct : à clarifier', '<p>Le sujet inclut « l\'installation » dans les 15 minutes, sans dire exactement ce qui doit être montré. <strong>Demande à ton enseignant</strong> ce qui est attendu (tout installer ? une partie ?). Une stratégie sûre : une VM « finie » en secours, et une VM installée jusqu\'au système sur laquelle tu lances <code>sudo UPGRADE=0 bash sae-alice.sh</code> en direct, pendant que tu présentes (compte quelques minutes selon le réseau).</p>')}
+
+<h2>Minuteur d'entraînement</h2>
+<div class="timer" data-widget="timer"></div>
+
+<h2>Se répartir à deux</h2>
+<ul>
+  <li><strong>Un parle, un manipule</strong> : celui qui présente ne tape pas ; l'autre pilote la VM et dit à voix haute ce qu'il fait.</li>
+  <li>Changez de rôle à la moitié, pour que les deux montrent qu'ils maîtrisent le sujet.</li>
+  <li>Chacun doit pouvoir répondre sur <strong>toutes</strong> les parties.</li>
+</ul>
+
+<h2>Plan B</h2>
+<ul>
+  <li><strong>Pas de réseau</strong> : VM « finie » prête, et captures du script en cours d'exécution (hors portfolio).</li>
+  <li><strong>VM qui ne démarre pas</strong> : copie de la VM sur une clé ; un export de secours.</li>
+  <li><strong>Script lent</strong> : <code>UPGRADE=0</code> ; télécharge d'avance l'archive Go et lance seulement les étapes utiles avec <code>ONLY</code>.</li>
+  <li><strong>Panne en direct</strong> : annonce-la calmement, c'est une « difficulté rencontrée » ; ouvre l'étape « Dépannage ».</li>
+</ul>
+
+<h2>Questions probables</h2>
+<p>Prépare une réponse courte (30 secondes) pour chacune. Ouvre pour voir une réponse type, puis reformule avec tes mots.</p>
+${QR.map(([q, a]) => `<details class="dt"><summary>${q}</summary><div><p>${a}</p></div></details>`).join('')}
+
+<h2>La veille et le jour J</h2>
+<ul class="pieges">
+  <li><strong>Matériel.</strong> Rapport imprimé (une version par binôme), VM sur le poste et sur clé, chargeur, VMware ouvert à l'avance.</li>
+  <li><strong>Réseau.</strong> Teste le clone du GitLab depuis la salle, ou prépare le plan B.</li>
+  <li><strong>Mots de passe.</strong> alice@but et bob@but, bien tapés avec le clavier français.</li>
+  <li><strong>Répétition.</strong> Une fois en conditions réelles avec le minuteur, sans lire le rapport.</li>
+</ul>`,
+  check: [
+    ['soutenance-1', "Nous avons répété à deux, avec le minuteur, en moins de 10 minutes avant les questions."],
+    ['soutenance-2', "Nous avons deux VM prêtes (finie + à installer) et une copie sur clé."],
+    ['soutenance-3', "Nous avons testé le réseau et le clone depuis la salle (ou prévu le plan B)."],
+    ['soutenance-4', "Je sais répondre à chacune des questions probables avec mes mots."],
+    ['soutenance-5', "Le rapport imprimé et relié est dans le sac."]
+  ]
+});
+
+/* ===== Application : navigation, widgets, progression ===== */
+const NAV_ORDER = ['analyse', 'choix', 'vmware', 'install', 'systeme', 'comptes', 'logiciels', 'prompt', 'bob', 'scripts', 'verif', 'distribuer', 'depannage', 'rapport', 'notice', 'soutenance', 'memo'];
+const SEC = Object.fromEntries(SECTIONS.map(s => [s.id, s]));
+const LIST = NAV_ORDER.map(id => SEC[id]);
+const GROUPS = ['Comprendre', 'Installer', 'Automatiser', 'Rendre', 'Outils'];
+const ALL_IDS = ['accueil', ...NAV_ORDER];
+const CK_IDS = LIST.flatMap(s => s.check.map(x => x[0]));
+const secDone = s => s.check.every(([id]) => Store.data.chk[id]);
+const DIST_NAME = { debian: 'Debian', xubuntu: 'Xubuntu' };
+
+/* ---------- Planning et compte à rebours ---------- */
+const PLAN = [
+  { d: '2026-10-19', t: 'Présentation du sujet', s: 'Construction des binômes, démarrage du travail' },
+  { d: '2026-11-02', t: 'Séance en autonomie', s: 'Avancer sur la VM et le rapport' },
+  { d: '2026-11-09', t: 'Suivi de projet', s: 'Vérification de la version courante du rapport et du travail réalisé' },
+  { d: '2026-11-16', t: 'Soutenances', s: '15 minutes : installation, présentation, questions' }
+];
+const parseD = d => { const [y, m, j] = d.split('-').map(Number); return new Date(y, m - 1, j); };
+const fmtD = d => parseD(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+function planState(now) {
+  const DAY = 86400000;
+  return PLAN.map((p, i) => {
+    const a = parseD(p.d).getTime(), b = a + 7 * DAY;
+    const st = now >= b ? 'past' : (now >= a ? 'now' : 'future');
+    return { ...p, st, days: Math.ceil((a - now) / DAY) };
+  });
+}
+function mountTimeline(host) {
+  const st = planState(Date.now());
+  const nextI = st.findIndex(x => x.st !== 'past');
+  host.innerHTML = `<ul class="tl">${st.map((x, i) => {
+    const cls = x.st === 'past' ? 'past' : (x.st === 'now' ? 'now' : (i === nextI ? 'next' : ''));
+    const lab = x.st === 'past' ? ['ok', 'Passé'] : (x.st === 'now' ? ['ko', 'Cette semaine'] : ['', 'Dans ' + x.days + ' jour' + (x.days > 1 ? 's' : '')]);
+    return `<li class="${cls}"><span class="tl-d">Semaine du ${esc(fmtD(x.d))}</span><span class="tl-t">${esc(x.t)}</span><span class="tl-s">${esc(x.s)}</span><span class="pill ${lab[0]} tl-st">${lab[1]}</span></li>`;
+  }).join('')}</ul>`;
+}
+function mountCountdown(host) {
+  const sout = planState(Date.now())[3];
+  let h;
+  if (sout.st === 'past') h = '<span><strong>✓</strong></span><span>Les soutenances sont passées.</span>';
+  else if (sout.st === 'now') h = '<span><strong>Cette semaine</strong></span><span>C\'est la semaine des soutenances : répète avec le minuteur.</span>';
+  else h = `<span><strong>J-${sout.days}</strong></span><span>avant la semaine des soutenances (lundi ${esc(fmtD(sout.d))}).</span>`;
+  host.innerHTML = h;
+}
+
+/* ---------- Pages ---------- */
+function progress() {
+  const done = CK_IDS.filter(id => Store.data.chk[id]).length;
+  return { done, total: CK_IDS.length, lessons: LIST.filter(secDone).length, nl: LIST.length };
+}
+function homeSummary() {
+  const p = progress();
+  const nx = LIST.find(s => !secDone(s));
+  return `<p class="sum-line"><strong>${p.done}</strong> case${p.done > 1 ? 's' : ''} cochée${p.done > 1 ? 's' : ''} sur ${p.total} · <strong>${p.lessons}</strong> étape${p.lessons > 1 ? 's' : ''} terminée${p.lessons > 1 ? 's' : ''} sur ${p.nl}</p>` +
+    (nx ? `<a class="btn" href="#${nx.id}">${p.done ? 'Continuer' : 'Commencer'} : ${esc(nx.title)}</a>` : '<p class="sum-line">Toutes les étapes sont terminées. Bonne soutenance !</p>');
+}
+function pageAccueil() {
+  const d = Store.data.distro;
+  return `<div class="home">
+  <section class="hero"><p class="kicker">SAE 1.03 · Installation de poste</p>
+  <h1>Réussir la SAE 1.03, de la VM à la soutenance.</h1>
+  <p class="lead">Fabriquer la machine virtuelle BUTGAMES : Linux avec bureau Xfce, comptes alice et bob, Go, VS Code, git et un prompt qui montre l'état du dépôt. Analyse du sujet, installation pas à pas pour <strong>Debian</strong> ou <strong>Xubuntu</strong>, scripts, vérifications, rapport et soutenance.</p>
+  <div id="home-sum" class="home-sum">${homeSummary()}</div></section>
+  <div class="cdown" data-widget="countdown"></div>
+  <h2>Ton parcours : Debian ou Xubuntu ?</h2>
+  <p>Tout le guide s'adapte à ton choix (tu peux le changer à tout moment avec le bouton en haut de la page).</p>
+  <div class="pick" role="group" aria-label="Distribution">
+    <button type="button" data-set-distro="debian" aria-pressed="${d === 'debian'}"><span class="pk-t">Debian + Xfce</span><span class="pk-s">Légère et très stable. Installateur plus détaillé, attention au mot de passe root.</span></button>
+    <button type="button" data-set-distro="xubuntu" aria-pressed="${d === 'xubuntu'}"><span class="pk-t">Xubuntu (LTS)</span><span class="pk-s">Xfce par défaut, installation guidée et rapide, sudo déjà en place.</span></button>
+  </div>
+  <h2>Par où commencer ?</h2>
+  <div class="fast">
+    <a href="#analyse"><b>Je pars de zéro</b><span>Analyse du sujet, puis les étapes dans l'ordre.</span></a>
+    <a href="#scripts"><b>Je veux aller vite</b><span>Installer le système, puis un script fait le reste.</span></a>
+    <a href="#verif"><b>J'ai déjà une VM</b><span>Vérifier chaque exigence avec le script de contrôle.</span></a>
+    <a href="#rapport"><b>Le rapport</b><span>Plan, schéma d'architecture, générateur de brouillon.</span></a>
+    <a href="#soutenance"><b>La soutenance</b><span>Minuteur, questions probables, plan B.</span></a>
+    <a href="#depannage"><b>Ça ne marche pas</b><span>Les erreurs classiques et leur remède.</span></a>
+  </div>
+  <h2>Les étapes</h2>
+  <p>Chaque étape se termine par une liste de cases à cocher : tu vois ce qu'il reste à faire.</p>
+  <ul class="skills">${LIST.map((s, i) => `<li class="skill${secDone(s) ? ' is-done' : ''}" data-l="${s.id}"><a href="#${s.id}"><span class="sk-n">${i + 1}</span><span class="sk-t">${esc(s.title)}</span><span class="sk-l">${esc(s.group)}</span></a></li>`).join('')}</ul>
+  ${note('convention', 'Un guide, pas un copier-coller', '<p>Les commandes marchent, mais le sujet te demande de <strong>justifier</strong> chaque choix et de <strong>présenter</strong> ton travail : comprends ce que fait chaque ligne. Les mots de passe de la SAE (<code>alice@but</code>, <code>bob@but</code>) sont imposés par le sujet.</p>')}
+  </div>`;
+}
+function pageSection(s) {
+  const idx = NAV_ORDER.indexOf(s.id);
+  const prev = SEC[NAV_ORDER[idx - 1]], next = SEC[NAV_ORDER[idx + 1]];
+  return `<article class="page"><p class="kicker">${esc(s.group)} · étape ${idx + 1} sur ${NAV_ORDER.length}</p><h1>${esc(s.title)}</h1><p class="lead">${esc(s.lead)}</p>
+  <div class="body">${s.body()}</div>
+  ${checkBox(s.id, s.check)}
+  <nav class="pager" aria-label="Navigation">${prev ? `<a href="#${prev.id}"><span>Précédent</span>${esc(prev.title)}</a>` : '<a href="#accueil"><span>Retour</span>Accueil</a>'}${next ? `<a class="next" href="#${next.id}"><span>Suivant</span>${esc(next.title)}</a>` : '<span></span>'}</nav></article>`;
+}
+function navHTML() {
+  const item = (id, n, label) => `<a href="#${id}" data-id="${id}"><span class="nav-n">${n}</span><span class="nav-t">${esc(label)}</span></a>`;
+  return `<div class="nav-g">${item('accueil', '⌂', 'Accueil')}</div>` + GROUPS.map(g => `<div class="nav-g"><div class="nav-h">${g}</div>${LIST.filter(s => s.group === g).map(s => item(s.id, NAV_ORDER.indexOf(s.id) + 1, s.title)).join('')}</div>`).join('');
+}
+
+/* ---------- Widgets ---------- */
+function mountCalc(host) {
+  host.innerHTML = `<div class="w-title">Calculateur : combien donner à la VM ?</div>
+  <p class="muted-s">Indique les caractéristiques de ton poste hôte (le PC qui fait tourner VMware).</p>
+  <div class="form-g"><label>RAM de l'hôte (Go)<input type="number" min="2" max="256" value="8" data-calc="ram" inputmode="numeric"></label>
+  <label>Threads (processeurs logiques) de l'hôte<input type="number" min="1" max="128" value="8" data-calc="cpu" inputmode="numeric"></label></div>
+  <div class="calc-out" aria-live="polite"></div><p class="muted-s calc-why"></p>`;
+  const up = () => {
+    const ram = Math.max(1, +$('[data-calc=ram]', host).value || 0), cpu = Math.max(1, +$('[data-calc=cpu]', host).value || 0);
+    const vcpu = cpu >= 12 ? 4 : (cpu >= 4 ? 2 : 1);
+    const vram = Math.max(1, Math.min(4, Math.floor(ram / 2)));
+    $('.calc-out', host).innerHTML = `<div><b>${vcpu}</b><span>vCPU</span></div><div><b>${vram} Go</b><span>RAM</span></div><div><b>40 Go</b><span>Disque dynamique</span></div><div><b>NAT</b><span>Réseau</span></div>`;
+    $('.calc-why', host).textContent = `Règle : au plus la moitié des ressources de l'hôte (${Math.floor(cpu / 2)} thread${cpu >= 4 ? 's' : ''} et ${Math.floor(ram / 2)} Go ici), 2 vCPU et 4 Go dès que l'hôte le permet.` + (vram < 4 ? ' Avec si peu de RAM, la VM sera lente : ferme les autres applications.' : '');
+  };
+  host.addEventListener('input', up); up();
+}
+const GEN_REASON = {
+  distro: {
+    debian: "Debian : distribution stable, légère et très documentée ; le bureau Xfce est un choix à l'installation. Support long, dépôts officiels riches.",
+    xubuntu: "Xubuntu LTS : Xfce par défaut, installateur guidé, support de 5 ans, large communauté ; le premier utilisateur reçoit sudo."
+  },
+  go: {
+    tarball: "Archive officielle go.dev : dernière version stable, identique pour toute l'équipe, intégrité vérifiée par SHA-256, installée dans /usr/local/go.",
+    apt: "Paquet golang-go de la distribution : installation en une commande et mises à jour par apt, au prix d'une version moins récente."
+  },
+  code: {
+    repo: "Dépôt apt officiel de Microsoft : VS Code se met à jour avec le système et l'installation est scriptable ; aucun snap.",
+    deb: "Paquet .deb téléchargé depuis code.visualstudio.com : simple ; il ajoute aussi le dépôt apt de Microsoft pour les mises à jour.",
+    snap: "Snap (code --classic) : installation en une commande, mais plus lourd et plus lent au démarrage."
+  }
+};
+const GEN_DEF = { distro: '', vcpu: 2, ram: 4, disk: 40, host: '', go: 'tarball', code: 'repo', names: '' };
+function genData() {
+  const g = Object.assign({}, GEN_DEF, Store.data.gen);
+  if (!g.distro) g.distro = Store.data.distro === 'xubuntu' ? 'Xubuntu 24.04 LTS (Xfce)' : 'Debian 13 « trixie » + Xfce';
+  g.deb = /debian/i.test(g.distro);
+  return g;
+}
+function genMarkdown(g) {
+  const ram = +g.ram, vcpu = +g.vcpu, disk = +g.disk;
+  const why = {
+    vcpu: vcpu >= 2 ? `${vcpu} cœurs : le bureau, VS Code, gopls et la compilation Go tournent en parallèle sans à-coups, et la VM n'occupe qu'une partie de l'hôte.` : `${vcpu} cœur : minimal ; la compilation et VS Code peuvent ralentir.`,
+    ram: ram >= 4 ? `${ram} Go : confortable pour Xfce (< 1 Go) + VS Code et gopls (2 à 3 Go).` : `${ram} Go : juste suffisant ; VS Code peut ralentir quand plusieurs outils tournent.`,
+    disk: `${disk} Go en disque dynamique : environ 10 à 15 Go réellement utilisés (système, Go, VS Code, outils), le reste en marge ; l'hôte ne perd que l'espace utilisé.`
+  };
+  const L = [];
+  L.push("# SAE 1.03 - Installation de poste");
+  L.push("## Dossier d'étude et de choix des solutions");
+  if (g.names.trim()) L.push('', `Auteurs : ${g.names.trim()}`);
+  L.push('', '### 1. Définition de la machine virtuelle', '',
+    '| Élément | Valeur | Justification |', '| --- | --- | --- |',
+    '| Hyperviseur | VMware Workstation | Imposé par le sujet. |',
+    `| Système invité | ${g.distro} | ${GEN_REASON.distro[g.deb ? 'debian' : 'xubuntu']} |`,
+    `| Processeurs | ${vcpu} vCPU | ${why.vcpu} |`,
+    `| Mémoire | ${ram} Go | ${why.ram} |`,
+    `| Disque | ${disk} Go dynamique | ${why.disk} |`,
+    '| Réseau | NAT | Accès à Internet et au GitLab de l\'IUT sans configuration ; pas de conflit avec le réseau de l\'hôte. |',
+    '| Affichage | 3D désactivée | Évite les problèmes d\'affichage de VS Code dans une VM. |');
+  if (g.host.trim()) L.push('', `Poste hôte : ${g.host.trim()}. La VM prend moins de la moitié de ses ressources.`);
+  L.push('', '### 2. Choix logiciels', '',
+    '| Besoin | Choix | Alternatives | Raison |', '| --- | --- | --- | --- |',
+    `| Bureau | Xfce | GNOME, KDE | Léger : laisse la mémoire à VS Code et à la compilation. |`,
+    `| Go | ${g.go === 'tarball' ? 'Archive officielle go.dev' : 'Paquet golang-go'} | ${g.go === 'tarball' ? 'Paquet golang-go' : 'Archive go.dev'} | ${GEN_REASON.go[g.go]} |`,
+    `| IDE | VS Code (${{ repo: 'dépôt apt Microsoft', deb: 'paquet .deb', snap: 'snap' }[g.code]}) | VSCodium, GoLand | ${GEN_REASON.code[g.code]} |`,
+    '| Extension Go | golang.go, avec gopls et dlv | - | Extension officielle de l\'équipe Go : complétion, erreurs, débogage, tests ; installée dans le compte de bob. |',
+    '| Gestionnaire de source | git | - | Imposé par le sujet ; fournit aussi la fonction de prompt __git_ps1. |',
+    '| Prompt | __git_ps1 dans /etc/butgames.bashrc | oh-my-bash, starship | Aucune installation en plus ; un seul fichier à maintenir pour tous les comptes. |',
+    '| Outils VMware | open-vm-tools et open-vm-tools-desktop | VMware Tools propriétaires | Paquets de la distribution : copier-coller, redimensionnement, mises à jour avec le système. |',
+    '| Automatisation | Scripts bash idempotents | Ansible, Packer | Aucun outil à installer, lisible, rejouable en quelques minutes. |');
+  L.push('', '### 3. Comptes et droits', '',
+    '| Compte | Mot de passe | Droits | Raison |', '| --- | --- | --- | --- |',
+    '| alice | alice@but | groupe sudo | Administre le poste et réalise toutes les installations. |',
+    '| bob | bob@but | aucun droit d\'administration | Développeur : moindre privilège ; installe seulement dans son compte (extension VS Code, outils Go). |');
+  L.push('', '### 4. Langue et clavier', '',
+    '- Système en anglais : LANG=en_US.UTF-8 (fichier /etc/default/locale).',
+    '- Clavier français : XKBLAYOUT="fr" (fichier /etc/default/keyboard). Deux réglages indépendants.');
+  return L.join('\n');
+}
+function mountGen(host) {
+  const g = genData();
+  const f = (k, lab, type, extra) => `<label>${lab}<input data-gen="${k}" type="${type}" value="${esc(g[k])}" ${extra || ''}></label>`;
+  host.innerHTML = `<div class="w-title">Brouillon du dossier d'étude</div>
+  <div class="form-g">
+    <label>Distribution et version<input data-gen="distro" list="gen-distros" value="${esc(g.distro)}" autocomplete="off"><datalist id="gen-distros"><option value="Debian 13 « trixie » + Xfce"><option value="Debian 12 « bookworm » + Xfce"><option value="Xubuntu 24.04 LTS (Xfce)"><option value="Xubuntu LTS plus récente (Xfce)"></datalist></label>
+    ${f('vcpu', 'vCPU', 'number', 'min="1" max="16" inputmode="numeric"')}${f('ram', 'RAM (Go)', 'number', 'min="1" max="64" inputmode="numeric"')}${f('disk', 'Disque (Go)', 'number', 'min="10" max="500" inputmode="numeric"')}
+    <label>Go<select data-gen="go"><option value="tarball"${g.go === 'tarball' ? ' selected' : ''}>Archive officielle go.dev</option><option value="apt"${g.go === 'apt' ? ' selected' : ''}>Paquet de la distribution</option></select></label>
+    <label>VS Code<select data-gen="code"><option value="repo"${g.code === 'repo' ? ' selected' : ''}>Dépôt apt Microsoft</option><option value="deb"${g.code === 'deb' ? ' selected' : ''}>Paquet .deb</option><option value="snap"${g.code === 'snap' ? ' selected' : ''}>Snap</option></select></label>
+    ${f('host', 'Poste hôte (facultatif)', 'text', 'placeholder="ex. PC de l\'IUT, 16 Go, 8 threads"')}${f('names', 'Auteurs (facultatif)', 'text', 'placeholder="Prénom Nom, Prénom Nom"')}
+  </div>
+  <label class="gen-chk"><input type="checkbox" data-gen-cmds checked> Ajouter la liste minimale des commandes</label>
+  <textarea class="gen-out" readonly aria-label="Brouillon généré" spellcheck="false"></textarea>
+  <div class="gen-bar"><button type="button" class="btn" data-act="copy-gen">Copier le brouillon</button><button type="button" class="btn ghost" data-act="dl-gen">Télécharger (.md)</button><button type="button" class="btn ghost" data-act="reset-gen">Remettre à zéro</button></div>`;
+  const out = $('.gen-out', host);
+  const build = () => {
+    const cur = genData();
+    let t = genMarkdown(cur);
+    if ($('[data-gen-cmds]', host).checked) t += '\n\n### 5. Liste minimale des actions et commandes (installation)\n\n' + memoText(cur.deb ? 'debian' : 'xubuntu', cur.go);
+    out.value = t;
+  };
+  host._build = build;
+  if (!host._bound) {
+    host._bound = true;
+    host.addEventListener('input', e => {
+      const k = e.target.dataset && e.target.dataset.gen;
+      if (k) { Store.data.gen[k] = ['vcpu', 'ram', 'disk'].includes(k) ? Math.max(1, +e.target.value || 1) : e.target.value; Store.save(); }
+      host._build();
+    });
+    host.addEventListener('change', () => host._build());
+  }
+  build();
+}
+function mountTimer(host) {
+  const total = PHASES.reduce((a, p) => a + p.s, 0);
+  let elapsed = 0, run = false, iv = null, t0 = 0, base = 0;
+  const mmss = s => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  host.innerHTML = `<div class="tm-clock" aria-live="off">15:00</div><div class="tm-phase"></div><div class="tm-bar"><i></i></div>
+  <div class="gen-bar"><button type="button" class="btn" data-tm="go">Démarrer</button><button type="button" class="btn ghost" data-tm="reset">Remettre à zéro</button></div>
+  <ol class="tm-list">${PHASES.map((p, i) => `<li data-i="${i}"><span class="tm-m"></span><span>${esc(p.t)}</span></li>`).join('')}</ol><p class="muted-s tm-tip"></p>`;
+  const draw = () => {
+    const left = Math.max(0, total - elapsed);
+    const clock = $('.tm-clock', host); clock.textContent = mmss(left); clock.classList.toggle('low', left <= 300 && elapsed > 0);
+    let acc = 0, cur = PHASES.length - 1, curEnd = total;
+    for (let i = 0; i < PHASES.length; i++) { acc += PHASES[i].s; if (elapsed < acc) { cur = i; curEnd = acc; break; } }
+    const finished = elapsed >= total;
+    $('.tm-phase', host).textContent = finished ? 'Temps écoulé' : (elapsed === 0 && !run ? 'Prêt' : `${PHASES[cur].t} · encore ${mmss(curEnd - elapsed)}`);
+    $('.tm-tip', host).textContent = finished ? '' : PHASES[cur].tip;
+    $('.tm-bar i', host).style.width = Math.min(100, 100 * elapsed / total) + '%';
+    let start = 0;
+    $$('.tm-list li', host).forEach((li, i) => {
+      const p = PHASES[i]; $('.tm-m', li).textContent = mmss(start) + ' → ' + mmss(start + p.s);
+      li.classList.toggle('cur', !finished && i === cur && (run || elapsed > 0)); li.classList.toggle('done', elapsed >= start + p.s); start += p.s;
+    });
+    $('[data-tm=go]', host).textContent = run ? 'Pause' : (elapsed > 0 && !finished ? 'Reprendre' : 'Démarrer');
+  };
+  const tick = () => { elapsed = Math.min(total, base + Math.floor((Date.now() - t0) / 1000)); if (elapsed >= total) { stop(); } draw(); };
+  const stop = () => { run = false; clearInterval(iv); iv = null; };
+  host.addEventListener('click', e => {
+    const b = e.target.closest('[data-tm]'); if (!b) return;
+    if (b.dataset.tm === 'go') {
+      if (run) { stop(); } else { if (elapsed >= total) elapsed = 0; base = elapsed; t0 = Date.now(); run = true; iv = setInterval(tick, 250); }
+    } else { stop(); elapsed = 0; base = 0; }
+    draw();
+  });
+  host._cleanup = stop;
+  draw();
+}
+function mountDep(host) {
+  const q = $('#dep-q', host), rows = $$('#dep-t tbody tr', host), n = $('#dep-n', host);
+  const f = () => {
+    const words = q.value.toLowerCase().split(/\s+/).filter(Boolean); let k = 0;
+    rows.forEach(r => { const ok = words.every(w => r.dataset.t.includes(w)); r.hidden = !ok; if (ok) k++; });
+    n.textContent = words.length ? `${k} résultat${k > 1 ? 's' : ''} sur ${rows.length}` : `${rows.length} problèmes décrits`;
+  };
+  q.addEventListener('input', f); f();
+}
+function mountWidgets(root) {
+  $$('[data-widget]', root).forEach(h => {
+    const k = h.dataset.widget;
+    if (k === 'timeline') mountTimeline(h); else if (k === 'countdown') mountCountdown(h);
+    else if (k === 'calc') mountCalc(h); else if (k === 'gen') mountGen(h); else if (k === 'timer') mountTimer(h);
+  });
+  if ($('#dep-q', root)) mountDep(root);
+}
+
+/* ---------- Progression, distribution, navigation ---------- */
+window.updateProgress = function () {
+  const p = progress(), pct = Math.round(100 * p.done / p.total);
+  const bar = $('#prog-bar'), txt = $('#prog-txt');
+  if (bar) { bar.style.width = pct + '%'; bar.parentElement.setAttribute('aria-valuenow', String(pct)); }
+  if (txt) txt.textContent = `${p.done}/${p.total} cases`;
+  $$('.nav a').forEach(a => { const s = SEC[a.dataset.id]; a.classList.toggle('is-done', !!s && secDone(s)); });
+  $$('.skill[data-l]').forEach(s => s.classList.toggle('is-done', secDone(SEC[s.dataset.l])));
+  const sum = $('#home-sum'); if (sum) sum.innerHTML = homeSummary();
+  $$('.ck-box').forEach(b => { const s = SEC[b.dataset.sec]; if (!s) return; const n = s.check.filter(([id]) => Store.data.chk[id]).length; $('.ck-n', b).textContent = n + '/' + s.check.length; b.classList.toggle('is-done', n === s.check.length); });
+  try { localStorage.setItem('hub:systeme/sae-103', JSON.stringify({ done: p.done, total: p.total, lessons: p.lessons, nl: p.nl, unit: 'cases cochées' })); } catch (e) { /* stockage indisponible */ }
+};
+function applyDistro() {
+  const d = Store.data.distro;
+  document.body.dataset.distro = d;
+  $$('.dist-seg button, .pick button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.setDistro === d)));
+}
+function setDistro(d) {
+  Store.data.distro = d === 'xubuntu' ? 'xubuntu' : 'debian'; Store.save();
+  const id = currentId();
+  if (id === 'memo' || id === 'rapport') route(true); else applyDistro();
+}
+const currentId = () => { const id = (location.hash || '').replace('#', ''); return ALL_IDS.includes(id) ? id : 'accueil'; };
+function route(keepScroll) {
+  const id = currentId(), s = SEC[id], m = $('#main');
+  $$('[data-widget=timer]', m).forEach(h => h._cleanup && h._cleanup());
+  const y = window.scrollY;
+  m.innerHTML = id === 'accueil' ? pageAccueil() : pageSection(s);
+  $$('.nav a').forEach(a => a.setAttribute('aria-current', a.dataset.id === id ? 'page' : 'false'));
+  document.title = id === 'accueil' ? 'SAE 1.03 · Installation de poste' : s.title + ' · SAE 1.03';
+  applyDistro(); mountWidgets(m); window.updateProgress(); closeDrawer();
+  if (keepScroll === true) window.scrollTo(0, y); else { window.scrollTo(0, 0); m.focus({ preventScroll: true }); }
+}
+function closeDrawer() { document.body.classList.remove('drawer-open'); const b = $('#menu-btn'); if (b) b.setAttribute('aria-expanded', 'false'); }
+function setTheme(t) { try { localStorage.setItem('cours-theme', t || ''); } catch (e) { /* stockage indisponible */ } if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
+
+function init() {
+  $('#app').innerHTML = `
+<a class="skip" href="#main">Aller au contenu</a>
+<header class="top">
+  <button type="button" id="menu-btn" class="icon-btn" aria-label="Menu" aria-expanded="false" aria-controls="side">☰</button>
+  <a class="back" href="index.html" title="Retour à la matière" aria-label="Retour à la matière">⌂</a><a class="brand" href="#accueil"><span class="brand-mark">SAE</span>1.03 <small>installation de poste</small></a>
+  <div class="meter" role="progressbar" aria-label="Progression" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="prog-bar"></i></div>
+  <span id="prog-txt" class="prog-txt"></span>
+  <div class="tools"><span class="dist-lbl">Distribution</span><div class="seg dist-seg" role="group" aria-label="Distribution"><button type="button" data-set-distro="debian" aria-pressed="true">Debian</button><button type="button" data-set-distro="xubuntu" aria-pressed="false">Xubuntu</button></div><button type="button" id="theme-btn" class="icon-btn" aria-label="Changer le thème" title="Thème clair / sombre">◐</button></div>
+</header>
+<div class="shell"><nav id="side" class="side nav" aria-label="Sommaire">${navHTML()}</nav><div class="scrim" data-app="scrim"></div><main id="main" tabindex="-1"></main></div>`;
+  document.addEventListener('click', e => {
+    const dist = e.target.closest('[data-set-distro]');
+    if (dist) { setDistro(dist.dataset.setDistro); return; }
+    const a = e.target.closest('[data-act]');
+    if (a) { act(a); return; }
+    if (e.target.closest('[data-app="scrim"]')) closeDrawer();
+  });
+  document.addEventListener('change', e => {
+    const id = e.target.dataset && e.target.dataset.ck;
+    if (id) { Store.data.chk[id] = e.target.checked; if (!e.target.checked) delete Store.data.chk[id]; Store.save(); window.updateProgress(); }
+  });
+  $('#menu-btn').addEventListener('click', () => { const o = document.body.classList.toggle('drawer-open'); $('#menu-btn').setAttribute('aria-expanded', String(o)); });
+  $('#theme-btn').addEventListener('click', () => {
+    const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    setTheme(dark ? 'light' : 'dark');
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+  window.addEventListener('hashchange', () => route());
+  route();
+}
+async function act(b) {
+  const k = b.dataset.act;
+  if (k === 'copy') {
+    const fig = b.closest('figure'), t = fig.dataset.copy !== undefined ? fig.dataset.copy : $('pre', fig).textContent;
+    flash(b, (await copyText(t)) ? 'Copié ✓' : 'Copie impossible');
+  } else if (k === 'copy-src') {
+    flash(b, (await copyText($('#' + b.dataset.src).textContent.replace(/^\n+/, ''))) ? 'Copié ✓' : 'Copie impossible');
+  } else if (k === 'dl-src') {
+    download(b.dataset.name, $('#' + b.dataset.src).textContent.replace(/^\n+/, ''), 'text/x-shellscript'); flash(b, 'Téléchargé ✓');
+  } else if (k === 'dl-arch') {
+    download('architecture-logicielle.svg', archSVG(true), 'image/svg+xml'); flash(b, 'Téléchargé ✓');
+  } else if (k === 'copy-gen') {
+    flash(b, (await copyText($('.gen-out').value)) ? 'Copié ✓' : 'Copie impossible');
+  } else if (k === 'dl-gen') {
+    download('dossier-etude-sae103.md', $('.gen-out').value, 'text/markdown'); flash(b, 'Téléchargé ✓');
+  } else if (k === 'reset-gen') {
+    Store.data.gen = {}; Store.save(); mountGen($('[data-widget=gen]'));
+  } else if (k === 'copy-memo' || k === 'dl-memo') {
+    const t = 'SAE 1.03 - Liste minimale des actions et commandes (' + DIST_NAME[Store.data.distro] + ')\n\n' + memoText(Store.data.distro, 'tarball');
+    if (k === 'copy-memo') flash(b, (await copyText(t)) ? 'Copié ✓' : 'Copie impossible'); else { download('commandes-minimales-sae103.txt', t); flash(b, 'Téléchargé ✓'); }
+  }
+}
+init();
+</script>
+</body>
+</html>
