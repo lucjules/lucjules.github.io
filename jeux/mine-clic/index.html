@@ -86,7 +86,7 @@
       <div id="p-etoiles" class="page" role="tabpanel" aria-labelledby="o-etoiles" hidden>
         <div class="et-tete">
           <img class="ic-etoile et-grande" alt="">
-          <div><h2 id="et-nb">0 étoile du Nether</h2><p id="et-bonus" class="sous"></p><p class="et-frag"><img class="ic-fragment" alt=""> <span id="et-frag"></span></p></div>
+          <div><h2 id="et-nb">0 étoile du Nether</h2><p id="et-bonus" class="sous"></p><p id="et-mult" class="sous"></p><p class="et-frag"><img class="ic-fragment" alt=""> <span id="et-frag"></span></p></div>
         </div>
 
         <div class="cadre-ren">
@@ -102,9 +102,10 @@
         <h3>Comment ça marche ?</h3>
         <ul class="aide">
           <li>Quand tu as assez miné, tu peux <b>renaître</b> : la partie recommence de zéro, mais tu gagnes des <b class="jaune">étoiles du Nether</b>.</li>
-          <li>Chaque étoile ajoute <b>2 % de production pour toujours</b>, dans toutes tes vies suivantes. Certains <b>paliers d'étoiles</b> (1, 5, 10, 25, 50, 100, 250, 500, 1 000) multiplient en plus toute ta production : voir le tableau plus bas.</li>
-          <li>Le nombre d'étoiles dépend des blocs minés <b>au total, toutes vies comprises</b> : la 1<sup>re</sup> à 100 millions, la 2<sup>e</sup> à 800 millions, la 3<sup>e</sup> à 2,7 milliards… (racine cubique des blocs minés divisés par 100 millions). Tu ne gagnes que les étoiles que tu n'as pas encore.</li>
-          <li>Chaque étoile gagnée donne aussi un <b class="violet">fragment d'étoile</b>, à dépenser dans la <b>boutique céleste</b> ci-dessous pour des pouvoirs permanents.</li>
+          <li>Chaque étoile ajoute <b>2 % de production pour toujours</b>, dans toutes tes vies suivantes. Les <b>paliers d'étoiles</b> (1, 5, 10, 25, 50, 100, 250, 500, 1 000, puis 2 500, 5 000, 10 000… <b>sans jamais s'arrêter</b>) multiplient en plus toute ta production : voir le tableau plus bas.</li>
+          <li>Le nombre d'étoiles dépend des blocs minés <b>au total, toutes vies comprises</b> : la 1<sup>re</sup> à 100 millions, la 2<sup>e</sup> à 800 millions, la 3<sup>e</sup> à 2,7 milliards… Jusqu'à 10 étoiles, c'est la racine cubique des blocs minés divisés par 100 millions ; ensuite, chaque étoile demande de plus en plus de blocs. Tu ne gagnes que les étoiles que tu n'as pas encore.</li>
+          <li>Tous tes bonus de production se multiplient entre eux. Au-delà de <b>×100</b>, leur effet total grandit plus doucement (racine carrée), mais il ne s'arrête jamais de grandir.</li>
+          <li>Chaque étoile gagnée donne aussi un <b class="violet">fragment d'étoile</b>, à dépenser dans la <b>boutique céleste</b> ci-dessous pour des pouvoirs permanents, puis pour des <b>éclats stellaires</b> sans fin : chacun multiplie l'effet de tes étoiles.</li>
           <li><b>Tu perds</b> tes blocs, tes machines et tes améliorations. <b>Tu gardes</b> le monde (dimensions, capacités, machines découvertes, collection, familiers, boss vaincus), les progrès, les pouvoirs, les missions et les statistiques.</li>
           <li>Astuce : renaître tôt pour quelques étoiles, puis renaître à nouveau quand la suivante est proche, fait progresser plus vite qu'attendre longtemps.</li>
         </ul>
@@ -162,7 +163,7 @@
           <li>Raccourcis : <b>Espace</b> ou <b>Entrée</b> pour miner, <b>1</b> à <b>4</b> pour les capacités.</li>
           <li><b>Renais</b> pour gagner des étoiles du Nether et acheter des pouvoirs permanents (onglet Étoiles).</li>
           <li>Pour acheter beaucoup de machines d'un coup, choisis ×10, ×100 ou <b>Max</b> (le plus possible).</li>
-          <li>Quand tu reviens, tes machines ont travaillé pendant ton absence (à moitié de leur vitesse, jusqu'à 24 h).</li>
+          <li>Quand tu reviens, tes machines ont travaillé pendant ton absence (à moitié de leur vitesse, jusqu'à 24 h ; les pouvoirs célestes allongent et accélèrent ce travail).</li>
         </ul>
         <p class="sous petit">Jeu fait maison, inspiré des jeux de clic et des mondes en blocs. Toutes les images sont dessinées par le code. Police Pixelify Sans (licence SIL OFL 1.1).</p>
       </div>
