@@ -461,9 +461,21 @@ function colorLine(l) {
   const m = e.match(/^(\s*)(#.*)$/);
   if (m) return m[1] + '<span class="c-com">' + m[2] + '</span>';
   const k = e.search(/\s#\s/);
-  if (k > 0 && !/['"][^'"]*$/.test(e.slice(0, k))) return e.slice(0, k) + '<span class="c-com">' + e.slice(k) + '</span>';
+  if (k > 0 && horsChaine(l.slice(0, k))) return esc(l.slice(0, k)) + '<span class="c-com">' + esc(l.slice(k)) + '</span>';
   return e;
 }
+/* vrai si le texte ne coupe aucune chaîne entre apostrophes ou guillemets (nombre pair de chacun) */
+const horsChaine = t => (t.match(/'/g) || []).length % 2 === 0 && (t.match(/"/g) || []).length % 2 === 0;
+/* Gros blocs : tous les commentaires sont retirés, une seule phrase est ajoutée à la fin. */
+function stripCom(text) {
+  return text.split('\n').map(l => {
+    if (/^\s*#/.test(l)) return null;
+    const k = l.search(/\s#\s/);
+    if (k > 0 && horsChaine(l.slice(0, k))) return l.slice(0, k).replace(/\s+$/, '');
+    return l;
+  }).filter(l => l !== null).join('\n').replace(/\n{3,}/g, '\n\n').replace(/(<<-?'?\w+'?)\n\n/g, '$1\n');
+}
+const avecFin = (text, fin) => fin ? stripCom(text.replace(/^\n+|\s+$/g, '')).replace(/\s+$/, '') + '\n# ' + fin : text;
 /* Pastilles : comment utiliser la commande */
 function badges(o) {
   let h = '';
@@ -476,7 +488,7 @@ function badges(o) {
 /* mode : 'bloc' (défaut : tout coller d'un coup), 'none' (fichier ou exemple, pas à taper). once : true / false / absent */
 function code(text, o) {
   o = Object.assign({ mode: 'bloc', lang: 'bash' }, o || {});
-  const t = text.replace(/^\n+|\s+$/g, '');
+  const t = o.fin ? avecFin(text, o.fin) : text.replace(/^\n+|\s+$/g, '');
   const html = t.split('\n').map(colorLine).join('\n');
   const name = o.name ? `<figcaption class="cb-name">${esc(o.name)}</figcaption>` : '';
   const left = (o.mode === 'none' ? `<span class="cb-lang">${esc(o.lang)}</span>` : '') + `<span class="cb-bdgs">${badges(o)}</span>`;
@@ -694,10 +706,10 @@ ${D(
   R`<p>Télécharge sur <strong>xubuntu.org</strong> l'ISO d'une version <strong>LTS</strong> (support long), environ 4 Go.</p>`
 )}
 <p>Vérifie l'empreinte du fichier (elle est publiée à côté du téléchargement, dans un fichier <code>SHA256SUMS</code>) : un ISO corrompu donne des erreurs d'installation incompréhensibles.</p>
-${sh(R`# Linux / macOS
-sha256sum nom-de-l-iso.iso
-# Windows (PowerShell)
-Get-FileHash .\nom-de-l-iso.iso -Algorithm SHA256`, { mode: 'none', lang: 'au choix selon ton système' })}
+<p><strong>Linux ou macOS :</strong></p>
+${sh(R`sha256sum nom-de-l-iso.iso`, { mode: 'none', lang: 'Linux / macOS' })}
+<p><strong>Windows (PowerShell) :</strong></p>
+${sh(R`Get-FileHash .\nom-de-l-iso.iso -Algorithm SHA256`, { mode: 'none', lang: 'PowerShell' })}
 
 <h2>L'assistant, étape par étape</h2>
 <ol class="flow">
@@ -836,10 +848,10 @@ ${steps([
 ${D(
   sh(R`sudo sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
 sudo locale-gen
-sudo update-locale LANG=en_US.UTF-8`, { once: false }),
+sudo update-locale LANG=en_US.UTF-8`, { once: false, fin: "Active l'anglais, le génère et le met par défaut." }),
   sh(R`sudo apt install -y language-pack-en
 sudo locale-gen en_US.UTF-8
-sudo update-locale LANG=en_US.UTF-8`, { once: false })
+sudo update-locale LANG=en_US.UTF-8`, { once: false, fin: "Installe l'anglais, le génère et le met par défaut." })
 )}
 <p>Contrôle (il prend effet à la prochaine connexion ; déjà vrai si tu as installé en anglais) :</p>
 ${term(R`$ cat /etc/default/locale
@@ -899,7 +911,7 @@ ${steps([
 <h3>A2. Les mots de passe imposés, et le groupe sudo d'alice</h3>
 ${sh(R`echo 'alice:alice@but' | sudo chpasswd
 echo 'bob:bob@but' | sudo chpasswd
-sudo usermod -aG sudo alice`, { once: false })}
+sudo usermod -aG sudo alice`, { once: false, fin: "Fixe les mots de passe imposés et met alice dans le groupe sudo." })}
 <p><strong>Attendu :</strong> aucun message. Les apostrophes empêchent le shell d'interpréter les caractères spéciaux du mot de passe : garde-les. Alice reste administratrice : <code>-aG sudo</code> l'ajoute au groupe <code>sudo</code> sans la retirer des autres.</p>
 <h3>A3. Vérifier les comptes</h3>
 ${steps([
@@ -957,7 +969,7 @@ sudo tar -C /usr/local --no-same-owner -xzf "$FILE"
 sudo chmod -R a+rX /usr/local/go
 # 4. Rendre la commande visible dans tous les shells
 sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
-sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt`, { once: false })}
+sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt`, { once: false, fin: "Télécharge la dernière version de Go, vérifie son empreinte et l'installe pour tous." })}
 <p><strong>Attendu :</strong> une ligne <code>Go : go1.xx.x pour amd64</code>, puis <code>go1.xx.x.linux-amd64.tar.gz: OK</code>. Si tu lis <code>FAILED</code> ou <code>OK</code> absent, ne continue pas : l'archive est incomplète.</p>
 <h3>A2 bis. Go : méthode 2, le paquet de la distribution (plus simple, version plus ancienne)</h3>
 ${sh(R`sudo apt install -y golang-go`, { once: false })}
@@ -975,7 +987,7 @@ Architectures: $(dpkg --print-architecture)
 Signed-By: /usr/share/keyrings/microsoft.gpg
 EOF
 sudo apt update
-sudo apt install -y code`, { once: false })}
+sudo apt install -y code`, { once: false, fin: "Ajoute le dépôt officiel de Microsoft et installe VS Code." })}
 ${D(
   '<p class="muted-s">Debian : le paquet <code>code</code> du dépôt Microsoft est la voie normale (ni snap ni flatpak).</p>',
   '<p class="muted-s">Xubuntu : <code>sudo snap install code --classic</code> marche aussi, mais le snap est plus lourd et plus lent au démarrage : le dépôt apt est préférable pour une VM distribuée.</p>'
@@ -1038,7 +1050,7 @@ ${steps([{ c: 'ls /usr/lib/git-core/git-sh-prompt', ok: "le chemin du fichier es
 
 <h3>A2. Créer le fichier commun et le rendre lisible par tous</h3>
 <p>Copie le bloc <strong>entier</strong> (de <code>sudo tee</code> jusqu'à <code>EOF</code>) en une seule fois :</p>
-${sh('sudo tee /etc/butgames.bashrc >/dev/null <<\'EOF\'\n' + bashrcTxt() + '\nEOF', { once: false })}
+${sh('sudo tee /etc/butgames.bashrc >/dev/null <<\'EOF\'\n' + bashrcTxt() + '\nEOF', { once: false, fin: "Crée le fichier commun qui règle le prompt git et le PATH de Go." })}
 <p>Puis, <strong>séparément</strong>, rends-le lisible par bob (et contrôle) :</p>
 ${steps([
   { c: 'sudo chmod 644 /etc/butgames.bashrc', ok: "aucun message.", once: false },
@@ -1050,7 +1062,7 @@ ${note('convention', 'Tu préfères un éditeur ?', '<p><code>sudo nano /etc/but
 <p>Ce bloc ajoute <strong>une ligne</strong> à la fin du <code>.bashrc</code> d'alice, de bob et du modèle des futurs comptes. Il vérifie d'abord (avec <code>sudo grep</code>) que la ligne n'y est pas déjà : tu peux donc le relancer sans créer de doublon.</p>
 ${sh(R`for rc in /etc/skel/.bashrc /home/alice/.bashrc /home/bob/.bashrc; do
   sudo grep -qF 'butgames.bashrc' "$rc" || echo '[ -r /etc/butgames.bashrc ] && . /etc/butgames.bashrc' | sudo tee -a "$rc" >/dev/null
-done`, { once: false })}
+done`, { once: false, fin: "Ajoute une seule fois la ligne de chargement dans chaque .bashrc." })}
 ${steps([{ c: 'tail -n 2 ~/.bashrc', ok: "la dernière ligne est <code>[ -r /etc/butgames.bashrc ] &amp;&amp; . /etc/butgames.bashrc</code>.", once: false }])}
 
 <h3>A4. Recharger le terminal et contrôler</h3>
@@ -1128,7 +1140,7 @@ ${chemin('A', 'À la main', 'étapes B1 à B7', R`
 <p>git signe chaque commit avec un nom et un email, à régler une fois par utilisateur.</p>
 ${sh(R`git config --global user.name "Bob"
 git config --global user.email "bob@butgames.local"
-git config --global init.defaultBranch main`, { once: false })}
+git config --global init.defaultBranch main`, { once: false, fin: "Donne à git le nom et l'email de bob." })}
 
 <h3>B2. L'extension Go de VS Code</h3>
 <p>${who('bob')} Dans la <strong>session graphique de bob</strong> (une fenêtre doit pouvoir s'ouvrir) :</p>
@@ -1526,7 +1538,7 @@ function bashrcTxt() {
 const GO_CMDS = R`ARCH=$(dpkg --print-architecture)
 VER=$(curl -fsSL 'https://go.dev/dl/?mode=json' | grep -m1 -o '"version": *"go[0-9.]*"' | grep -o 'go[0-9.]*')
 curl -fLO "https://go.dev/dl/$VER.linux-$ARCH.tar.gz"
-sha256sum "$VER.linux-$ARCH.tar.gz"      # comparer avec l'empreinte de https://go.dev/dl/
+sha256sum "$VER.linux-$ARCH.tar.gz"
 sudo rm -rf /usr/local/go && sudo tar -C /usr/local --no-same-owner -xzf "$VER.linux-$ARCH.tar.gz"
 sudo chmod -R a+rX /usr/local/go
 sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
@@ -1558,30 +1570,30 @@ const MEMO = (distro, goSrc) => [
     { c: 'sudo apt update && sudo apt full-upgrade -y' },
     { c: 'sudo apt install -y git curl wget ca-certificates gpg apt-transport-https bash-completion locales open-vm-tools open-vm-tools-desktop' },
     distro === 'debian'
-      ? { x: 'Langue anglaise :', c: "sudo sed -i 's/^# *\\(en_US.UTF-8 UTF-8\\)/\\1/' /etc/locale.gen\nsudo locale-gen\nsudo update-locale LANG=en_US.UTF-8" }
-      : { x: 'Langue anglaise :', c: 'sudo apt install -y language-pack-en\nsudo locale-gen en_US.UTF-8\nsudo update-locale LANG=en_US.UTF-8' },
+      ? { x: 'Langue anglaise :', f: "Active l'anglais, le génère et le met par défaut.", c: "sudo sed -i 's/^# *\\(en_US.UTF-8 UTF-8\\)/\\1/' /etc/locale.gen\nsudo locale-gen\nsudo update-locale LANG=en_US.UTF-8" }
+      : { x: 'Langue anglaise :', f: "Installe l'anglais, le génère et le met par défaut.", c: 'sudo apt install -y language-pack-en\nsudo locale-gen en_US.UTF-8\nsudo update-locale LANG=en_US.UTF-8' },
     { x: 'Clavier français et fuseau horaire :', c: 'sudo localectl set-x11-keymap fr pc105\nsudo timedatectl set-timezone Europe/Paris' }
   ] },
   { who: 'alice', t: 'Comptes', steps: [
-    { c: 'sudo useradd -m -s /bin/bash -c "Bob" bob\necho \'alice:alice@but\' | sudo chpasswd\necho \'bob:bob@but\' | sudo chpasswd\nsudo usermod -aG sudo alice' }
+    { f: "Crée bob, fixe les mots de passe imposés et met alice dans le groupe sudo.", c: 'sudo useradd -m -s /bin/bash -c "Bob" bob\necho \'alice:alice@but\' | sudo chpasswd\necho \'bob:bob@but\' | sudo chpasswd\nsudo usermod -aG sudo alice' }
   ] },
   { who: 'alice', t: 'Go', steps: [ goSrc === 'apt'
     ? { x: 'Paquet de la distribution :', c: 'sudo apt install -y golang-go' }
-    : { x: 'Archive officielle go.dev :', c: GO_CMDS } ] },
-  { who: 'alice', t: 'Visual Studio Code', steps: [ { x: 'Dépôt apt officiel de Microsoft :', c: CODE_CMDS } ] },
+    : { x: 'Archive officielle go.dev :', f: "Télécharge la dernière version de Go, vérifie son empreinte et l'installe pour tous.", c: GO_CMDS } ] },
+  { who: 'alice', t: 'Visual Studio Code', steps: [ { x: 'Dépôt apt officiel de Microsoft :', f: "Ajoute le dépôt officiel de Microsoft et installe VS Code.", c: CODE_CMDS } ] },
   { who: 'alice', t: 'Prompt git et PATH (un fichier commun)', steps: [
-    { x: 'Créer /etc/butgames.bashrc (contenu : voir l\'étape « Prompt »), le rendre lisible, puis le charger depuis chaque .bashrc :', c: 'sudo chmod 644 /etc/butgames.bashrc\nfor rc in /etc/skel/.bashrc /home/alice/.bashrc /home/bob/.bashrc; do\n  sudo grep -qF \'butgames.bashrc\' "$rc" || echo \'[ -r /etc/butgames.bashrc ] && . /etc/butgames.bashrc\' | sudo tee -a "$rc" >/dev/null\ndone' }
+    { x: 'Créer /etc/butgames.bashrc (contenu : voir l\'étape « Prompt »), le rendre lisible, puis le charger depuis chaque .bashrc :', f: "Rend le fichier lisible et ajoute une seule fois la ligne de chargement dans chaque .bashrc.", c: 'sudo chmod 644 /etc/butgames.bashrc\nfor rc in /etc/skel/.bashrc /home/alice/.bashrc /home/bob/.bashrc; do\n  sudo grep -qF \'butgames.bashrc\' "$rc" || echo \'[ -r /etc/butgames.bashrc ] && . /etc/butgames.bashrc\' | sudo tee -a "$rc" >/dev/null\ndone' }
   ] },
   { who: 'alice', t: 'Dossier partagé pour les scripts et contrôle des droits', steps: [
-    { x: 'Les scripts doivent être lisibles par bob (le dossier d\'alice est privé) :', c: 'sudo mkdir -p /opt/butgames\nsudo cp ~/Downloads/sae-*.sh /opt/butgames/\nsudo chmod -R a+rX /opt/butgames\nsudo chown -R bob:bob /home/bob' }
+    { x: 'Les scripts doivent être lisibles par bob (le dossier d\'alice est privé) :', f: "Copie les scripts dans le dossier partagé et rend à bob ses fichiers.", c: 'sudo mkdir -p /opt/butgames\nsudo cp ~/Downloads/sae-*.sh /opt/butgames/\nsudo chmod -R a+rX /opt/butgames\nsudo chown -R bob:bob /home/bob' }
   ] },
   { who: 'bob', t: 'Environnement de développement (dans le compte de bob)', steps: [
     { c: 'git config --global user.name "Bob"\ngit config --global user.email "bob@butgames.local"' },
     { c: 'code --install-extension golang.go' },
-    { c: 'go install golang.org/x/tools/gopls@latest\ngo install github.com/go-delve/delve/cmd/dlv@latest\ngo install honnef.co/go/tools/cmd/staticcheck@latest' }
+    { f: "Installe les outils Go dans le dossier personnel de bob.", c: 'go install golang.org/x/tools/gopls@latest\ngo install github.com/go-delve/delve/cmd/dlv@latest\ngo install honnef.co/go/tools/cmd/staticcheck@latest' }
   ] },
   { who: 'bob', t: 'Valider l\'installation', steps: [
-    { c: 'mkdir -p ~/projets && cd ~/projets\ngit clone --branch langage_go ' + GIT_URL + '\ncd hello.sae4.but1.iut\n./test.sh 2>&1 | tee ~/preuve-test.txt; echo "code retour : ${PIPESTATUS[0]}"' }
+    { f: "Clone le projet sur la branche langage_go et lance son test en gardant la trace.", c: 'mkdir -p ~/projets && cd ~/projets\ngit clone --branch langage_go ' + GIT_URL + '\ncd hello.sae4.but1.iut\n./test.sh 2>&1 | tee ~/preuve-test.txt; echo "code retour : ${PIPESTATUS[0]}"' }
   ] }
 ];
 function memoText(distro, goSrc) {
@@ -1591,7 +1603,7 @@ function memoText(distro, goSrc) {
     out.push(`${++n}. [${WHO[g.who]}] ${g.t}`);
     g.steps.forEach(s => {
       if (s.x) out.push('   ' + s.x);
-      if (s.c) out.push(s.c.split('\n').map(l => '       ' + l).join('\n'));
+      if (s.c) out.push(avecFin(s.c, s.f).split('\n').map(l => '       ' + l).join('\n'));
     });
   });
   return out.join('\n');
@@ -1606,9 +1618,9 @@ addSec({
 <p>Le sujet demande « la liste <strong>minimale</strong> des actions/commandes réalisées pour créer la machine », que le lecteur peut rejouer. La voici dans l'ordre, pour ${Di('<strong>Debian</strong>', '<strong>Xubuntu</strong>')}. Elle suit exactement ce que fait le script.</p>
 <div class="gen-bar"><button type="button" class="btn" data-act="copy-memo">Copier toute la liste</button><button type="button" class="btn ghost" data-act="dl-memo">Télécharger (.txt)</button></div>
 ${note('retenir', 'Version courte avec les scripts', '<p>Avec les trois scripts de l\'étape « Scripts », la liste se réduit à : (1) créer la VM et installer le système (actions graphiques ci-dessous), (2) <code>sudo bash /opt/butgames/sae-alice.sh</code>, (3) redémarrer, puis <code>bash /opt/butgames/sae-bob.sh</code> en bob. Dans le rapport, donne <strong>les deux versions</strong> : la liste détaillée (ce qui est fait) et la version script (comment le refaire vite).</p>')}
-${g.map((blk, i) => `<h2>${i + 1}. ${esc(blk.t)}${who(blk.who)}</h2>${blk.steps.map(s => (s.x ? `<p>${esc(s.x)}</p>` : '') + (s.c ? sh(s.c, { mode: 'none' }) : '')).join('')}`).join('')}
+${g.map((blk, i) => `<h2>${i + 1}. ${esc(blk.t)}${who(blk.who)}</h2>${blk.steps.map(s => (s.x ? `<p>${esc(s.x)}</p>` : '') + (s.c ? sh(avecFin(s.c, s.f), { mode: 'none' }) : '')).join('')}`).join('')}
 <h2>Annexe : /etc/butgames.bashrc</h2>
-${file('/etc/butgames.bashrc', bashrcTxt())}`;
+${file('/etc/butgames.bashrc', avecFin(bashrcTxt(), 'Règle le PATH de Go et le prompt avec l\'état du dépôt git.'))}`;
   },
   check: [
     ['memo-1', "Ma liste de commandes est dans le rapport, dans l'ordre, et chaque ligne est expliquée."],
@@ -1630,7 +1642,7 @@ sudo chmod 644 /etc/butgames.bashrc
 for rc in /etc/skel/.bashrc /home/alice/.bashrc /home/bob/.bashrc; do
   sudo grep -qF 'butgames.bashrc' "$rc" || echo '[ -r /etc/butgames.bashrc ] && . /etc/butgames.bashrc' | sudo tee -a "$rc" >/dev/null
 done
-source ~/.bashrc`, { once: false });
+source ~/.bashrc`, { once: false, fin: "Crée le fichier du prompt, le rend lisible et le fait charger par alice, bob et les futurs comptes." });
 
 const HELP = {
   permissions: () => ({
@@ -1651,7 +1663,7 @@ const HELP = {
 sudo chmod 644 /etc/butgames.bashrc        # le prompt est lisible par tous
 sudo chmod -R a+rX /usr/local/go /opt/butgames   # Go et les scripts sont lisibles par tous
 sudo gpasswd -d bob sudo                   # bob reste non administrateur (un message « not a member » est normal)
-echo 'bob:bob@but' | sudo chpasswd         # remet le mot de passe imposé`, { once: false }),
+echo 'bob:bob@but' | sudo chpasswd         # remet le mot de passe imposé`, { once: false, fin: "Rend à bob ses fichiers, rend le partagé lisible et remet les mots de passe imposés." }),
     only: 'comptes droits',
     errors: [
       ['<code>bob is not in the sudoers file</code>', 'Bob a tapé <code>sudo</code> : <strong>voulu</strong>.', 'Fais la tâche en alice, ou depuis bob : <code>su - alice</code>, <code>sudo …</code>, <code>exit</code>.'],
@@ -1701,14 +1713,14 @@ sudo locale-gen
 sudo update-locale LANG=en_US.UTF-8
 sudo localectl set-x11-keymap fr pc105
 setxkbmap fr
-sudo timedatectl set-timezone Europe/Paris`, { once: false }),
+sudo timedatectl set-timezone Europe/Paris`, { once: false, fin: "Met à jour, installe les outils VMware, puis règle l'anglais, le clavier français et le fuseau." }),
       sh(R`sudo apt update && sudo apt full-upgrade -y
 sudo apt install -y open-vm-tools open-vm-tools-desktop language-pack-en
 sudo locale-gen en_US.UTF-8
 sudo update-locale LANG=en_US.UTF-8
 sudo localectl set-x11-keymap fr pc105
 setxkbmap fr
-sudo timedatectl set-timezone Europe/Paris`, { once: false })
+sudo timedatectl set-timezone Europe/Paris`, { once: false, fin: "Met à jour, installe les outils VMware, puis règle l'anglais, le clavier français et le fuseau." })
     ),
     only: 'paquets locale clavier fuseau',
     errors: [
@@ -1732,7 +1744,7 @@ echo 'alice:alice@but' | sudo chpasswd
 echo 'bob:bob@but' | sudo chpasswd
 sudo usermod -aG sudo alice
 sudo gpasswd -d bob sudo
-sudo chown -R bob:bob /home/bob`, { once: false }),
+sudo chown -R bob:bob /home/bob`, { once: false, fin: "Crée bob s'il manque, remet les mots de passe, garde alice dans sudo et bob hors sudo." }),
     only: 'comptes droits',
     errors: [
       ['<code>user \'bob\' already exists</code>', 'bob est déjà créé.', 'Parfait : passe aux mots de passe.'],
@@ -1763,7 +1775,7 @@ Signed-By: /usr/share/keyrings/microsoft.gpg
 EOF
 sudo apt update
 sudo apt install -y code
-[ -d /usr/local/go ] && sudo chmod -R a+rX /usr/local/go`, { once: false }),
+[ -d /usr/local/go ] && sudo chmod -R a+rX /usr/local/go`, { once: false, fin: "Installe git, Go (paquet) et VS Code, et rend Go lisible par tous." }),
     only: 'paquets go vscode droits',
     errors: [
       ['<code>go: command not found</code>', 'Go non installé, ou PATH.', '<code>sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go</code>, puis nouveau terminal.'],
@@ -1813,7 +1825,7 @@ go install github.com/go-delve/delve/cmd/dlv@latest
 go install honnef.co/go/tools/cmd/staticcheck@latest
 mkdir -p ~/projets && cd ~/projets
 [ -d hello.sae4.but1.iut ] || git clone --branch langage_go ${GIT_URL}
-cd hello.sae4.but1.iut && git checkout langage_go`, { once: false }),
+cd hello.sae4.but1.iut && git checkout langage_go`, { once: false, fin: "Règle git, installe l'extension et les outils Go, clone le projet sur la branche langage_go." }),
     after: steps([{ w: 'bob', c: './test.sh 2>&1 | tee ~/preuve-test.txt', ok: 'puis, <strong>juste après</strong>, <code>echo "code retour : ${PIPESTATUS[0]}"</code> : <code>0</code> attendu.', once: false }]),
     only: 'bob droits',
     errors: [
@@ -1838,7 +1850,7 @@ cd hello.sae4.but1.iut && git checkout langage_go`, { once: false }),
     fix: sh(R`sudo mkdir -p /opt/butgames
 sudo cp ~/Downloads/sae-*.sh /opt/butgames/
 sudo chmod -R a+rX /opt/butgames
-ls -l /opt/butgames`, { once: false }),
+ls -l /opt/butgames`, { once: false, fin: "Copie les scripts dans le dossier partagé et les rend lisibles par tous." }),
     only: 'partage droits',
     errors: [
       ['<code>cp: cannot stat</code>', 'Scripts pas dans <code>~/Downloads</code>.', '<code>ls ~/Downloads</code> ; retélécharge depuis cette page (Firefox).'],
@@ -1878,7 +1890,7 @@ ls -l /opt/butgames`, { once: false }),
     fix: sh(R`sudo apt autoremove --purge -y
 sudo apt clean
 history -c && rm -f ~/.bash_history
-sudo poweroff`, { once: false }),
+sudo poweroff`, { once: false, fin: "Nettoie la VM, efface l'historique, puis l'éteint." }),
     errors: [
       ['La copie demande « moved or copied »', 'VMware détecte un nouvel emplacement.', 'Réponds <strong>I copied it</strong>.'],
       ['La copie ne démarre pas', 'VM suspendue au lieu d\'éteinte, ou fichiers manquants.', 'Refais la copie VM <strong>éteinte</strong>, tous les fichiers du dossier.'],
@@ -1970,7 +1982,7 @@ addSec({
 ${sh(R`mkdir -p ~/projets/mon-projet && cd ~/projets/mon-projet
 git init                       # le prompt affiche maintenant (main)
 go mod init mon-projet         # crée go.mod : le nom du module
-code .                         # ouvre le dossier dans VS Code`, { once: true })}
+code .                         # ouvre le dossier dans VS Code`, { once: true, fin: "Crée le dossier du projet, y initialise git et le module Go, puis ouvre VS Code." })}
 <p>Crée le fichier <code>main.go</code> (dans VS Code : <em>Nouveau fichier</em>) :</p>
 ${file('main.go', R`package main
 
@@ -1981,7 +1993,7 @@ func main() {
 }`)}
 ${sh(R`go run .          # compile et lance, sans garder de fichier
 go build -o jeu    # produit l'exécutable ./jeu
-./jeu`, { once: false })}
+./jeu`, { once: false, fin: "Compile et lance le programme, puis produit un exécutable." })}
 <p>Un test se place dans un fichier qui finit par <code>_test.go</code> :</p>
 ${file('main_test.go', R`package main
 
@@ -2009,7 +2021,7 @@ ${tbl(['Commande', 'Rôle'], [
 <p>${who('bob')} Dans le dépôt cloné (<strong>les deux lignes de suite</strong>, rien entre les deux) :</p>
 ${sh(R`cd ~/projets/hello.sae4.but1.iut
 ./test.sh 2>&1 | tee ~/preuve-test.txt
-echo "code retour : ${'$'}{PIPESTATUS[0]}"`, { once: false })}
+echo "code retour : ${'$'}{PIPESTATUS[0]}"`, { once: false, fin: "Lance test.sh en gardant la trace dans un fichier, puis affiche son code retour." })}
 <p>La <strong>preuve de lancement</strong> doit montrer : la commande lancée, le prompt avec <code>(langage_go)</code>, la sortie du test, et le <strong>code retour 0</strong>. Prends-la en capture d'écran du terminal, et garde le fichier <code>preuve-test.txt</code>. Rappelle que le test <strong>n'est pas exhaustif</strong> : ajoute la création et le lancement de ton projet Go comme second contrôle.</p>
 ${note('attention', 'Où mettre quoi', '<p>La <strong>trace du test</strong> va dans la <strong>notice</strong>. Le <strong>portfolio</strong>, lui, n\'accepte <strong>pas de trace d\'exécution shell</strong> : seulement du texte et au plus deux captures « propres » (par exemple le bureau avec VS Code ouvert sur un projet Go).</p>')}
 
