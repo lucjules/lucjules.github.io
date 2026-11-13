@@ -7,6 +7,7 @@ Mon site, en deux espaces choisis depuis l'accueil (`index.html`) :
   - [Aérélia](https://lucjules.github.io/LunaPoke/), aventure rétro de capture de créatures, dans son propre dépôt (`LunaPoke`) ;
   - [Voie libre](https://lucjules.github.io/jeux/voie-libre/) 1.0, course en 3D (WebGL) à travers les quartiers d'une ville sur trois voies (course libre, Tour de la ville en 15 niveaux, Défi du jour, événements saisonniers), dans ce dépôt (`jeux/voie-libre/`) ; il s'installe aussi comme une appli à part (son propre manifeste et ses icônes dans `jeux/voie-libre/icones/`) ;
   - [Mine Clic](https://lucjules.github.io/jeux/mine-clic/), jeu de clic dans un monde de blocs : miner (combos, blocs brillants), acheter des machines (×1, ×10, ×100 ou Max) et des centaines d'améliorations, capacités à recharge, missions, coffres et creepers, événement de Noël, un boss par dimension, des familiers, collection de blocs à maîtriser, cycle jour et nuit, voyager de la surface jusqu'aux confins du monde, des progrès (dont des secrets), renaissances avec étoiles du Nether dont les paliers ne s'arrêtent jamais, boutique céleste sans fond, musique d'ambiance ; une partie complète se compte en centaines d'heures (voir `outils/simuler-mine-clic.js`). Dans ce dépôt (`jeux/mine-clic/`), installable lui aussi comme une appli à part.
+  - [Filon Infini](https://lucjules.github.io/jeux/filon-infini/), jeu incrémental : un clicker, puis un arbre de compétences immense (un seul chemin, quelques voies annexes) à chacun des cinq paliers (Pièces, Renaissance, Ascension, Transcendance, Divinité), avec automatisations, nœuds « garder » et Apothéose finale, dans ce dépôt (`jeux/filon-infini/`, un seul fichier) ;
 
 **En ligne :** https://lucjules.github.io/
 
@@ -42,6 +43,7 @@ jeux/voie-libre/       jeu Voie libre 1.0 : index.html, style.css, et dans js/ d
                        progression.js (sauvegarde, missions, trophées, boutique), rendu/ (3D avec Three.js),
                        audio.js (sons et musique synthétisés), interface.js, controles.js, main.js
 jeux/voie-libre/lib/   Three.js (licence MIT), copié dans le dépôt pour fonctionner hors ligne
+jeux/filon-infini/     jeu Filon Infini : un seul index.html (les arbres sont générés et calibrés par simulation)
 jeux/mine-clic/        jeu Mine Clic : index.html, style.css, et dans js/ trois scripts classiques (sans module,
                        il s'ouvre donc aussi en double-cliquant) : donnees.js (blocs, dimensions, machines,
                        améliorations, progrès, pouvoirs, capacités, missions, dessins en pixels), textures.js (textures, icônes et cube 3D
@@ -63,6 +65,7 @@ sw.js, manifest.webmanifest   application installable et hors ligne
 outils/construire.js   régénère l'index de recherche et la liste hors ligne
 outils/tester-voie-libre.js   tests du jeu Voie libre (parcours franchissable, mécanismes, progression, rendu 3D)
 outils/tester-exercices-sql.js  vérifie les bases et les exercices du chapitre 1 bis
+outils/filon-infini/         sources de Filon Infini : moteur, interface, générateur d'arbres calibré par simulation (gen.js) et build.js
 outils/tester-mine-clic.js    tests du jeu Mine Clic (clics, achats, Max, capacités, missions, coffres, dimensions, renaissance, pouvoirs, sauvegarde, téléphone)
 outils/simuler-mine-clic.js   simulateur d'économie de Mine Clic : mesure la durée d'une partie complète d'un joueur « glouton » (et compare deux versions du jeu)
 .github/workflows/     lance outils/construire.js automatiquement sur GitHub

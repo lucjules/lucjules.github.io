@@ -34,6 +34,10 @@ var JEUX={
   if(!n)return['Voie libre : pas encore joué',null];
   var e=Array.isArray(d.niveaux)?d.niveaux.reduce(function(s,x){return s+Math.min(3,Math.max(0,Math.floor(+x)||0))},0):0;
   return['Voie libre : record '+Math.max(0,Math.floor(+d.record)||0).toLocaleString('fr-FR')+' · ★ '+e+' / 45 · '+n+' course'+(n>1?'s':''),null]},
+ 'filon-infini':function(){var d=lire('filon-infini-v2'),n=d&&d.nodes?Object.keys(d.nodes).length:0;
+  if(!n&&!(d&&+d.clicks>0))return['Filon Infini : pas encore commencé',0];
+  var t=1;for(var i=1;i<=4;i++)if(d.disc&&d.disc['T'+i])t=i+1;var pal=['Pièces','Renaissance','Ascension','Transcendance','Divinité'][t-1],tot=Math.max(n,Math.floor(+d.nt)||500),s=Math.max(0,+d.played||0);
+  return['Filon Infini : '+n+' compétences · palier '+pal+' · '+Math.floor(s/3600)+' h '+String(Math.floor(s/60)%60).padStart(2,'0')+' de jeu'+(d.ended?' · terminé ★':''),Math.min(1,n/tot)]},
  'mine-clic':function(){var d=lire('mine-clic'),t=d&&+d.totalAll>0?+d.totalAll:0;
   if(!t)return['Mine Clic : pas encore commencé',0];
   var n=Array.isArray(d.progres)?d.progres.length:0,tot=Math.max(n,Math.floor(+d.nbProgres)||160),e=Math.floor(+d.etoiles)||0;

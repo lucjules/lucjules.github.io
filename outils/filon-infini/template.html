@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Filon Infini · Mes jeux</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Filon Infini : un jeu incrémental de mine. Clique, débloque un arbre de compétences immense, puis renais, ascensionne, transcende et deviens divin.">
+<meta name="theme-color" content="#0c0f1e">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../../assets/fonts/fonts.css">
+<style>
+/*__CSS__*/
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="head">
+    <a class="back" href="../../jeux.html" aria-label="Retour à Mes jeux" title="Retour à Mes jeux">←</a>
+    <div><h1>Filon Infini</h1><small>Un clic, puis un arbre immense.</small></div>
+    <span class="sp"></span>
+    <span class="savestate mono" id="savestate" aria-live="polite"></span>
+    <button class="mini" data-act="save" title="Sauvegarder maintenant">Sauver</button>
+    <button class="mini danger" id="wipe" data-act="wipe">Tout effacer</button>
+  </header>
+</div>
+
+<div class="resbar" role="status" aria-label="Ressources"><div class="wrap"><div class="res" id="res"></div></div></div>
+
+<div class="wrap">
+  <main>
+    <div class="banner" id="endbanner" hidden><b style="color:var(--c4)">Apothéose accomplie.</b> Tu as terminé le jeu. Tu peux continuer à jouer librement.</div>
+
+    <div class="panel clicker">
+      <button class="ore" id="ore" data-act="click" aria-label="Miner : gagne des pièces"><span>⛏️</span></button>
+      <div class="cstat"><span>+<b class="mono" id="clickval">1</b> par clic</span><span><b class="mono" id="psec">0</b> pièces /s</span></div>
+      <div class="fx" id="fx"></div>
+    </div>
+
+    <div class="panel goal" id="goal">
+      <div class="gl"><span>Objectif</span><span></span></div>
+      <div class="gt">…</div>
+      <div class="bar"><i></i></div>
+      <div class="gn mono"><span></span><span></span></div>
+    </div>
+
+    <div id="sections" style="display:flex;flex-direction:column;gap:14px"></div>
+
+    <section class="panel chainWrap" aria-label="Chaîne d’automatisation">
+      <h2>Chaîne d’automatisation</h2>
+      <p>Chaque palier automatise celui d’en dessous. Une pastille s’allume quand tu la débloques ; touche-la pour la couper ou la relancer.</p>
+      <div class="chain-scroll"><div class="chain" id="chain"></div></div>
+      <div class="chain-none" id="chainnone">Aucune automatisation débloquée pour l’instant.</div>
+    </section>
+  </main>
+  <footer>Sauvegarde automatique dans ce navigateur, sur cet appareil. Le jeu continue quand tu es absent, jusqu’à 3 heures.</footer>
+</div>
+
+<div id="toasts" aria-live="polite"></div>
+<div class="win" id="win" hidden role="dialog" aria-modal="true" aria-label="Fin du jeu">
+  <div class="card">
+    <div class="big">🌟</div>
+    <h2>Apothéose !</h2>
+    <p>Tu es devenu la mine elle-même. Le filon est infini, et il porte ton nom.</p>
+    <div class="stats" id="winstats"></div>
+    <button class="mini" data-act="closewin">Continuer à jouer</button>
+  </div>
+</div>
+
+<script>
+/*__DATA__*/
+</script>
+<script>
+/*__CORE__*/
+</script>
+<script>
+/*__UI__*/
+</script>
+</body>
+</html>

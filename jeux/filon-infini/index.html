@@ -1,656 +1,243 @@
 <!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:dark}body{margin:0}[hidden]{display:none!important}</style></head><body>
-<title>Filon Infini</title>
-<meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Filon Infini · Mes jeux</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Filon Infini : un jeu incrémental de mine. Clique, débloque un arbre de compétences immense, puis renais, ascensionne, transcende et deviens divin.">
+<meta name="theme-color" content="#0c0f1e">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../../assets/fonts/fonts.css">
 <style>
-/* Disposition : barre de ressources collante, mine à gauche (clic + générateurs), onglets de paliers à droite, schéma d'automatisation en bas. */
 :root{
   color-scheme:dark;
-  --bg:#0c0e1d; --bg2:#12152b; --panel:#181c38; --panel2:#212648; --edge:#2c3363; --edge2:#3a4281;
-  --text:#f3f5ff; --mute:#a3abd8; --dim:#6b74a6;
-  --c0:#ffc93c; --c1:#4ade80; --c2:#38bdf8; --c3:#b57bff; --c4:#ff6b8f;
-  --bad:#ff6b6b; --good:#4ade80;
-  --font:'Fredoka','Trebuchet MS','Segoe UI',system-ui,sans-serif;
+  --bg:#0c0f1e; --bg2:#10142a; --panel:#151a33; --panel2:#1b2142; --edge:#29315d; --edge2:#3a4486;
+  --text:#eef1ff; --mute:#9ba4d2; --dim:#69729f;
+  --c0:#f5c542; --c1:#4fd68a; --c2:#46b8f0; --c3:#b08cff; --c4:#ff7aa2;
+  --bad:#ff7b7b; --good:#5be38f;
+  --font:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
   --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --gutter-l:max(16px,env(safe-area-inset-left,0px));
-  --gutter-r:max(16px,env(safe-area-inset-right,0px));
+  --amp:0px;
+  --gl:max(16px,env(safe-area-inset-left,0px)); --gr:max(16px,env(safe-area-inset-right,0px));
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html{-webkit-text-size-adjust:100%}
-body{
-  margin:0; background-color:var(--bg); color:var(--text);
-  font-family:var(--font); font-weight:500; font-size:15px; line-height:1.35;
-  background-image:linear-gradient(rgba(255,255,255,.028) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.028) 1px,transparent 1px);
-  background-size:34px 34px;
-  -webkit-tap-highlight-color:transparent;
-}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.4;
+  background-image:radial-gradient(1200px 500px at 50% -120px,rgba(90,110,255,.13),transparent 70%);-webkit-tap-highlight-color:transparent}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg2);z-index:60}
 button{font:inherit;color:inherit}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
-h1,h2,h3{margin:0;font-weight:600;letter-spacing:.01em}
-.wrap{padding-left:var(--gutter-l);padding-right:var(--gutter-r);max-width:1280px;margin:0 auto}
+h1,h2,h3,p{margin:0}
+.wrap{max-width:820px;margin:0 auto;padding-left:var(--gl);padding-right:var(--gr)}
 
-/* ---------- en-tête ---------- */
-.head{padding-block:14px 10px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
-.brand{display:flex;align-items:center;gap:10px}
-.logo{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:22px;
-  background:linear-gradient(160deg,#ffe28a,var(--c0) 55%,#d99400);box-shadow:0 4px 0 #8a5a00}
-.brand h1{font-size:22px;line-height:1}
-.brand small{display:block;color:var(--mute);font-size:12px;font-weight:500}
-.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.seg{display:inline-flex;background:var(--bg2);border:2px solid var(--edge);border-radius:12px;padding:3px;gap:3px}
-.seg button{border:0;background:transparent;color:var(--mute);padding:5px 10px;border-radius:8px;cursor:pointer;font-weight:600;min-width:40px}
-.seg button[aria-pressed="true"]{background:var(--c0);color:#1b1500;box-shadow:0 2px 0 #8a5a00}
-.mini{border:2px solid var(--edge);background:var(--panel);color:var(--text);border-radius:12px;padding:6px 12px;cursor:pointer;font-weight:600;box-shadow:0 3px 0 rgba(0,0,0,.35)}
-.mini:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.35)}
+/* en-tête */
+.head{display:flex;align-items:center;gap:12px;padding-block:14px 12px}
+.back{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;text-decoration:none;color:var(--text);background:var(--panel);border:1px solid var(--edge);font-size:18px}
+.head h1{font-size:22px;font-weight:700;letter-spacing:-.01em;line-height:1}
+.head small{display:block;color:var(--mute);font-size:12.5px;margin-top:3px}
+.sp{flex:1}
+.mini{border:1px solid var(--edge);background:var(--panel);color:var(--text);border-radius:10px;padding:7px 12px;cursor:pointer;font-weight:600;font-size:13.5px}
+.mini:hover{border-color:var(--edge2)}
 .mini.danger.armed{background:var(--bad);border-color:var(--bad);color:#2a0000}
-.savestate{font-size:12px;color:var(--dim);min-width:74px}
+.savestate{font-size:12px;color:var(--dim);min-width:70px;text-align:right}
 
-/* ---------- barre de ressources ---------- */
-.resbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:color-mix(in srgb,var(--bg2) 94%,transparent);
-  border-block:2px solid var(--edge);backdrop-filter:blur(6px)}
-.res{display:flex;gap:10px;padding-block:8px;overflow-x:auto;scrollbar-width:none}
+/* ressources */
+.resbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:rgba(12,15,30,.92);backdrop-filter:blur(8px);border-block:1px solid var(--edge)}
+.res{display:flex;gap:8px;padding-block:8px;overflow-x:auto;scrollbar-width:none}
 .res::-webkit-scrollbar{display:none}
-.chip{--tc:var(--c0);flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:6px 14px 6px 8px;border-radius:14px;
-  background:color-mix(in srgb,var(--tc) 14%,var(--panel));border:2px solid color-mix(in srgb,var(--tc) 55%,var(--edge));
-  box-shadow:0 3px 0 color-mix(in srgb,var(--tc) 30%,#000)}
-.chip .ico{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:19px;background:var(--tc);box-shadow:inset 0 -3px 0 rgba(0,0,0,.2)}
-.chip b{display:block;font-size:17px;line-height:1.05;color:var(--text)}
+.chip{--tc:var(--c0);flex:0 0 auto;display:flex;align-items:center;gap:9px;padding:5px 13px 5px 6px;border-radius:12px;background:color-mix(in srgb,var(--tc) 12%,var(--panel));border:1px solid color-mix(in srgb,var(--tc) 45%,var(--edge))}
+.chip .ico{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:16px;background:color-mix(in srgb,var(--tc) 85%,#000)}
+.chip b{display:block;font-size:16px;line-height:1.05}
 .chip small{display:block;font-size:11px;color:var(--mute);line-height:1.2}
 .chip .pend{color:var(--tc);font-weight:700}
-.chip.fresh{animation:pop .7s cubic-bezier(.2,1.6,.4,1) both}
 
-/* ---------- grille principale ---------- */
-.main{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;padding-block:16px 8px}
-@media(min-width:960px){.main{grid-template-columns:minmax(320px,430px) minmax(0,1fr);align-items:start}}
-.panel{background:var(--panel);border:2px solid var(--edge);border-radius:18px;box-shadow:0 5px 0 rgba(0,0,0,.32);padding:14px}
-.panel h2{font-size:17px}
-.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+main{padding-block:16px 10px;display:flex;flex-direction:column;gap:14px}
+.panel{background:var(--panel);border:1px solid var(--edge);border-radius:18px;padding:16px}
 
-/* ---------- objectif ---------- */
-.goal .gl{display:flex;justify-content:space-between;gap:10px;align-items:baseline;color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:600}
-.goal .gt{font-size:17px;font-weight:600;margin:4px 0 8px}
-.bar{height:16px;border-radius:9px;background:var(--bg);border:2px solid var(--edge);overflow:hidden;position:relative}
-.bar i{display:block;height:100%;width:0;border-radius:7px;background:repeating-linear-gradient(-45deg,var(--tc,var(--c0)) 0 10px,color-mix(in srgb,var(--tc,var(--c0)) 78%,#fff) 10px 20px);transition:width .25s}
-.goal .gn{margin-top:6px;font-size:12px;color:var(--mute);display:flex;justify-content:space-between;gap:8px}
-.goal.done .gt{color:var(--good)}
-
-/* ---------- la mine ---------- */
-.oreBox{display:flex;flex-direction:column;align-items:center;gap:10px;position:relative;padding-block:18px}
-.ore{width:min(210px,64vw);aspect-ratio:1;border:0;border-radius:30px;cursor:pointer;position:relative;display:grid;place-items:center;font-size:88px;line-height:1;
-  background:
-    radial-gradient(circle at 27% 15%,rgba(255,255,255,.7) 0 5.5%,transparent 6.5%),
-    radial-gradient(circle at 73% 15%,rgba(255,255,255,.7) 0 5.5%,transparent 6.5%),
-    radial-gradient(circle at 30% 28%,#fff1b8,var(--c0) 48%,#e19a00);
-  box-shadow:0 11px 0 #8a5a00,0 22px 34px rgba(0,0,0,.5),inset 0 -12px 0 rgba(0,0,0,.14);
+/* clicker */
+.clicker{display:flex;flex-direction:column;align-items:center;gap:12px;padding-block:22px 18px;position:relative;overflow:hidden}
+.ore{width:min(190px,56vw);aspect-ratio:1;border:0;border-radius:50%;cursor:pointer;display:grid;place-items:center;font-size:80px;line-height:1;position:relative;
+  background:radial-gradient(circle at 32% 28%,#fff0b0,var(--c0) 45%,#cf8f00);
+  box-shadow:0 8px 0 #8a5a00,0 18px 34px rgba(0,0,0,.45),inset 0 -10px 0 rgba(0,0,0,.13);
   transition:transform .05s,box-shadow .05s;touch-action:manipulation;user-select:none;-webkit-user-select:none}
-.ore:active,.ore.hit{transform:translateY(8px);box-shadow:0 3px 0 #8a5a00,0 10px 18px rgba(0,0,0,.5),inset 0 -12px 0 rgba(0,0,0,.14)}
-.ore span{filter:drop-shadow(0 4px 0 rgba(0,0,0,.25));pointer-events:none}
-.oreinfo{text-align:center;color:var(--mute);font-size:13px}
-.oreinfo b{color:var(--c0);font-size:19px}
+.ore:active,.ore.hit{transform:translateY(6px);box-shadow:0 2px 0 #8a5a00,0 8px 16px rgba(0,0,0,.45),inset 0 -10px 0 rgba(0,0,0,.13)}
+.ore span{pointer-events:none;filter:drop-shadow(0 3px 0 rgba(0,0,0,.25))}
+.cstat{text-align:center;color:var(--mute);font-size:13.5px;display:flex;gap:6px 18px;flex-wrap:wrap;justify-content:center}
+.cstat b{color:var(--c0);font-size:17px}
 .fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-.fl{position:absolute;font-family:var(--mono);font-weight:700;color:var(--c0);text-shadow:0 2px 0 #4a3000,0 0 8px rgba(255,201,60,.5);font-size:18px;white-space:nowrap;
-  animation:floaty .9s ease-out forwards;transform:translate(-50%,-50%)}
-@keyframes floaty{to{transform:translate(-50%,-190%);opacity:0}}
+.fl{position:absolute;font-family:var(--mono);font-weight:700;color:var(--c0);text-shadow:0 2px 0 #4a3000;font-size:17px;white-space:nowrap;animation:floaty .9s ease-out forwards;transform:translate(-50%,-50%)}
+@keyframes floaty{to{transform:translate(-50%,-200%);opacity:0}}
+.goal{padding:12px 16px}
+.goal .gl{display:flex;justify-content:space-between;gap:10px;color:var(--mute);font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+.goal .gt{font-size:16px;font-weight:600;margin:3px 0 8px}
+.bar{height:12px;border-radius:7px;background:var(--bg);border:1px solid var(--edge);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--tc,var(--c0));transition:width .25s}
+.goal .gn{margin-top:5px;font-size:12px;color:var(--mute);display:flex;justify-content:space-between}
 
-/* ---------- générateurs ---------- */
-.gens-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
-.gens-head .seg button{padding:4px 8px;min-width:34px;font-size:13px}
-#gens{display:flex;flex-direction:column;gap:10px}
-.gen{--tc:var(--c0);display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px;border-radius:14px;background:var(--panel2);border:2px solid var(--edge)}
-.gen.fresh{animation:pop .7s cubic-bezier(.2,1.6,.4,1) both;border-color:var(--c0);box-shadow:0 0 0 4px rgba(255,201,60,.22)}
-.gico{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;font-size:26px;background:linear-gradient(160deg,#323a78,#242a56);box-shadow:inset 0 -4px 0 rgba(0,0,0,.25)}
-.ginfo{min-width:0}
-.gname{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
-.gname b{font-size:16px}
-.gname .cnt{color:var(--c0);font-size:14px;font-weight:700}
-.gdesc{font-size:12px;color:var(--mute);line-height:1.25}
-.gprod{font-size:12px;color:var(--text)}
-.gprod em{font-style:normal;color:var(--dim)}
-.buy{--tc:var(--c0);border:0;border-radius:12px;padding:8px 12px;min-width:96px;cursor:pointer;display:flex;flex-direction:column;align-items:center;line-height:1.15;
-  background:var(--tc);color:#1b1500;font-weight:700;box-shadow:0 4px 0 color-mix(in srgb,var(--tc) 50%,#000);transition:transform .05s}
-.buy:active{transform:translateY(3px);box-shadow:0 1px 0 color-mix(in srgb,var(--tc) 50%,#000)}
-.buy .bq{font-size:11px;opacity:.75}
-.buy .bc{font-size:14px}
-.buy.off{background:#2b3160;color:var(--dim);box-shadow:0 4px 0 #181c3b;cursor:not-allowed}
-.buy.off:active{transform:none;box-shadow:0 4px 0 #181c3b}
+/* sections déroulantes */
+.sec{--tc:var(--c0);background:var(--panel);border:1px solid color-mix(in srgb,var(--tc) 40%,var(--edge));border-radius:18px;overflow:hidden}
+.sec.fresh{animation:pop .7s cubic-bezier(.2,1.4,.4,1) both}
+.sec-head{width:100%;display:flex;align-items:center;gap:12px;padding:12px 16px;border:0;cursor:pointer;text-align:left;background:linear-gradient(90deg,color-mix(in srgb,var(--tc) 22%,var(--panel2)),var(--panel2))}
+.sec-head .ico{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-size:21px;background:color-mix(in srgb,var(--tc) 85%,#000);flex:0 0 auto}
+.sec-head .st{flex:1;min-width:0}
+.sec-head b{display:block;font-size:18px;line-height:1.1}
+.sec-head small{color:var(--mute);font-size:12.5px}
+.sec-head .cur{font-size:16px;font-weight:700;color:var(--tc);text-align:right}
+.sec-head .chev{color:var(--mute);transition:transform .15s;font-size:14px}
+.sec.shut .chev{transform:rotate(-90deg)}
+.sec.shut .sec-body{display:none}
+.sec-body{padding:14px 14px 18px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--tc);display:none;flex:0 0 auto}
+.sec.has .dot{display:block}
 
-/* ---------- onglets ---------- */
-.side{min-width:0;display:flex;flex-direction:column;gap:12px}
-.tabs{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:thin}
-.tab{--tc:var(--c0);flex:0 0 auto;border:2px solid var(--edge);background:var(--panel);color:var(--mute);border-radius:14px 14px 10px 10px;padding:8px 14px;cursor:pointer;font-weight:600;display:flex;gap:8px;align-items:center;
-  box-shadow:0 4px 0 rgba(0,0,0,.3);position:relative}
-.tab[aria-selected="true"]{background:var(--tc);color:#101018;border-color:var(--tc);box-shadow:0 4px 0 color-mix(in srgb,var(--tc) 50%,#000)}
-.tab .dot{position:absolute;top:-5px;right:-4px;width:14px;height:14px;border-radius:50%;background:var(--tc);border:2px solid var(--bg);display:none}
-.tab.has .dot{display:block;animation:pulse .7s ease-in-out infinite alternate}
-.tab.ready::after{content:"✦";position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--tc)}
-.tab.fresh{animation:pop .8s cubic-bezier(.2,1.6,.4,1) both}
-.tabbody{padding:14px;min-height:260px}
-.empty{padding:34px 18px;text-align:center;color:var(--mute)}
-.empty b{display:block;font-size:18px;color:var(--text);margin-bottom:6px}
-.empty .big{font-size:44px;display:block;margin-bottom:6px;filter:grayscale(.3)}
-
-/* ---------- améliorations de pièces ---------- */
-.uphead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
-.uphead small{color:var(--mute)}
-.uplist{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
-.upg{--tc:var(--c0);display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;padding:8px 10px;border-radius:14px;border:2px solid var(--edge);
-  background:var(--panel2);cursor:pointer;box-shadow:0 4px 0 rgba(0,0,0,.3);min-width:0}
-.upg .uico{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;font-size:21px;background:linear-gradient(160deg,#323a78,#242a56)}
-.upg b{font-size:14px;display:block;line-height:1.15}
-.upg small{display:block;color:var(--mute);font-size:12px;line-height:1.25}
-.upg .need{color:#ffb86b}
-.upg .need.ok{color:var(--good)}
-.upg .ucost{font-size:13px;font-weight:700;color:var(--bad);white-space:nowrap}
-.upg.can{border-color:var(--c0);box-shadow:0 4px 0 #8a5a00,0 0 0 3px rgba(255,201,60,.18)}
-.upg.can .ucost{color:var(--good)}
-.upg:not(.can){cursor:not-allowed}
-.upg.fresh{animation:pop .7s cubic-bezier(.2,1.6,.4,1) both;border-color:var(--c0)}
-.lockedlist{margin-top:14px}
-.lockedlist summary{cursor:pointer;color:var(--mute);font-size:13px}
-.lockedlist ul{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
-.lockedlist li{font-size:12px;color:var(--dim);display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--edge);padding:3px 0}
-
-/* ---------- carte de prestige ---------- */
-.pcard{--tc:var(--c1);border-radius:16px;border:2px solid color-mix(in srgb,var(--tc) 65%,var(--edge));background:linear-gradient(180deg,color-mix(in srgb,var(--tc) 16%,var(--panel2)),var(--panel2));padding:14px;display:flex;flex-direction:column;gap:10px}
-.pc-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
-.pc-title{display:flex;align-items:center;gap:10px}
-.pc-title .ico{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:23px;background:var(--tc);box-shadow:inset 0 -4px 0 rgba(0,0,0,.2)}
-.pc-title h2{font-size:21px}
-.pc-title small{display:block;color:var(--mute);font-size:12px;font-weight:500}
-.pc-cur{text-align:right}
-.pc-cur b{font-size:26px;color:var(--tc);line-height:1}
-.pc-cur small{display:block;color:var(--mute);font-size:12px}
-.pc-formula{font-size:13px;color:var(--mute);background:rgba(0,0,0,.2);border-radius:10px;padding:8px 10px;line-height:1.5}
+/* carte de prestige */
+.pcard{border-radius:14px;border:1px solid color-mix(in srgb,var(--tc) 50%,var(--edge));background:color-mix(in srgb,var(--tc) 7%,var(--panel2));padding:14px;display:flex;flex-direction:column;gap:10px}
+.pc-formula{font-size:13px;color:var(--mute);background:rgba(0,0,0,.22);border-radius:10px;padding:8px 10px;line-height:1.5}
 .pc-formula .f2{display:block;color:var(--text);font-size:12.5px;margin-top:2px;word-break:break-word}
 .pc-sub{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--mute);margin-top:4px;flex-wrap:wrap}
-.pbtn{border:0;border-radius:14px;padding:11px 14px 12px;cursor:pointer;text-align:left;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;
-  background:var(--tc);color:#0d1017;box-shadow:0 5px 0 color-mix(in srgb,var(--tc) 50%,#000);transition:transform .05s}
-.pbtn:active{transform:translateY(4px);box-shadow:0 1px 0 color-mix(in srgb,var(--tc) 50%,#000)}
-.pbtn .pb-main{font-size:18px;font-weight:700}
-.pbtn .pb-gain{font-size:20px;font-weight:700;text-align:right}
-.pbtn .pb-f{grid-column:1/-1;font-size:11.5px;opacity:.85;word-break:break-word}
-.pbtn.off{background:#2b3160;color:var(--mute);box-shadow:0 5px 0 #181c3b;cursor:not-allowed}
-.pbtn.off:active{transform:none}
-.pbtn.ready{animation:glow 1s ease-in-out infinite alternate}
+.pbtn{border:0;border-radius:12px;padding:11px 14px;cursor:pointer;text-align:left;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;background:var(--tc);color:#0b0e18;font-weight:700}
+.pbtn .pb-main{font-size:17px}
+.pbtn .pb-gain{font-size:19px;text-align:right}
+.pbtn .pb-f{grid-column:1/-1;font-size:11.5px;font-weight:500;opacity:.85;word-break:break-word}
+.pbtn.off{background:#272e5a;color:var(--mute);cursor:not-allowed}
+.pbtn.ready{animation:glow 1.1s ease-in-out infinite alternate}
 .pc-note{font-size:12px;color:var(--dim)}
-
-/* ---------- automatisations ---------- */
-.autos{border:2px dashed color-mix(in srgb,var(--tc,var(--c1)) 50%,var(--edge));border-radius:14px;padding:10px 12px;margin-top:12px;display:flex;flex-direction:column;gap:8px}
-.autos h3{font-size:14px;color:var(--mute)}
-.tog{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;font-size:14px;background:none;border:0;padding:2px 0;text-align:left}
-.tog .sw{flex:0 0 auto;width:42px;height:24px;border-radius:14px;background:#2b3160;position:relative;transition:background .15s;border:2px solid var(--edge)}
-.tog .sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#8b93c7;transition:transform .15s,background .15s}
-.tog.on .sw{background:color-mix(in srgb,var(--tc,var(--c1)) 70%,#000);border-color:var(--tc,var(--c1))}
-.tog.on .sw::after{transform:translateX(18px);background:#fff}
+.autos{margin-top:12px;border:1px dashed color-mix(in srgb,var(--tc) 45%,var(--edge));border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.autos h3{font-size:13px;color:var(--mute);font-weight:600}
+.tog{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;background:none;border:0;padding:2px 0;text-align:left}
+.tog .sw{flex:0 0 auto;width:40px;height:23px;border-radius:13px;background:#272e5a;position:relative;border:1px solid var(--edge)}
+.tog .sw::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#8b93c7;transition:transform .15s}
+.tog.on .sw{background:color-mix(in srgb,var(--tc) 65%,#000);border-color:var(--tc)}
+.tog.on .sw::after{transform:translateX(17px);background:#fff}
 .tog small{color:var(--dim);font-size:12px;margin-left:auto}
 .thr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:var(--mute)}
 .thr .st{display:inline-flex;align-items:center;gap:3px}
-.thr button{border:2px solid var(--edge);background:var(--panel);color:var(--text);border-radius:8px;width:30px;height:28px;cursor:pointer;font-weight:700;line-height:1}
-.thr button:active{transform:translateY(1px)}
-.thr b{min-width:54px;text-align:center;color:var(--tc,var(--c1));font-size:15px}
+.thr button{border:1px solid var(--edge);background:var(--panel);color:var(--text);border-radius:8px;width:30px;height:28px;cursor:pointer;font-weight:700}
+.thr b{min-width:54px;text-align:center;color:var(--tc);font-size:15px}
 
-/* ---------- arbre ---------- */
-.tree{--tc:var(--c1);position:relative;display:flex;flex-direction:column;gap:30px;padding:8px 0 4px;margin-top:14px}
-.tree svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:0}
-.trow{display:flex;justify-content:center;gap:14px;position:relative;z-index:1}
-.ln{fill:none;stroke:var(--edge2);stroke-width:3;stroke-dasharray:6 7;stroke-linecap:round}
+/* arbre : un chemin qui serpente */
+.tbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:14px 2px 4px;flex-wrap:wrap}
+.tbar small{color:var(--mute);font-size:12.5px}
+.tbar .mini{padding:6px 12px}
+.tbar .mini.on{background:var(--tc);border-color:var(--tc);color:#0b0e18}
+.tree{position:relative;display:flex;flex-direction:column;align-items:center;gap:30px;padding:18px 0 6px;--amp:0px}
+.tree svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.ln{fill:none;stroke:var(--edge2);stroke-width:3;stroke-dasharray:5 7;stroke-linecap:round}
+.ln.own{stroke:var(--tc);stroke-dasharray:none;stroke-width:4;opacity:.8}
 .ln.act{stroke:color-mix(in srgb,var(--tc) 70%,#fff);stroke-dasharray:none}
-.ln.own{stroke:var(--tc);stroke-dasharray:none;stroke-width:4}
-.node{--tc:var(--c1);position:relative;z-index:1;flex:1 1 0;min-width:0;max-width:240px;display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;
-  padding:10px 12px 11px;border-radius:14px;border:2px solid var(--edge);background:var(--panel2);cursor:pointer;box-shadow:0 4px 0 rgba(0,0,0,.35);transition:transform .05s}
-.node .nico{font-size:24px;line-height:1}
-.node .nname{font-size:14px;line-height:1.15;font-weight:600}
-.node .ndesc{font-size:12px;color:var(--mute);line-height:1.25}
-.node .ntag{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:2px 6px;border-radius:6px;background:rgba(255,255,255,.07);color:var(--tc)}
-.node .ncost{margin-top:auto;padding-top:4px;font-size:13px;font-weight:700;color:var(--bad)}
-.node.can{border-color:var(--tc);box-shadow:0 4px 0 color-mix(in srgb,var(--tc) 50%,#000),0 0 0 3px color-mix(in srgb,var(--tc) 28%,transparent)}
-.node.can .ncost{color:var(--good)}
-.node.can:active{transform:translateY(3px)}
-.node.lock{opacity:.5;cursor:not-allowed}
-.node.own{background:color-mix(in srgb,var(--tc) 20%,var(--panel2));border-color:var(--tc);cursor:default}
-.node.own .ncost{color:var(--tc)}
-.node.final{border-width:3px}
-.node.fresh{animation:pop .8s cubic-bezier(.2,1.6,.4,1) both;border-color:var(--tc)}
-.node.fresh::after,.upg.fresh::after,.gen.fresh::after{content:"NOUVEAU";position:absolute;top:-9px;right:8px;font-size:10px;font-weight:700;letter-spacing:.08em;background:var(--c0);color:#241a00;padding:2px 7px;border-radius:7px}
-.upg,.gen{position:relative}
+.more{align-self:center;border:1px dashed var(--edge2);background:transparent;color:var(--mute);border-radius:10px;padding:6px 12px;cursor:pointer;font-size:13px;position:relative;z-index:1}
+.n{--tc:var(--c0);position:relative;z-index:1;width:min(330px,calc(100% - 8px));transform:translateX(calc(var(--s,0) * var(--amp)));
+  display:grid;grid-template-columns:42px minmax(0,1fr);gap:2px 12px;align-items:center;text-align:left;padding:10px 12px;border-radius:14px;border:1px solid var(--edge);background:var(--panel2);cursor:pointer}
+.n .nico{grid-row:1/4;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:22px;background:#242b57;align-self:start}
+.n .nname{font-size:15px;font-weight:600;line-height:1.2}
+.n .ndesc{font-size:12.5px;color:var(--mute);line-height:1.3}
+.n .ncost{font-size:13px;font-weight:700;color:var(--bad);margin-top:2px}
+.n .ntag{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--tc)}
+.n.can{border-color:var(--tc);box-shadow:0 0 0 3px color-mix(in srgb,var(--tc) 22%,transparent)}
+.n.can .ncost{color:var(--good)}
+.n.lock{opacity:.5;cursor:not-allowed}
+.n.own{cursor:default;padding:7px 10px;background:color-mix(in srgb,var(--tc) 12%,var(--panel));border-color:color-mix(in srgb,var(--tc) 45%,var(--edge))}
+.n.own .nico{width:34px;height:34px;font-size:18px;grid-row:1/3;background:color-mix(in srgb,var(--tc) 30%,#1a2040)}
+.n.own .nname{font-size:13.5px}
+.n.own .ndesc{font-size:12px}
+.n.own .ncost{display:none}
+.n.final{border-width:2px}
+.n.fresh{animation:pop .8s cubic-bezier(.2,1.5,.4,1) both;border-color:var(--tc)}
+.n.fresh::after{content:"NOUVEAU";position:absolute;top:-9px;right:10px;font-size:10px;font-weight:700;letter-spacing:.08em;background:var(--tc);color:#0b0e18;padding:2px 7px;border-radius:7px}
 
-/* ---------- chaîne d'automatisation ---------- */
-.chainWrap h2{margin-bottom:4px}
-.chainWrap p{margin:0 0 10px;color:var(--mute);font-size:13px}
-.chain-scroll{overflow-x:auto;padding:12px 4px 10px;scrollbar-width:thin}
-.chain{display:flex;align-items:flex-start;gap:0;min-width:max-content}
-.cbox{--tc:var(--c0);width:190px;display:flex;flex-direction:column;gap:8px}
-.cnode{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:14px;background:var(--tc);color:#0d1017;font-weight:700;box-shadow:0 4px 0 color-mix(in srgb,var(--tc) 50%,#000)}
-.cnode span:first-child{font-size:22px}
+/* chaîne */
+.chainWrap h2{font-size:17px;margin-bottom:3px}
+.chainWrap p{color:var(--mute);font-size:13px;margin-bottom:8px}
+.chain-scroll{overflow-x:auto;padding:10px 2px 8px}
+.chain{display:flex;align-items:flex-start;min-width:max-content}
+.cbox{--tc:var(--c0);width:180px;display:flex;flex-direction:column;gap:7px}
+.cnode{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:12px;background:var(--tc);color:#0b0e18;font-weight:700}
 .cchips{display:flex;flex-direction:column;gap:5px}
-.cchips small{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.07em}
-.cchip{display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:10px;font-size:12.5px;border:2px dashed var(--edge);color:var(--dim);background:transparent;text-align:left;cursor:default;line-height:1.2}
-.cchip.own{border-style:solid;border-color:var(--tc);color:var(--text);background:color-mix(in srgb,var(--tc) 22%,transparent);box-shadow:0 0 12px color-mix(in srgb,var(--tc) 35%,transparent)}
+.cchips small{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.cchip{display:flex;gap:6px;padding:5px 9px;border-radius:9px;font-size:12.5px;border:1px dashed var(--edge);color:var(--dim);background:transparent;text-align:left;line-height:1.2;cursor:default}
+.cchip.own{border-style:solid;border-color:var(--tc);color:var(--text);background:color-mix(in srgb,var(--tc) 20%,transparent);box-shadow:0 0 12px color-mix(in srgb,var(--tc) 30%,transparent)}
 .cchip.own.off{box-shadow:none;border-color:var(--edge);color:var(--dim);background:transparent;text-decoration:line-through}
 .cchip.tg{cursor:pointer}
-.carrow{width:58px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;height:44px;color:var(--dim);font-size:26px;font-weight:700}
-.carrow.lit{color:var(--c0);text-shadow:0 0 12px currentColor}
-.chain-none{color:var(--dim);font-size:13px;padding:4px 2px}
+.carrow{width:52px;flex:0 0 auto;height:42px;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:24px}
+.carrow.lit{color:var(--c0)}
+.chain-none{color:var(--dim);font-size:13px}
 
-/* ---------- Roblox ---------- */
-details.lua{margin-top:16px}
-details.lua>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:12px;font-size:18px;font-weight:600}
-details.lua>summary::-webkit-details-marker{display:none}
-details.lua>summary::before{content:"▸";display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--c3);color:#12081f;transition:transform .15s}
-details.lua[open]>summary::before{transform:rotate(90deg)}
-.lua-body{margin-top:14px;display:flex;flex-direction:column;gap:14px;max-width:880px}
-.lua-body p,.lua-body li{color:var(--mute);font-size:14px;line-height:1.5;margin:0}
-.lua-body ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
-.lua-body h3{font-size:16px;color:var(--text)}
-.lua-body code.i{font-family:var(--mono);font-size:12.5px;background:rgba(255,255,255,.08);padding:1px 5px;border-radius:5px;color:var(--text)}
-pre.code{margin:0;background:#0a0c18;border:2px solid var(--edge);border-radius:14px;padding:12px 14px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.55;tab-size:4;color:#d6dbff}
-pre.code .c{color:#6b76a8;font-style:italic}
-pre.code .s{color:#8be9a8}
-pre.code .k{color:#ff8ab0}
-pre.code .n{color:#ffcf6b}
-.cap{font-size:12px;color:var(--c3);font-weight:600;text-transform:uppercase;letter-spacing:.07em}
+footer{padding-block:18px 40px;color:var(--dim);font-size:12.5px}
 
-footer{padding-block:20px 40px;color:var(--dim);font-size:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
-
-/* ---------- notifications ---------- */
-#toasts{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top,0px) + 70px);z-index:80;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;padding-inline:var(--gutter-l) var(--gutter-r)}
-.toast{--tc:var(--c0);pointer-events:none;display:flex;align-items:center;gap:10px;max-width:min(420px,100%);padding:9px 16px 10px;border-radius:14px;background:var(--panel2);border:2px solid var(--tc);
-  box-shadow:0 6px 0 rgba(0,0,0,.4),0 0 24px color-mix(in srgb,var(--tc) 35%,transparent);animation:toastin .35s cubic-bezier(.2,1.5,.4,1) both,toastout .35s ease-in 3.2s forwards}
-.toast .ti{font-size:22px}
-.toast b{display:block;font-size:15px;line-height:1.15}
+/* notifications */
+#toasts{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top,0px) + 66px);z-index:80;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;padding-inline:var(--gl) var(--gr)}
+.toast{--tc:var(--c0);display:flex;align-items:center;gap:10px;max-width:min(420px,100%);padding:9px 15px;border-radius:13px;background:var(--panel2);border:1px solid var(--tc);box-shadow:0 8px 24px rgba(0,0,0,.45);animation:toastin .3s cubic-bezier(.2,1.4,.4,1) both,toastout .3s ease-in 3.2s forwards}
+.toast .ti{font-size:21px}
+.toast b{display:block;font-size:14.5px;line-height:1.15}
 .toast small{display:block;color:var(--mute);font-size:12px}
-@keyframes toastin{from{transform:translateY(-14px) scale(.8);opacity:0}to{transform:none;opacity:1}}
-@keyframes toastout{to{transform:translateY(-10px);opacity:0}}
+@keyframes toastin{from{transform:translateY(-12px) scale(.9);opacity:0}to{transform:none;opacity:1}}
+@keyframes toastout{to{transform:translateY(-8px);opacity:0}}
 
-/* ---------- victoire ---------- */
-.win{position:fixed;inset:0;z-index:90;background:rgba(6,7,16,.86);display:grid;place-items:center;padding:20px}
-.win .card{max-width:480px;width:100%;text-align:center;padding:28px 22px;border-radius:24px;background:var(--panel);border:3px solid var(--c4);box-shadow:0 8px 0 rgba(0,0,0,.4),0 0 60px rgba(255,107,143,.35)}
-.win .big{font-size:64px;line-height:1}
+.win{position:fixed;inset:0;z-index:90;background:rgba(6,8,18,.88);display:grid;place-items:center;padding:20px}
+.win .card{max-width:480px;width:100%;text-align:center;padding:28px 22px;border-radius:22px;background:var(--panel);border:2px solid var(--c4)}
+.win .big{font-size:60px;line-height:1}
 .win h2{font-size:30px;margin:8px 0 6px;color:var(--c4)}
-.win p{color:var(--mute);margin:0 0 14px}
+.win p{color:var(--mute);margin-bottom:14px}
 .win .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0 18px;text-align:left}
 .win .stats div{background:var(--bg2);border-radius:12px;padding:8px 12px;font-size:12px;color:var(--mute)}
 .win .stats b{display:block;font-size:16px;color:var(--text)}
 .win .mini{background:var(--c4);color:#2a0010;border-color:var(--c4);font-size:16px;padding:10px 22px}
+.banner{padding:10px 14px;border-radius:14px;border:1px solid var(--c4);background:rgba(255,122,162,.12)}
 
-@keyframes pop{0%{transform:scale(.55);opacity:0}60%{transform:scale(1.07);opacity:1}100%{transform:scale(1)}}
-@keyframes pulse{from{transform:scale(1)}to{transform:scale(1.12)}}
-@keyframes glow{from{box-shadow:0 5px 0 color-mix(in srgb,var(--tc) 50%,#000),0 0 0 0 color-mix(in srgb,var(--tc) 50%,transparent)}to{box-shadow:0 5px 0 color-mix(in srgb,var(--tc) 50%,#000),0 0 0 8px color-mix(in srgb,var(--tc) 0%,transparent)}}
+@keyframes pop{0%{transform:translateX(calc(var(--s,0) * var(--amp))) scale(.6);opacity:0}60%{transform:translateX(calc(var(--s,0) * var(--amp))) scale(1.05);opacity:1}100%{transform:translateX(calc(var(--s,0) * var(--amp))) scale(1)}}
+@keyframes glow{from{box-shadow:0 0 0 0 color-mix(in srgb,var(--tc) 55%,transparent)}to{box-shadow:0 0 0 8px color-mix(in srgb,var(--tc) 0%,transparent)}}
 :focus-visible{outline:3px solid #fff;outline-offset:2px}
-@media(max-width:560px){
-  body{font-size:14px}
-  .head{padding-block:10px 8px}
-  .brand h1{font-size:19px}
-  .panel{padding:12px}
-  .gen{grid-template-columns:42px minmax(0,1fr) auto;gap:8px}
-  .gico{width:42px;height:42px;font-size:22px}
-  .buy{min-width:84px;padding:7px 9px}
-  .trow{gap:10px}
-  .tree{gap:26px}
-  .uplist{grid-template-columns:1fr}
-}
-@media(prefers-reduced-motion:reduce){
-  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition:none!important}
-}
+@media(max-width:560px){body{font-size:14px}.head{gap:8px}.head h1{white-space:nowrap;font-size:20px}.mini{white-space:nowrap;padding:6px 9px;font-size:12.5px}.savestate{display:none}.panel{padding:12px}.sec-body{padding:12px 8px 16px}.head small{display:none}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition:none!important}}
 
 </style>
-
+</head>
+<body>
 <div class="wrap">
   <header class="head">
-    <div class="brand">
-      <span class="logo" aria-hidden="true">⛏️</span>
-      <div><h1>Filon Infini</h1><small>Mine, renais, monte, transcende, deviens divin.</small></div>
-    </div>
-    <div class="tools">
-      <span class="savestate mono" id="savestate" aria-live="polite"></span>
-      <div class="seg" id="speed" role="group" aria-label="Vitesse du jeu">
-        <button data-act="speed" data-v="1" aria-pressed="true">×1</button>
-        <button data-act="speed" data-v="10" aria-pressed="false">×10</button>
-        <button data-act="speed" data-v="100" aria-pressed="false">×100</button>
-      </div>
-      <button class="mini" data-act="save" title="Sauvegarder maintenant">Sauver</button>
-      <button class="mini danger" id="wipe" data-act="wipe">Tout effacer</button>
-    </div>
+    <a class="back" href="../../jeux.html" aria-label="Retour à Mes jeux" title="Retour à Mes jeux">←</a>
+    <div><h1>Filon Infini</h1><small>Un clic, puis un arbre immense.</small></div>
+    <span class="sp"></span>
+    <span class="savestate mono" id="savestate" aria-live="polite"></span>
+    <button class="mini" data-act="save" title="Sauvegarder maintenant">Sauver</button>
+    <button class="mini danger" id="wipe" data-act="wipe">Tout effacer</button>
   </header>
 </div>
 
-<div class="resbar" role="status" aria-label="Ressources">
-  <div class="wrap"><div class="res" id="res"></div></div>
-</div>
+<div class="resbar" role="status" aria-label="Ressources"><div class="wrap"><div class="res" id="res"></div></div></div>
 
 <div class="wrap">
-  <div class="win-banner" id="endbanner" hidden style="margin-top:14px;padding:10px 14px;border-radius:14px;border:2px solid var(--c4);background:rgba(255,107,143,.12);color:var(--text)">
-    <b style="color:var(--c4)">Apothéose accomplie.</b> Tu as terminé le jeu. Tu peux continuer à jouer librement.
-  </div>
+  <main>
+    <div class="banner" id="endbanner" hidden><b style="color:var(--c4)">Apothéose accomplie.</b> Tu as terminé le jeu. Tu peux continuer à jouer librement.</div>
 
-  <main class="main">
-    <section class="col" aria-label="La mine">
-      <div class="panel goal" id="goal">
-        <div class="gl"><span>Objectif</span><span></span></div>
-        <div class="gt">…</div>
-        <div class="bar"><i></i></div>
-        <div class="gn mono"><span></span><span></span></div>
-      </div>
+    <div class="panel clicker">
+      <button class="ore" id="ore" data-act="click" aria-label="Miner : gagne des pièces"><span>⛏️</span></button>
+      <div class="cstat"><span>+<b class="mono" id="clickval">1</b> par clic</span><span><b class="mono" id="psec">0</b> pièces /s</span></div>
+      <div class="fx" id="fx"></div>
+    </div>
 
-      <div class="panel oreBox">
-        <button class="ore" id="ore" data-act="click" aria-label="Miner : gagne des pièces"><span>⛏️</span></button>
-        <div class="oreinfo">+<b class="mono" id="clickval">1</b> pièce par clic</div>
-        <div class="fx" id="fx"></div>
-      </div>
+    <div class="panel goal" id="goal">
+      <div class="gl"><span>Objectif</span><span></span></div>
+      <div class="gt">…</div>
+      <div class="bar"><i></i></div>
+      <div class="gn mono"><span></span><span></span></div>
+    </div>
 
-      <div class="panel">
-        <div class="gens-head">
-          <h2>Générateurs</h2>
-          <div class="seg" id="buymode" role="group" aria-label="Quantité achetée">
-            <button data-act="mode" data-v="1" aria-pressed="true">×1</button>
-            <button data-act="mode" data-v="10" aria-pressed="false">×10</button>
-            <button data-act="mode" data-v="100" aria-pressed="false">×100</button>
-            <button data-act="mode" data-v="max" aria-pressed="false">Max</button>
-          </div>
-        </div>
-        <div id="gens"></div>
-      </div>
-    </section>
+    <div id="sections" style="display:flex;flex-direction:column;gap:14px"></div>
 
-    <section class="side" id="side" aria-label="Paliers">
-      <div class="tabs" id="tabs" role="tablist"></div>
-      <div class="panel tabbody" id="tabbody"></div>
+    <section class="panel chainWrap" aria-label="Chaîne d’automatisation">
+      <h2>Chaîne d’automatisation</h2>
+      <p>Chaque palier automatise celui d’en dessous. Une pastille s’allume quand tu la débloques ; touche-la pour la couper ou la relancer.</p>
+      <div class="chain-scroll"><div class="chain" id="chain"></div></div>
+      <div class="chain-none" id="chainnone">Aucune automatisation débloquée pour l’instant.</div>
     </section>
   </main>
-
-  <section class="panel chainWrap" aria-label="Chaîne d’automatisation">
-    <h2>Chaîne d’automatisation</h2>
-    <p>Chaque palier automatise celui d’en dessous. Une pastille s’allume quand tu la débloques ; touche-la pour la couper ou la relancer.</p>
-    <div class="chain-scroll"><div class="chain" id="chain"></div></div>
-    <div class="chain-none" id="chainnone">Aucune automatisation débloquée pour l’instant.</div>
-  </section>
-
-  <details class="panel lua" id="lua">
-    <summary>Comment le coder sur Roblox</summary>
-    <div class="lua-body">
-      <p>Ce jeu est un bon modèle de <em>simulator</em> Roblox. La règle d’or : <b>le serveur décide de tout</b>. Le client affiche et demande, il ne calcule jamais un achat ni un reset. Voici l’architecture en 4 scripts.</p>
-      <ul>
-        <li><b>ModuleScript de config</b> dans <code class="i">ServerStorage</code> : les paliers et tous les nœuds (<code class="i">Id</code>, <code class="i">Cost</code>, <code class="i">Req</code>, <code class="i">Effect</code>). Les clients ne peuvent pas le lire.</li>
-        <li><b>Script serveur</b> : profil de chaque joueur, achat vérifié via un <code class="i">RemoteEvent</code>, découverte des nœuds.</li>
-        <li><b>Prestige</b> : gain en racine carrée, reset, et logique « garder » en chaîne.</li>
-        <li><b>LocalScript</b> : crée une carte uniquement pour les nœuds que le serveur lui annonce.</li>
-      </ul>
-      <div><div class="cap">1 · Configuration (ModuleScript)</div><pre class="code"><code><span class="c">-- ServerStorage/GameConfig  (ModuleScript)</span>
-<span class="c">-- Dans ServerStorage : les clients ne peuvent PAS lire ce module,</span>
-<span class="c">-- donc ils ne connaissent jamais les nœuds qu'ils n'ont pas découverts.</span>
-<span class="k">local</span> Config = {}
-
-Config.GrowthRate = <span class="n">1.15</span> <span class="c">-- coût ×1.15 à chaque achat d'un générateur</span>
-
-<span class="c">-- Paliers de prestige (0 = pièces)</span>
-Config.Tiers = {
-	[<span class="n">1</span>] = { Name = <span class="s">"Renaissance"</span>,   Currency = <span class="s">"RP"</span>, Threshold = <span class="n">1e9</span>,  BaseMult = <span class="n">3</span>, RevealAt = <span class="n">0.5</span> },
-	[<span class="n">2</span>] = { Name = <span class="s">"Ascension"</span>,     Currency = <span class="s">"AP"</span>, Threshold = <span class="n">3000</span>, BaseMult = <span class="n">3</span>, RevealAt = <span class="n">0.5</span> },
-	[<span class="n">3</span>] = { Name = <span class="s">"Transcendance"</span>, Currency = <span class="s">"TP"</span>, Threshold = <span class="n">120</span>,  BaseMult = <span class="n">3</span>, RevealAt = <span class="n">0.5</span> },
-	[<span class="n">4</span>] = { Name = <span class="s">"Divinité"</span>,      Currency = <span class="s">"DP"</span>, Threshold = <span class="n">600</span>,  BaseMult = <span class="n">3</span>, RevealAt = <span class="n">0.5</span> },
-}
-
-<span class="c">-- Le nœud "Garder l'arbre du palier inférieur" de chaque palier</span>
-Config.KeepNode = { [<span class="n">1</span>] = <span class="s">"R_Keep"</span>, [<span class="n">2</span>] = <span class="s">"A_Keep"</span>, [<span class="n">3</span>] = <span class="s">"T_Keep"</span>, [<span class="n">4</span>] = <span class="s">"D_Keep"</span> }
-
-<span class="c">-- Un nœud = Id, Tier (monnaie utilisée), Cost, Req (prérequis), Effect</span>
-Config.Nodes = {
-	{ Id = <span class="s">"R_Gold"</span>,    Tier = <span class="n">1</span>, Name = <span class="s">"Pioche dorée"</span>,      Cost = <span class="n">1</span>,  Req = {},             Effect = { Type = <span class="s">"CoinMult"</span>, Value = <span class="n">3</span> } },
-	{ Id = <span class="s">"R_Click"</span>,   Tier = <span class="n">1</span>, Name = <span class="s">"Apprentis"</span>,         Cost = <span class="n">5</span>,  Req = { <span class="s">"R_Gold"</span> },   Effect = { Type = <span class="s">"AutoClick"</span>, PerSecond = <span class="n">8</span> } },
-	{ Id = <span class="s">"R_Auto"</span>,    Tier = <span class="n">1</span>, Name = <span class="s">"Contremaître"</span>,      Cost = <span class="n">12</span>, Req = { <span class="s">"R_Click"</span> },  Effect = { Type = <span class="s">"AutoBuyGenerators"</span> } },
-	{ Id = <span class="s">"R_Keep"</span>,    Tier = <span class="n">1</span>, Name = <span class="s">"Coffre de la mine"</span>, Cost = <span class="n">60</span>, Req = { <span class="s">"R_Auto"</span> },   Effect = { Type = <span class="s">"KeepLower"</span> } },
-
-	{ Id = <span class="s">"A_Keep"</span>,    Tier = <span class="n">2</span>, Name = <span class="s">"Mémoire des cimes"</span>, Cost = <span class="n">2</span>,  Req = {},             Effect = { Type = <span class="s">"KeepLower"</span> } },
-	{ Id = <span class="s">"A_Auto"</span>,    Tier = <span class="n">2</span>, Name = <span class="s">"Ascenseur auto"</span>,    Cost = <span class="n">5</span>,  Req = { <span class="s">"A_Keep"</span> },   Effect = { Type = <span class="s">"AutoPrestige"</span> } },
-	{ Id = <span class="s">"A_Passive"</span>, Tier = <span class="n">2</span>, Name = <span class="s">"Source céleste"</span>,    Cost = <span class="n">12</span>, Req = { <span class="s">"A_Auto"</span> },   Effect = { Type = <span class="s">"PassiveLower"</span>, Rate = <span class="n">0.10</span> } },
-	{ Id = <span class="s">"A_Tree"</span>,    Tier = <span class="n">2</span>, Name = <span class="s">"Maître des arbres"</span>, Cost = <span class="n">20</span>, Req = { <span class="s">"A_Passive"</span> },Effect = { Type = <span class="s">"AutoBuyLowerTree"</span> } },
-	<span class="c">-- ... le jeu complet compte une quarantaine de nœuds, jusqu'à « D_End » (Apothéose)</span>
-}
-
-Config.NodeById = {}
-<span class="k">for</span> _, node <span class="k">in</span> ipairs(Config.Nodes) <span class="k">do</span>
-	Config.NodeById[node.Id] = node
-<span class="k">end</span>
-
-<span class="k">return</span> Config</code></pre></div>
-      <div><div class="cap">2 · Achat vérifié côté serveur (RemoteEvent)</div><pre class="code"><code><span class="c">-- ServerScriptService/GameServer  (Script)</span>
-<span class="c">-- Le serveur est la seule source de vérité : le client DEMANDE, le serveur DÉCIDE.</span>
-<span class="k">local</span> Players = game:GetService(<span class="s">"Players"</span>)
-<span class="k">local</span> ReplicatedStorage = game:GetService(<span class="s">"ReplicatedStorage"</span>)
-<span class="k">local</span> ServerStorage = game:GetService(<span class="s">"ServerStorage"</span>)
-
-<span class="k">local</span> Config = require(ServerStorage.GameConfig)
-
-<span class="k">local</span> Remotes = ReplicatedStorage:WaitForChild(<span class="s">"Remotes"</span>)
-<span class="k">local</span> BuyNode = Remotes:WaitForChild(<span class="s">"BuyNode"</span>)               <span class="c">-- RemoteEvent client -&gt; serveur</span>
-<span class="k">local</span> NodeDiscovered = Remotes:WaitForChild(<span class="s">"NodeDiscovered"</span>) <span class="c">-- RemoteEvent serveur -&gt; client</span>
-
-<span class="k">local</span> Profiles = {} <span class="c">-- [Player] = profil (à sauvegarder avec DataStore / ProfileService)</span>
-
-<span class="k">local</span> <span class="k">function</span> newProfile()
-	<span class="k">return</span> {
-		Currency = { [<span class="n">0</span>] = <span class="n">0</span>, [<span class="n">1</span>] = <span class="n">0</span>, [<span class="n">2</span>] = <span class="n">0</span>, [<span class="n">3</span>] = <span class="n">0</span>, [<span class="n">4</span>] = <span class="n">0</span> },
-		Earned = { [<span class="n">0</span>] = <span class="n">0</span>, [<span class="n">1</span>] = <span class="n">0</span>, [<span class="n">2</span>] = <span class="n">0</span>, [<span class="n">3</span>] = <span class="n">0</span>, [<span class="n">4</span>] = <span class="n">0</span> }, <span class="c">-- gagné pendant CE run</span>
-		Owned = {},      <span class="c">-- [nodeId] = true</span>
-		Discovered = {}, <span class="c">-- [nodeId] = true, reste vrai même après un reset</span>
-		TierSeen = {},   <span class="c">-- [tier] = true</span>
-	}
-<span class="k">end</span>
-
-<span class="k">local</span> <span class="k">function</span> reqsOwned(profile, node)
-	<span class="k">for</span> _, reqId <span class="k">in</span> ipairs(node.Req) <span class="k">do</span>
-		<span class="k">if</span> <span class="k">not</span> profile.Owned[reqId] <span class="k">then</span>
-			<span class="k">return</span> <span class="k">false</span>
-		<span class="k">end</span>
-	<span class="k">end</span>
-	<span class="k">return</span> <span class="k">true</span>
-<span class="k">end</span>
-
-<span class="c">-- Un palier apparaît quand on atteint 50 % de son coût, la première fois</span>
-<span class="k">local</span> <span class="k">function</span> tierSeen(profile, tier)
-	<span class="k">if</span> profile.TierSeen[tier] <span class="k">then</span>
-		<span class="k">return</span> <span class="k">true</span>
-	<span class="k">end</span>
-	<span class="k">local</span> cfg = Config.Tiers[tier]
-	<span class="k">if</span> profile.Earned[tier - <span class="n">1</span>] &gt;= cfg.Threshold * cfg.RevealAt <span class="k">then</span>
-		profile.TierSeen[tier] = <span class="k">true</span>
-		<span class="k">return</span> <span class="k">true</span>
-	<span class="k">end</span>
-	<span class="k">return</span> <span class="k">false</span>
-<span class="k">end</span>
-
-<span class="c">-- Révèle les nœuds dont TOUS les prérequis sont possédés.</span>
-<span class="c">-- On n'envoie au client que ces nœuds-la, jamais le reste.</span>
-<span class="k">local</span> <span class="k">function</span> refreshDiscovery(player, profile)
-	<span class="k">for</span> _, node <span class="k">in</span> ipairs(Config.Nodes) <span class="k">do</span>
-		<span class="k">if</span> <span class="k">not</span> profile.Discovered[node.Id] <span class="k">and</span> tierSeen(profile, node.Tier) <span class="k">and</span> reqsOwned(profile, node) <span class="k">then</span>
-			profile.Discovered[node.Id] = <span class="k">true</span>
-			NodeDiscovered:FireClient(player, {
-				Id = node.Id, Tier = node.Tier, Name = node.Name,
-				Cost = node.Cost, Req = node.Req,
-			})
-		<span class="k">end</span>
-	<span class="k">end</span>
-<span class="k">end</span>
-
-<span class="c">-- Achat : toutes les vérifications sont faites ici, jamais côté client</span>
-BuyNode.OnServerEvent:Connect(<span class="k">function</span>(player, nodeId)
-	<span class="k">if</span> typeof(nodeId) ~= <span class="s">"string"</span> <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>        <span class="c">-- 1. type de l'argument</span>
-	<span class="k">local</span> profile = Profiles[player]
-	<span class="k">local</span> node = Config.NodeById[nodeId]
-	<span class="k">if</span> <span class="k">not</span> profile <span class="k">or</span> <span class="k">not</span> node <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>            <span class="c">-- 2. le nœud existe</span>
-	<span class="k">if</span> profile.Owned[nodeId] <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>              <span class="c">-- 3. pas déjà acheté</span>
-	<span class="k">if</span> <span class="k">not</span> profile.Discovered[nodeId] <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>     <span class="c">-- 4. visible pour ce joueur</span>
-	<span class="k">if</span> <span class="k">not</span> reqsOwned(profile, node) <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>       <span class="c">-- 5. prérequis possédés</span>
-	<span class="k">if</span> profile.Currency[node.Tier] &lt; node.Cost <span class="k">then</span> <span class="k">return</span> <span class="k">end</span> <span class="c">-- 6. assez de monnaie</span>
-
-	profile.Currency[node.Tier] -= node.Cost
-	profile.Owned[nodeId] = <span class="k">true</span>
-	refreshDiscovery(player, profile)
-<span class="k">end</span>)
-
-Players.PlayerAdded:Connect(<span class="k">function</span>(player)
-	Profiles[player] = newProfile() <span class="c">-- ici : charger depuis le DataStore</span>
-	refreshDiscovery(player, Profiles[player])
-	<span class="c">-- à la connexion, renvoyer aussi les nœuds déjà découverts (jamais les autres)</span>
-<span class="k">end</span>)
-Players.PlayerRemoving:Connect(<span class="k">function</span>(player)
-	Profiles[player] = <span class="k">nil</span> <span class="c">-- ici : sauvegarder</span>
-<span class="k">end</span>)</code></pre></div>
-      <div><div class="cap">3 · Reset et « garder » en chaîne</div><pre class="code"><code><span class="c">-- Suite de GameServer : prestige, reset et "garder"</span>
-<span class="k">local</span> DoPrestige = Remotes:WaitForChild(<span class="s">"DoPrestige"</span>) <span class="c">-- RemoteEvent client -&gt; serveur</span>
-
-<span class="c">-- Garder l'arbre `lowTier` quand on reset `resetTier` ne marche que si</span>
-<span class="c">-- TOUS les nœuds « garder » des paliers entre les deux sont possédés.</span>
-<span class="c">-- Exemple : garder l'arbre 1 lors d'une Transcendance (3) exige A_Keep ET T_Keep.</span>
-<span class="k">local</span> <span class="k">function</span> keepsTree(profile, lowTier, resetTier)
-	<span class="k">for</span> tier = lowTier + <span class="n">1</span>, resetTier <span class="k">do</span>
-		<span class="k">if</span> <span class="k">not</span> profile.Owned[Config.KeepNode[tier]] <span class="k">then</span>
-			<span class="k">return</span> <span class="k">false</span>
-		<span class="k">end</span>
-	<span class="k">end</span>
-	<span class="k">return</span> <span class="k">true</span>
-<span class="k">end</span>
-
-<span class="k">local</span> <span class="k">function</span> gainMultiplier(profile, tier)
-	<span class="k">local</span> mult = Config.Tiers[tier].BaseMult
-	<span class="k">for</span> _, node <span class="k">in</span> ipairs(Config.Nodes) <span class="k">do</span>
-		<span class="k">local</span> fx = node.Effect
-		<span class="k">if</span> profile.Owned[node.Id] <span class="k">and</span> fx.Type == <span class="s">"GainMult"</span> <span class="k">and</span> fx.Tier == tier <span class="k">then</span>
-			mult *= fx.Value
-		<span class="k">end</span>
-	<span class="k">end</span>
-	<span class="k">return</span> mult
-<span class="k">end</span>
-
-<span class="c">-- gain = floor( racine( gagné pendant ce run ÷ seuil ) x multiplicateurs )</span>
-<span class="k">local</span> <span class="k">function</span> pendingGain(profile, tier)
-	<span class="k">local</span> cfg = Config.Tiers[tier]
-	<span class="k">local</span> earned = profile.Earned[tier - <span class="n">1</span>] <span class="c">-- GAGNÉ pendant ce run, pas la monnaie possédée</span>
-	<span class="k">if</span> earned &lt; cfg.Threshold <span class="k">then</span>
-		<span class="k">return</span> <span class="n">0</span>
-	<span class="k">end</span>
-	<span class="k">return</span> math.floor(math.sqrt(earned / cfg.Threshold) * gainMultiplier(profile, tier))
-<span class="k">end</span>
-
-<span class="k">local</span> <span class="k">function</span> wipeTree(profile, tier)
-	<span class="k">for</span> _, node <span class="k">in</span> ipairs(Config.Nodes) <span class="k">do</span>
-		<span class="k">if</span> node.Tier == tier <span class="k">then</span>
-			profile.Owned[node.Id] = <span class="k">nil</span> <span class="c">-- on efface Owned, PAS Discovered</span>
-		<span class="k">end</span>
-	<span class="k">end</span>
-	<span class="k">if</span> tier == <span class="n">0</span> <span class="k">then</span>
-		profile.CoinUpgrades = {}
-		profile.Generators = {}
-	<span class="k">end</span>
-<span class="k">end</span>
-
-DoPrestige.OnServerEvent:Connect(<span class="k">function</span>(player, tier)
-	<span class="k">if</span> typeof(tier) ~= <span class="s">"number"</span> <span class="k">or</span> <span class="k">not</span> Config.Tiers[tier] <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>
-	<span class="k">local</span> profile = Profiles[player]
-	<span class="k">if</span> <span class="k">not</span> profile <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>
-
-	<span class="k">local</span> gain = pendingGain(profile, tier)
-	<span class="k">if</span> gain &lt; <span class="n">1</span> <span class="k">then</span> <span class="k">return</span> <span class="k">end</span>
-
-	<span class="c">-- 1. décider quoi garder AVANT d'effacer quoi que ce soit</span>
-	<span class="k">local</span> keep = {}
-	<span class="k">for</span> lower = <span class="n">0</span>, tier - <span class="n">1</span> <span class="k">do</span>
-		keep[lower] = keepsTree(profile, lower, tier)
-	<span class="k">end</span>
-
-	<span class="c">-- 2. créditer la monnaie du palier</span>
-	profile.Currency[tier] += gain
-	profile.Earned[tier] += gain
-
-	<span class="c">-- 3. remettre à zéro tout ce qui est en dessous</span>
-	<span class="k">for</span> lower = <span class="n">0</span>, tier - <span class="n">1</span> <span class="k">do</span>
-		profile.Currency[lower] = <span class="n">0</span>
-		profile.Earned[lower] = <span class="n">0</span>
-		<span class="k">if</span> <span class="k">not</span> keep[lower] <span class="k">then</span>
-			wipeTree(profile, lower)
-		<span class="k">end</span>
-	<span class="k">end</span>
-
-	refreshDiscovery(player, profile)
-<span class="k">end</span>)
-
-<span class="c">-- Boucle serveur (RunService.Heartbeat) : automatisations et gain passif</span>
-<span class="c">--   passif : profile.Currency[t-1] += 0.10 * pendingRaw(t-1) * dt</span>
-<span class="c">--   auto-prestige : si la condition choisie par le joueur est vraie, appeler la même fonction que DoPrestige</span></code></pre></div>
-      <div><div class="cap">4 · Cacher les nœuds non découverts côté client</div><pre class="code"><code><span class="c">-- StarterPlayerScripts/TreeUI  (LocalScript)</span>
-<span class="c">-- Le client ne contient AUCUNE donnée sur les nœuds cachés.</span>
-<span class="c">-- Il crée une carte uniquement quand le serveur lui envoie NodeDiscovered.</span>
-<span class="k">local</span> ReplicatedStorage = game:GetService(<span class="s">"ReplicatedStorage"</span>)
-<span class="k">local</span> TweenService = game:GetService(<span class="s">"TweenService"</span>)
-<span class="k">local</span> Players = game:GetService(<span class="s">"Players"</span>)
-
-<span class="k">local</span> Remotes = ReplicatedStorage:WaitForChild(<span class="s">"Remotes"</span>)
-<span class="k">local</span> gui = Players.LocalPlayer:WaitForChild(<span class="s">"PlayerGui"</span>):WaitForChild(<span class="s">"TreeGui"</span>)
-<span class="k">local</span> treeFrame = gui:WaitForChild(<span class="s">"Tree"</span>)
-<span class="k">local</span> template = script:WaitForChild(<span class="s">"NodeTemplate"</span>)
-
-<span class="k">local</span> cards = {} <span class="c">-- [nodeId] = Frame, uniquement les nœuds découverts</span>
-
-<span class="k">local</span> <span class="k">function</span> drawLine(fromCard, toCard)
-	<span class="c">-- un Frame fin, tourné entre les deux cartes (ou une UIStroke / Beam)</span>
-<span class="k">end</span>
-
-<span class="k">local</span> <span class="k">function</span> createCard(info)
-	<span class="k">if</span> cards[info.Id] <span class="k">then</span> <span class="k">return</span> <span class="k">end</span> <span class="c">-- une fois découvert, il reste affiché</span>
-
-	<span class="k">local</span> card = template:Clone()
-	card.Name = info.Id
-	card.NodeName.Text = info.Name
-	card.Cost.Text = tostring(info.Cost)
-	card.Parent = treeFrame
-	cards[info.Id] = card
-
-	<span class="c">-- petite animation d'apparition</span>
-	<span class="k">local</span> target = card.Size
-	card.Size = UDim2.fromScale(<span class="n">0</span>, <span class="n">0</span>)
-	TweenService:Create(card, TweenInfo.new(<span class="n">0.35</span>, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = target }):Play()
-
-	<span class="c">-- lignes : seulement vers les prérequis déjà découverts</span>
-	<span class="k">for</span> _, reqId <span class="k">in</span> ipairs(info.Req) <span class="k">do</span>
-		<span class="k">if</span> cards[reqId] <span class="k">then</span>
-			drawLine(cards[reqId], card)
-		<span class="k">end</span>
-	<span class="k">end</span>
-
-	<span class="c">-- notification</span>
-	gui.Toast:Fire(<span class="s">"Nouvelle amélioration découverte !"</span>)
-<span class="k">end</span>
-
-Remotes.NodeDiscovered.OnClientEvent:Connect(createCard)
-
-<span class="c">-- Achat : le bouton n'achète rien lui-même, il demande au serveur</span>
-<span class="k">local</span> <span class="k">function</span> onNodeClicked(nodeId)
-	Remotes.BuyNode:FireServer(nodeId)
-<span class="k">end</span></code></pre></div>
-      <h3>Points importants</h3>
-      <ul>
-        <li><b>Ne jamais envoyer un nœud caché au client.</b> Un tricheur lit tout ce qui est dans <code class="i">ReplicatedStorage</code>. On n’envoie un nœud que lorsque ses prérequis sont possédés, et on le garde dans <code class="i">Discovered</code> pour qu’il reste visible après un reset.</li>
-        <li><b>Le gain se calcule sur la monnaie gagnée pendant le run</b> (<code class="i">Earned</code>), pas sur celle que le joueur possède, pour ne pas le punir quand il dépense.</li>
-        <li><b>Décide quoi garder avant d’effacer.</b> Les nœuds « garder » vivent dans les arbres que l’on est en train de réinitialiser ; il faut lire leur état avant le reset.</li>
-        <li><b>Production et automatisations</b> tournent sur le serveur dans <code class="i">RunService.Heartbeat</code>, avec le temps écoulé réel (<code class="i">dt</code>) pour que la progression hors-ligne reste juste.</li>
-        <li><b>Sauvegarde</b> avec <code class="i">DataStoreService</code> (ou ProfileService) à la déconnexion et toutes les 60 secondes. Garde la monnaie en <code class="i">number</code> ; au-delà de 1e300, passe à une bibliothèque de grands nombres.</li>
-      </ul>
-    </div>
-  </details>
-
-  <footer>
-    <span>Sauvegarde automatique dans ce navigateur. Les boutons ×10 et ×100 accélèrent le temps pour tester.</span>
-    <span class="mono" id="foot"></span>
-  </footer>
+  <footer>Sauvegarde automatique dans ce navigateur, sur cet appareil. Le jeu continue quand tu es absent, jusqu’à 3 heures.</footer>
 </div>
 
 <div id="toasts" aria-live="polite"></div>
-
 <div class="win" id="win" hidden role="dialog" aria-modal="true" aria-label="Fin du jeu">
   <div class="card">
     <div class="big">🌟</div>
@@ -662,33 +249,20 @@ Remotes.NodeDiscovered.OnClientEvent:Connect(createCard)
 </div>
 
 <script>
+/* généré par gen.js : arbres et coûts calibrés */
+const DATA={"seuil":[0,3400000000000000,3e+28,1.9e+24,7.3e+22],"base":[0,1,1,1,1],"trees":[[{"n":"Pioche en bois","ic":"⛏️","c":10,"f":{"c":1}},{"n":"Gants renforcés","ic":"🧤","c":22,"f":{"c":1}},{"n":"Mineur novice","ic":"👷","c":33,"f":{"p":3.5}},{"n":"Brouette","ic":"🛒","c":57,"f":{"p":5.3}},{"n":"Pioche de fer","ic":"⛏️","c":96,"f":{"k":2}},{"n":"Foreuse manuelle","ic":"🔩","c":143,"f":{"p":10}},{"n":"Chariot minier","ic":"🛤️","c":223,"f":{"p":15}},{"n":"Marteau-piqueur","ic":"🔨","c":349,"f":{"c":5}},{"n":"Prime de rendement","ic":"💰","c":502,"f":{"m":2}},{"n":"Mineur expert","ic":"⛑️","c":1080,"f":{"p":27}},{"n":"Foreuse électrique","ic":"🔌","c":1610,"f":{"p":37}},{"n":"Wagonnet","ic":"🚃","c":2260,"f":{"p":49}},{"n":"Pioche en acier","ic":"⛏️","c":3320,"f":{"q":0.22}},{"n":"Tapis roulant","ic":"➡️","c":4660,"f":{"p":85}},{"n":"Excavatrice","ic":"🚜","c":7310,"f":{"p":120}},{"n":"Camion benne","ic":"🚚","c":10900,"f":{"p":170}},{"n":"Gantelet mécanique","ic":"🦾","c":16600,"f":{"k":6}},{"n":"Assurance mineurs","ic":"📜","c":20800,"f":{"m":2}},{"n":"Foreuse géante","ic":"🕳️","c":42000,"f":{"p":270}},{"n":"Usine de broyage","ic":"🏭","c":62200,"f":{"p":370}},{"n":"Fonderie","ic":"🔥","c":89500,"f":{"p":500}},{"n":"Pioche en diamant","ic":"💎","c":125000,"f":{"c":28}},{"n":"Station minière (voie annexe)","ic":"🚀","c":160000,"f":{"p":590},"b":1},{"n":"Centrale à charbon","ic":"🏗️","c":209000,"f":{"p":1000}},{"n":"Laser de coupe","ic":"⚡","c":288000,"f":{"p":1400}},{"n":"Drone mineur","ic":"🛸","c":398000,"f":{"p":1800}},{"n":"Réacteur compact","ic":"☢️","c":554000,"f":{"p":2400}},{"n":"Contrat municipal","ic":"🏛️","c":762000,"f":{"m":3}},{"n":"Robot foreur","ic":"🤖","c":2310000,"f":{"p":3000}},{"n":"Forge orbitale","ic":"🛰️","c":3180000,"f":{"p":3900}},{"n":"Station minière","ic":"🚀","c":4280000,"f":{"p":5000}},{"n":"Portail minier","ic":"🌀","c":5590000,"f":{"p":6400}},{"n":"Réacteur à fusion","ic":"⚛️","c":7580000,"f":{"p":8200}},{"n":"Marteau pneumatique","ic":"🔨","c":10000000,"f":{"q":0.15}},{"n":"Collecteur d’astéroïdes","ic":"☄️","c":12100000,"f":{"p":12000}},{"n":"Moissonneuse stellaire","ic":"🌠","c":16700000,"f":{"p":16000}},{"n":"Subvention d’État","ic":"🏦","c":22900000,"f":{"m":3}},{"n":"Mine d’antimatière","ic":"🧪","c":68600000,"f":{"p":21000}},{"n":"Faille dimensionnelle","ic":"🌌","c":94600000,"f":{"p":27000}},{"n":"Pioche de mithril","ic":"⛏️","c":127000000,"f":{"q":0.16}},{"n":"Cœur de géante rouge","ic":"🔴","c":153000000,"f":{"p":42000}},{"n":"Sphère de Dyson","ic":"🪐","c":213000000,"f":{"p":57000}},{"n":"Trou noir domestique","ic":"⚫","c":299000000,"f":{"p":77000}},{"n":"Atelier du temps","ic":"⏳","c":417000000,"f":{"p":100000}},{"n":"Usine à univers","ic":"🌍","c":564000000,"f":{"p":140000}},{"n":"Tapis roulant (voie annexe)","ic":"➡️","c":775000000,"f":{"p":200000},"b":1},{"n":"Monopole minier","ic":"👑","c":1090000000,"f":{"m":4}},{"n":"Poing d’adamantium","ic":"👊","c":4420000000,"f":{"q":0.18}},{"n":"Brouette","ic":"🛒","c":5230000000,"f":{"p":300000}},{"n":"Foreuse manuelle","ic":"🔩","c":7590000000,"f":{"p":420000}},{"n":"Chariot minier","ic":"🛤️","c":10800000000,"f":{"p":580000}},{"n":"Mineur expert","ic":"⛑️","c":15300000000,"f":{"p":810000}},{"n":"Foreuse électrique","ic":"🔌","c":21900000000,"f":{"p":1100000}},{"n":"Wagonnet","ic":"🚃","c":30900000000,"f":{"p":1600000}},{"n":"Pioche stellaire","ic":"🌟","c":43600000000,"f":{"q":0.2}},{"n":"Cartel des métaux","ic":"🕴️","c":52500000000,"f":{"m":5}},{"n":"Tapis roulant","ic":"➡️","c":265000000000,"f":{"p":2500000}},{"n":"Excavatrice","ic":"🚜","c":384000000000,"f":{"p":3600000}},{"n":"Camion benne","ic":"🚚","c":575000000000,"f":{"p":5200000}},{"n":"Foreuse géante","ic":"🕳️","c":845000000000,"f":{"p":7500000}},{"n":"Usine de broyage","ic":"🏭","c":1210000000000,"f":{"p":11000000}},{"n":"Fonderie","ic":"🔥","c":1820000000000,"f":{"p":16000000}},{"n":"Main du destin","ic":"🖐️","c":2660000000000,"f":{"q":0.22}},{"n":"Raffinerie","ic":"⚗️","c":3090000000000,"f":{"p":26000000}},{"n":"Bourse des minerais","ic":"📈","c":4770000000000,"f":{"m":6}},{"n":"Centrale à charbon","ic":"🏗️","c":28900000000000,"f":{"p":39000000}},{"n":"Laser de coupe","ic":"⚡","c":44200000000000,"f":{"p":59000000}},{"n":"Drone mineur","ic":"🛸","c":66900000000000,"f":{"p":88000000}},{"n":"Moissonneuse stellaire (voie annexe)","ic":"🌠","c":101000000000000,"f":{"p":150000000},"b":1},{"n":"Pioche en bois","ic":"⛏️","c":160000000000000,"f":{"q":0.25}},{"n":"Robot foreur","ic":"🤖","c":188000000000000,"f":{"p":240000000}},{"n":"Forge orbitale","ic":"🛰️","c":301000000000000,"f":{"p":380000000}},{"n":"Station minière","ic":"🚀","c":479000000000000,"f":{"p":600000000}},{"n":"Portail minier","ic":"🌀","c":770000000000000,"f":{"p":940000000}},{"n":"Brevet industriel","ic":"📑","c":1210000000000000,"f":{"m":8}}],[{"n":"Coffre de la mine","ic":"🔒","c":1,"f":{},"h":1,"d":"Garde l’arbre des pièces après une Renaissance, et rend celui que tu viens de perdre."},{"n":"Graine ancienne","ic":"🌱","c":1,"f":{"m":10}},{"n":"Racine profonde","ic":"🌿","c":2,"f":{"g1":2}},{"n":"Apprentis","ic":"🧒","c":5,"f":{},"a":"click","r":5,"d":"Clique tout seul, 5 fois par seconde."},{"n":"Braise brûlante","ic":"🔥","c":8,"f":{"m":10}},{"n":"Aube puissante","ic":"🌅","c":25,"f":{"g1":3}},{"n":"Contremaître","ic":"🧑‍💼","c":77,"f":{},"a":"tree","d":"Achète tout seul les compétences de l’arbre des pièces."},{"n":"Sève ancienne","ic":"🍯","c":77,"f":{"m":5}},{"n":"Forge profonde","ic":"⚒️","c":172,"f":{"m":1.3}},{"n":"Cendre brûlante","ic":"🌫️","c":196,"f":{"g1":1.8}},{"n":"Étincelle puissante","ic":"✨","c":354,"f":{"m":1.25}},{"n":"Pousse ancienne","ic":"🌱","c":395,"f":{"g1":1.4}},{"n":"Source profonde","ic":"💧","c":554,"f":{"m":1.6}},{"n":"Phénix brûlant","ic":"🐦","c":700,"f":{"g1":1.3}},{"n":"Souffle puissant (voie annexe)","ic":"🍃","c":911,"f":{"m":1.3},"b":1},{"n":"Brasier ancien","ic":"🔥","c":1030,"f":{"m":2.5}},{"n":"Cycle profond","ic":"♻️","c":1650,"f":{"g1":1.5}},{"n":"Renouveau brûlant","ic":"🌸","c":2460,"f":{"m":1.8}},{"n":"Germe puissant","ic":"🌰","c":3300,"f":{"g1":4}},{"n":"Feuillage ancien","ic":"🍃","c":13200,"f":{"m":1.3}},{"n":"Printemps profond","ic":"🌷","c":15100,"f":{"g1":1.8}},{"n":"Écho brûlant","ic":"🔔","c":27100,"f":{"m":1.25}},{"n":"Éveil puissant","ic":"🌄","c":30300,"f":{"g1":1.4}},{"n":"Graine sacrée","ic":"🌱","c":42500,"f":{"m":1.6}},{"n":"Racine fertile","ic":"🌿","c":53800,"f":{"g1":1.3}},{"n":"Braise radieuse","ic":"🔥","c":69800,"f":{"m":2.5}},{"n":"Aube vive","ic":"🌅","c":110000,"f":{"g1":1000}},{"n":"Sève sacrée","ic":"🍯","c":110000000,"f":{"g1":1.5}},{"n":"Forge fertile","ic":"⚒️","c":331000000,"f":{"m":1.8}},{"n":"Cendre radieuse (voie annexe)","ic":"🌫️","c":445000000,"f":{"m":1.3},"b":1},{"n":"Étincelle vive","ic":"✨","c":507000000,"f":{"g1":4}},{"n":"Pousse sacrée","ic":"🌱","c":2020000000,"f":{"m":1.3}},{"n":"Source fertile","ic":"💧","c":2310000000,"f":{"g1":1.8}},{"n":"Phénix radieux","ic":"🐦","c":4170000000,"f":{"m":1.25}},{"n":"Souffle vif","ic":"🍃","c":4650000000,"f":{"g1":1.4}},{"n":"Brasier sacré","ic":"🔥","c":6510000000,"f":{"m":1.6}},{"n":"Cycle fertile","ic":"♻️","c":8240000000,"f":{"g1":1.3}},{"n":"Renouveau radieux","ic":"🌸","c":10700000000,"f":{"m":2.5}},{"n":"Germe vif","ic":"🌰","c":16900000000,"f":{"g1":1.5}},{"n":"Feuillage sacré","ic":"🍃","c":25400000000,"f":{"m":1.8}},{"n":"Printemps fertile","ic":"🌷","c":34100000000,"f":{"g1":4}},{"n":"Écho radieux","ic":"🔔","c":136000000000,"f":{"m":1.3}},{"n":"Éveil vif","ic":"🌄","c":155000000000,"f":{"g1":1.8}},{"n":"Graine pure","ic":"🌱","c":280000000000,"f":{"m":1.25}},{"n":"Racine dorée (voie annexe)","ic":"🌿","c":313000000000,"f":{"m":1.3},"b":1},{"n":"Braise éternelle","ic":"🔥","c":356000000000,"f":{"g1":1.4}},{"n":"Aube lumineuse","ic":"🌅","c":500000000000,"f":{"m":1.6}},{"n":"Sève pure","ic":"🍯","c":631000000000,"f":{"g1":1.3}},{"n":"Forge dorée","ic":"⚒️","c":821000000000,"f":{"m":2.5}},{"n":"Cendre éternelle","ic":"🌫️","c":1290000000000,"f":{"g1":1.5}},{"n":"Étincelle lumineuse","ic":"✨","c":1950000000000,"f":{"m":1.8}},{"n":"Pousse pure","ic":"🌱","c":2610000000000,"f":{"g1":4}},{"n":"Source dorée","ic":"💧","c":10400000000000,"f":{"m":1.3}},{"n":"Phénix éternel","ic":"🐦","c":11900000000000,"f":{"g1":1.8}},{"n":"Souffle lumineux","ic":"🍃","c":21500000000000,"f":{"m":1.25}},{"n":"Brasier pur","ic":"🔥","c":23900000000000,"f":{"m":1000000}},{"n":"Cycle doré","ic":"♻️","c":23900000000000000,"f":{"g1":1.4}},{"n":"Renouveau éternel","ic":"🌸","c":33600000000000000,"f":{"m":1.6}},{"n":"Germe lumineux","ic":"🌰","c":42500000000000000,"f":{"g1":1.3}},{"n":"Feuillage pur (voie annexe)","ic":"🍃","c":55200000000000000,"f":{"m":1.3},"b":1},{"n":"Printemps doré","ic":"🌷","c":62900000000000000,"f":{"m":2.5}},{"n":"Écho éternel","ic":"🔔","c":99500000000000000,"f":{"g1":1.5}},{"n":"Éveil lumineux","ic":"🌄","c":149000000000000000,"f":{"m":1.8}},{"n":"Graine profonde","ic":"🌱","c":200000000000000000,"f":{"g1":4}},{"n":"Racine brûlante","ic":"🌿","c":801000000000000000,"f":{"m":1.3}},{"n":"Braise puissante","ic":"🔥","c":913000000000000000,"f":{"g1":1.8}},{"n":"Aube ancienne","ic":"🌅","c":1640000000000000000,"f":{"m":1.25}},{"n":"Sève profonde","ic":"🍯","c":2760000000000000000,"f":{"g1":1.4}},{"n":"Forge brûlante","ic":"⚒️","c":3860000000000000000,"f":{"m":1.6}},{"n":"Cendre puissante","ic":"🌫️","c":4880000000000000000,"f":{"g1":1.3}},{"n":"Étincelle ancienne","ic":"✨","c":6350000000000000000,"f":{"m":2.5}},{"n":"Pousse profonde","ic":"🌱","c":10000000000000000000,"f":{"g1":1.5}},{"n":"Source brûlante","ic":"💧","c":15000000000000000000,"f":{"m":1.8}},{"n":"Phénix puissant","ic":"🐦","c":20200000000000000000,"f":{"g1":1000000}},{"n":"Souffle ancien (voie annexe)","ic":"🍃","c":2.0099999999999998e+25,"f":{"m":1.3},"b":1},{"n":"Brasier profond","ic":"🔥","c":2.31e+25,"f":{"g1":4}},{"n":"Cycle brûlant","ic":"♻️","c":9.21e+25,"f":{"m":1.3}},{"n":"Renouveau puissant","ic":"🌸","c":1.05e+26,"f":{"g1":1.8}},{"n":"Germe ancien","ic":"🌰","c":1.89e+26,"f":{"m":1.25}},{"n":"Feuillage profond","ic":"🍃","c":2.11e+26,"f":{"g1":1.4}},{"n":"Printemps brûlant","ic":"🌷","c":2.96e+26,"f":{"m":1.6}},{"n":"Écho puissant","ic":"🔔","c":3.7399999999999996e+26,"f":{"g1":1.3}},{"n":"Éveil ancien","ic":"🌄","c":4.87e+26,"f":{"m":2.5}},{"n":"Graine fertile","ic":"🌱","c":7.689999999999999e+26,"f":{"g1":1.5}},{"n":"Racine radieuse","ic":"🌿","c":1.1500000000000002e+27,"f":{"m":1.8}},{"n":"Braise vive","ic":"🔥","c":1.5500000000000003e+27,"f":{"g1":4}},{"n":"Aube sacrée","ic":"🌅","c":6.19e+27,"f":{"m":1.3}},{"n":"Sève fertile","ic":"🍯","c":7.060000000000001e+27,"f":{"g1":1.8}},{"n":"Forge radieuse ultime","ic":"🏔️","c":1.27e+28,"f":{"g1":100}}],[{"n":"Mémoire des cimes","ic":"🔒","c":1,"f":{},"h":1,"d":"Garde l’arbre Renaissance après une Ascension, et rend celui que tu viens de perdre."},{"n":"Cime céleste","ic":"🏔️","c":3,"f":{"g1":10}},{"n":"Ascenseur automatique","ic":"🛗","c":11,"f":{},"a":"pres","d":"Lance la Renaissance tout seul, selon ta condition."},{"n":"Brise limpide","ic":"🌬️","c":28,"f":{"m":10}},{"n":"Nuée radieuse","ic":"☁️","c":50,"f":{"g2":3}},{"n":"Source céleste","ic":"⛲","c":150,"f":{},"a":"pass","d":"Gagne chaque seconde 10 % des RP en attente."},{"n":"Aile pure","ic":"🪽","c":152,"f":{"m":10}},{"n":"Maître des arbres","ic":"🧙","c":271,"f":{},"a":"tree","d":"Achète tout seul l’arbre Renaissance."},{"n":"Falaise céleste","ic":"⛰️","c":271,"f":{"g2":3}},{"n":"Montée limpide","ic":"📈","c":814,"f":{"m":1.3}},{"n":"Lumière radieuse","ic":"💡","c":1730,"f":{"g2":1.8}},{"n":"Hauteur pure","ic":"🗻","c":3130,"f":{"m":1.25}},{"n":"Plume céleste","ic":"🪶","c":3310,"f":{"g2":1.4}},{"n":"Échelle limpide","ic":"🪜","c":4640,"f":{"m":1.6}},{"n":"Sommet radieux (voie annexe)","ic":"🏔️","c":5210,"f":{"m":1.3},"b":1},{"n":"Vent pur","ic":"💨","c":5560,"f":{"g2":1.3}},{"n":"Nuage céleste","ic":"☁️","c":7240,"f":{"m":2.5}},{"n":"Aigle limpide","ic":"🦅","c":9090,"f":{"g2":1.5}},{"n":"Envol radieux","ic":"🕊️","c":13600,"f":{"m":1.8}},{"n":"Zénith pur","ic":"☀️","c":15800,"f":{"g2":4}},{"n":"Horizon céleste","ic":"🌄","c":63200,"f":{"m":1.3}},{"n":"Ciel limpide","ic":"🌤️","c":67500,"f":{"g2":1.8}},{"n":"Orage radieux","ic":"⛈️","c":121000,"f":{"m":1.25}},{"n":"Cairn pur","ic":"🪨","c":129000,"f":{"g2":1.4}},{"n":"Cime haute","ic":"🏔️","c":179000,"f":{"m":1.6}},{"n":"Brise légère","ic":"🌬️","c":203000,"f":{"g2":1.3}},{"n":"Nuée éclatante","ic":"☁️","c":263000,"f":{"g2":1000}},{"n":"Aile glacée","ic":"🪽","c":263000000,"f":{"m":2.5}},{"n":"Falaise haute","ic":"⛰️","c":330000000,"f":{"g2":1.5}},{"n":"Montée légère (voie annexe)","ic":"📈","c":496000000,"f":{"m":1.3},"b":1},{"n":"Lumière éclatante","ic":"💡","c":530000000,"f":{"m":1.8}},{"n":"Hauteur glacée","ic":"🗻","c":614000000,"f":{"g1":4}},{"n":"Plume haute","ic":"🪶","c":1220000000,"f":{"m":1.3}},{"n":"Échelle légère","ic":"🪜","c":1310000000,"f":{"g1":1.8}},{"n":"Sommet éclatant","ic":"🏔️","c":1760000000,"f":{"m":1.25}},{"n":"Vent glacé","ic":"💨","c":1860000000,"f":{"g1":1.4}},{"n":"Nuage haut","ic":"☁️","c":2200000000,"f":{"m":1.6}},{"n":"Aigle léger","ic":"🦅","c":2470000000,"f":{"g1":1.3}},{"n":"Envol éclatant","ic":"🕊️","c":2820000000,"f":{"m":2.5}},{"n":"Zénith glacé","ic":"☀️","c":3550000000,"f":{"g1":1.5}},{"n":"Horizon haut","ic":"🌄","c":4340000000,"f":{"m":1.8}},{"n":"Ciel léger","ic":"🌤️","c":7550000000,"f":{"g2":4}},{"n":"Orage éclatant","ic":"⛈️","c":30100000000,"f":{"m":1.3}},{"n":"Cairn glacé","ic":"🪨","c":32300000000,"f":{"g2":1.8}},{"n":"Cime majestueuse (voie annexe)","ic":"🏔️","c":58000000000,"f":{"m":1.3},"b":1},{"n":"Brise vertigineuse","ic":"🌬️","c":61900000000,"f":{"m":1.25}},{"n":"Nuée infinie","ic":"☁️","c":65500000000,"f":{"g2":1.4}},{"n":"Aile souveraine","ic":"🪽","c":91800000000,"f":{"m":1.6}},{"n":"Falaise majestueuse","ic":"⛰️","c":103000000000,"f":{"g2":1.3}},{"n":"Montée vertigineuse","ic":"📈","c":134000000000,"f":{"m":2.5}},{"n":"Lumière infinie","ic":"💡","c":168000000000,"f":{"g2":1.5}},{"n":"Hauteur souveraine","ic":"🗻","c":253000000000,"f":{"m":1.8}},{"n":"Plume majestueuse","ic":"🪶","c":293000000000,"f":{"g2":4}},{"n":"Échelle vertigineuse","ic":"🪜","c":1170000000000,"f":{"m":1.3}},{"n":"Sommet infini","ic":"🏔️","c":1250000000000,"f":{"g2":1.8}},{"n":"Vent souverain","ic":"💨","c":2250000000000,"f":{"m":1000000}},{"n":"Nuage majestueux","ic":"☁️","c":71200000000000,"f":{"m":1.25}},{"n":"Aigle vertigineux","ic":"🦅","c":75300000000000,"f":{"g2":1.4}},{"n":"Envol infini","ic":"🕊️","c":105000000000000,"f":{"m":1.6}},{"n":"Zénith souverain (voie annexe)","ic":"☀️","c":119000000000000,"f":{"m":1.3},"b":1},{"n":"Horizon majestueux","ic":"🌄","c":126000000000000,"f":{"g2":1.3}},{"n":"Ciel vertigineux","ic":"🌤️","c":165000000000000,"f":{"m":2.5}},{"n":"Orage infini","ic":"⛈️","c":207000000000000,"f":{"g2":1.5}},{"n":"Cairn souverain","ic":"🪨","c":310000000000000,"f":{"m":1.8}},{"n":"Cime limpide","ic":"🏔️","c":360000000000000,"f":{"g1":4}},{"n":"Brise radieuse","ic":"🌬️","c":719000000000000,"f":{"m":1.3}},{"n":"Nuée pure","ic":"☁️","c":768000000000000,"f":{"g1":1.8}},{"n":"Aile céleste","ic":"🪽","c":1030000000000000,"f":{"m":1.25}},{"n":"Falaise limpide","ic":"⛰️","c":1080000000000000,"f":{"g1":1.4}},{"n":"Montée radieuse","ic":"📈","c":1290000000000000,"f":{"m":1.6}},{"n":"Lumière pure","ic":"💡","c":1450000000000000,"f":{"g1":1.3}},{"n":"Hauteur céleste","ic":"🗻","c":2210000000000000,"f":{"m":2.5}},{"n":"Plume limpide","ic":"🪶","c":2770000000000000,"f":{"g1":1.5}},{"n":"Échelle radieuse","ic":"🪜","c":3390000000000000,"f":{"g2":1000000}},{"n":"Sommet pur (voie annexe)","ic":"🏔️","c":3.39e+21,"f":{"m":1.3},"b":1},{"n":"Vent céleste","ic":"💨","c":3.62e+21,"f":{"m":1.8}},{"n":"Nuage limpide","ic":"☁️","c":4.2e+21,"f":{"g2":4}},{"n":"Aigle radieux","ic":"🦅","c":1.67e+22,"f":{"m":1.3}},{"n":"Envol pur","ic":"🕊️","c":1.8e+22,"f":{"g2":1.8}},{"n":"Zénith céleste","ic":"☀️","c":3.22e+22,"f":{"m":1.25}},{"n":"Horizon limpide","ic":"🌄","c":3.42e+22,"f":{"g2":1.4}},{"n":"Ciel radieux","ic":"🌤️","c":4.77e+22,"f":{"m":1.6}},{"n":"Orage pur","ic":"⛈️","c":5.38e+22,"f":{"g2":1.3}},{"n":"Cairn céleste","ic":"🪨","c":6.98e+22,"f":{"m":2.5}},{"n":"Cime légère","ic":"🏔️","c":8.79e+22,"f":{"g2":1.5}},{"n":"Brise éclatante","ic":"🌬️","c":1.31e+23,"f":{"m":1.8}},{"n":"Nuée glacée","ic":"☁️","c":1.53e+23,"f":{"g2":4}},{"n":"Aile haute","ic":"🪽","c":6.1e+23,"f":{"m":1.3}},{"n":"Falaise légère ultime","ic":"🏔️","c":6.52e+23,"f":{"g2":100}}],[{"n":"Écho des sommets","ic":"🔒","c":1,"f":{},"h":1,"d":"Garde l’arbre Ascension après une Transcendance, et rend celui que tu viens de perdre."},{"n":"Étoile cosmique","ic":"⭐","c":2,"f":{"g2":10}},{"n":"Portail automatique","ic":"🌀","c":9,"f":{},"a":"pres","d":"Lance l’Ascension toute seule, selon ta condition."},{"n":"Nébuleuse obscure","ic":"🌌","c":16,"f":{"m":10}},{"n":"Comète absolue","ic":"☄️","c":22,"f":{"g3":3}},{"n":"Pluie d’étoiles","ic":"🌠","c":68,"f":{},"a":"pass","d":"Gagne chaque seconde 10 % des AP en attente."},{"n":"Orbite fractale","ic":"🪐","c":70,"f":{"m":10}},{"n":"Cartographe du vide","ic":"🗺️","c":94,"f":{},"a":"tree","d":"Achète tout seul l’arbre Ascension."},{"n":"Singularité cosmique","ic":"⚫","c":94,"f":{"g3":3}},{"n":"Aurore obscure","ic":"🌈","c":282,"f":{"m":1.3}},{"n":"Galaxie absolue","ic":"🌀","c":290,"f":{"g3":1.8}},{"n":"Constellation fractale","ic":"✨","c":524,"f":{"m":1.25}},{"n":"Dimension cosmique","ic":"🧿","c":538,"f":{"g3":1.4}},{"n":"Lune obscure","ic":"🌙","c":754,"f":{"m":1.6}},{"n":"Cosmos absolu","ic":"🌌","c":800,"f":{"g3":1.3}},{"n":"Vide fractal (voie annexe)","ic":"⚫","c":1040,"f":{"m":1.3},"b":1},{"n":"Quasar cosmique","ic":"💫","c":1070,"f":{"m":2.5}},{"n":"Horizon d’événements obscur","ic":"🕳️","c":1210,"f":{"g3":1.5}},{"n":"Pulsar absolu","ic":"📡","c":1810,"f":{"m":1.8}},{"n":"Éclat fractal","ic":"💠","c":1940,"f":{"g3":4}},{"n":"Spectre cosmique","ic":"👻","c":7790,"f":{"m":1.3}},{"n":"Trou de ver obscur","ic":"🌀","c":8050,"f":{"g3":1.8}},{"n":"Néant absolu","ic":"🕳️","c":14400,"f":{"m":1.25}},{"n":"Infini fractal","ic":"♾️","c":15000,"f":{"g3":1.4}},{"n":"Étoile spectrale","ic":"⭐","c":20800,"f":{"m":1.6}},{"n":"Nébuleuse sidérale","ic":"🌌","c":22100,"f":{"g3":1.3}},{"n":"Comète résonante","ic":"☄️","c":28800,"f":{"m":2.5}},{"n":"Orbite stellaire","ic":"🪐","c":32300,"f":{"g3":1.5}},{"n":"Singularité spectrale","ic":"⚫","c":48300,"f":{"m":1.8}},{"n":"Aurore sidérale","ic":"🌈","c":52100,"f":{"g3":1000}},{"n":"Galaxie résonante","ic":"🌀","c":52000000,"f":{"g2":4}},{"n":"Constellation stellaire (voie annexe)","ic":"✨","c":104000000,"f":{"m":1.3},"b":1},{"n":"Dimension spectrale","ic":"🧿","c":161000000,"f":{"m":1.3}},{"n":"Lune sidérale","ic":"🌙","c":167000000,"f":{"g2":1.8}},{"n":"Cosmos résonant","ic":"🌌","c":224000000,"f":{"m":1.25}},{"n":"Vide stellaire","ic":"⚫","c":230000000,"f":{"g2":1.4}},{"n":"Quasar spectral","ic":"💫","c":272000000,"f":{"m":1.6}},{"n":"Horizon d’événements sidéral","ic":"🕳️","c":289000000,"f":{"g2":1.3}},{"n":"Pulsar résonant","ic":"📡","c":329000000,"f":{"m":2.5}},{"n":"Éclat stellaire","ic":"💠","c":369000000,"f":{"g2":1.5}},{"n":"Spectre spectral","ic":"👻","c":452000000,"f":{"m":1.8}},{"n":"Trou de ver sidéral","ic":"🌀","c":487000000,"f":{"g3":4}},{"n":"Néant résonant","ic":"🕳️","c":1940000000,"f":{"m":1.3}},{"n":"Infini stellaire","ic":"♾️","c":2010000000,"f":{"g3":1.8}},{"n":"Étoile liminale","ic":"⭐","c":3620000000,"f":{"m":1.25}},{"n":"Nébuleuse quantique","ic":"🌌","c":3730000000,"f":{"g3":1.4}},{"n":"Comète transcendante","ic":"☄️","c":5210000000,"f":{"m":1.6}},{"n":"Orbite impalpable (voie annexe)","ic":"🪐","c":5530000000,"f":{"m":1.3},"b":1},{"n":"Singularité liminale","ic":"⚫","c":5710000000,"f":{"g3":1.3}},{"n":"Aurore quantique","ic":"🌈","c":7420000000,"f":{"m":2.5}},{"n":"Galaxie transcendante","ic":"🌀","c":8330000000,"f":{"g3":1.5}},{"n":"Constellation impalpable","ic":"✨","c":12400000000,"f":{"m":1.8}},{"n":"Dimension liminale","ic":"🧿","c":13500000000,"f":{"g3":4}},{"n":"Lune quantique","ic":"🌙","c":53800000000,"f":{"m":1.3}},{"n":"Cosmos transcendant","ic":"🌌","c":55500000000,"f":{"g3":1.8}},{"n":"Vide impalpable","ic":"⚫","c":100000000000,"f":{"m":1.25}},{"n":"Quasar liminal","ic":"💫","c":102000000000,"f":{"g3":1.4}},{"n":"Horizon d’événements quantique","ic":"🕳️","c":144000000000,"f":{"m":1.6}},{"n":"Pulsar transcendant","ic":"📡","c":153000000000,"f":{"g3":1.3}},{"n":"Éclat impalpable","ic":"💠","c":265000000000,"f":{"m":2.5}},{"n":"Spectre liminal","ic":"👻","c":296000000000,"f":{"m":1000000}},{"n":"Trou de ver quantique","ic":"🌀","c":1660000000000,"f":{"g3":1.5}},{"n":"Néant transcendant","ic":"🕳️","c":2510000000000,"f":{"m":1.8}},{"n":"Infini impalpable (voie annexe)","ic":"♾️","c":2690000000000,"f":{"m":1.3},"b":1},{"n":"Étoile obscure","ic":"⭐","c":2790000000000,"f":{"g2":4}},{"n":"Nébuleuse absolue","ic":"🌌","c":5560000000000,"f":{"m":1.3}},{"n":"Comète fractale","ic":"☄️","c":5760000000000,"f":{"g2":1.8}},{"n":"Orbite cosmique","ic":"🪐","c":7720000000000,"f":{"m":1.25}},{"n":"Singularité obscure","ic":"⚫","c":7930000000000,"f":{"g2":1.4}},{"n":"Aurore absolue","ic":"🌈","c":9400000000000,"f":{"m":1.6}},{"n":"Galaxie fractale","ic":"🌀","c":9960000000000,"f":{"g2":1.3}},{"n":"Constellation cosmique","ic":"✨","c":11300000000000,"f":{"m":2.5}},{"n":"Dimension obscure","ic":"🧿","c":12700000000000,"f":{"g2":1.5}},{"n":"Lune absolue","ic":"🌙","c":15600000000000,"f":{"m":1.8}},{"n":"Cosmos fractal","ic":"🌌","c":16800000000000,"f":{"g3":4}},{"n":"Vide cosmique","ic":"⚫","c":67200000000000,"f":{"m":1.3}},{"n":"Quasar obscur","ic":"💫","c":69300000000000,"f":{"g3":1.8}},{"n":"Horizon d’événements absolu","ic":"🕳️","c":124000000000000,"f":{"m":1.25}},{"n":"Pulsar fractal","ic":"📡","c":129000000000000,"f":{"g3":1.4}},{"n":"Éclat cosmique (voie annexe)","ic":"💠","c":180000000000000,"f":{"m":1.3},"b":1},{"n":"Spectre obscur","ic":"👻","c":185000000000000,"f":{"g3":1000000}},{"n":"Trou de ver absolu","ic":"🌀","c":185000000000000000000,"f":{"m":1.6}},{"n":"Néant fractal","ic":"🕳️","c":197000000000000000000,"f":{"g3":1.3}},{"n":"Infini cosmique","ic":"♾️","c":256000000000000000000,"f":{"m":2.5}},{"n":"Étoile sidérale","ic":"⭐","c":288000000000000000000,"f":{"g3":1.5}},{"n":"Nébuleuse résonante","ic":"🌌","c":430000000000000000000,"f":{"m":1.8}},{"n":"Comète stellaire","ic":"☄️","c":464000000000000000000,"f":{"g3":4}},{"n":"Orbite spectrale","ic":"🪐","c":1.85e+21,"f":{"m":1.3}},{"n":"Singularité sidérale","ic":"⚫","c":2.4e+21,"f":{"g3":1.8}},{"n":"Aurore résonante","ic":"🌈","c":4.31e+21,"f":{"m":1.25}},{"n":"Galaxie stellaire","ic":"🌀","c":4.43e+21,"f":{"g3":1.4}},{"n":"Constellation spectrale","ic":"✨","c":6.21e+21,"f":{"m":1.6}},{"n":"Dimension sidérale","ic":"🧿","c":6.58e+21,"f":{"g3":1.3}},{"n":"Lune résonante","ic":"🌙","c":8.56e+21,"f":{"m":2.5}},{"n":"Cosmos stellaire","ic":"🌌","c":9.6e+21,"f":{"g3":1.5}},{"n":"Vide spectral","ic":"⚫","c":1.43e+22,"f":{"m":1.8}},{"n":"Quasar sidéral ultime","ic":"🏔️","c":1.55e+22,"f":{"g3":100}}],[{"n":"Mémoire éternelle","ic":"🔒","c":1,"f":{},"h":1,"d":"Garde l’arbre Transcendance après une Divinité, et rend celui que tu viens de perdre."},{"n":"Prière divine","ic":"🙏","c":4,"f":{"g3":10}},{"n":"Rituel automatique","ic":"🕯️","c":12,"f":{},"a":"pres","d":"Lance la Transcendance toute seule, selon ta condition."},{"n":"Offrande glorieuse","ic":"🕯️","c":12,"f":{"m":10}},{"n":"Aura rayonnante","ic":"😇","c":14,"f":{"g4":3}},{"n":"Fontaine d’éternité","ic":"⛲","c":42,"f":{},"a":"pass","d":"Gagne chaque seconde 10 % des TP en attente."},{"n":"Éternité sainte","ic":"♾️","c":42,"f":{"m":10}},{"n":"Grand architecte","ic":"📐","c":48,"f":{},"a":"tree","d":"Achète tout seul l’arbre Transcendance."},{"n":"Cycle éternel","ic":"♾️","c":48,"f":{},"a":"self","d":"Lance la Divinité toute seule, selon ta condition."},{"n":"Révélation divine","ic":"👁️","c":152,"f":{"m":1.3}},{"n":"Couronne glorieuse","ic":"👑","c":156,"f":{"g4":1.8}},{"n":"Bénédiction rayonnante","ic":"✝️","c":312,"f":{"m":1.25}},{"n":"Harpe sainte","ic":"🎼","c":320,"f":{"g4":1.4}},{"n":"Flamme divine","ic":"🔥","c":451,"f":{"m":1.6}},{"n":"Splendeur glorieuse","ic":"🌟","c":462,"f":{"g4":1.3}},{"n":"Autel rayonnant","ic":"🏛️","c":630,"f":{"m":2.5}},{"n":"Oracle saint (voie annexe)","ic":"🔮","c":672,"f":{"m":1.3},"b":1},{"n":"Halo divin","ic":"😇","c":688,"f":{"g4":1.5}},{"n":"Miracle glorieux","ic":"✨","c":1050,"f":{"m":1.8}},{"n":"Temple rayonnant","ic":"⛩️","c":1100,"f":{"g4":4}},{"n":"Chant saint","ic":"🎶","c":4640,"f":{"m":1.3}},{"n":"Trône divin","ic":"🪑","c":4830,"f":{"g4":1.8}},{"n":"Panthéon glorieux","ic":"🏛️","c":8690,"f":{"m":1.25}},{"n":"Sceptre rayonnant","ic":"🔱","c":8980,"f":{"g4":1.4}},{"n":"Destin saint","ic":"🧭","c":12800,"f":{"m":1.6}},{"n":"Prière bénie","ic":"🙏","c":13300,"f":{"g4":1.3}},{"n":"Offrande omnisciente","ic":"🕯️","c":17600,"f":{"m":2.5}},{"n":"Aura éternelle","ic":"😇","c":19000,"f":{"g4":1.5}},{"n":"Éternité immortelle","ic":"♾️","c":28500,"f":{"m":1.8}},{"n":"Révélation bénie","ic":"👁️","c":30200,"f":{"g3":4}},{"n":"Couronne omnisciente","ic":"👑","c":61600,"f":{"m":1.3}},{"n":"Bénédiction éternelle","ic":"✝️","c":62600,"f":{"g4":1000}},{"n":"Harpe immortelle","ic":"🎼","c":63800000,"f":{"g3":1.8}},{"n":"Flamme bénie (voie annexe)","ic":"🔥","c":85700000,"f":{"m":1.3},"b":1},{"n":"Splendeur omnisciente","ic":"🌟","c":88700000,"f":{"m":1.25}},{"n":"Autel éternel","ic":"🏛️","c":89900000,"f":{"g3":1.4}},{"n":"Oracle immortel","ic":"🔮","c":33800000,"f":{"m":1.6}},{"n":"Halo béni","ic":"😇","c":35100000,"f":{"g3":1.3}},{"n":"Miracle omniscient","ic":"✨","c":40400000,"f":{"m":2.5}},{"n":"Temple éternel","ic":"⛩️","c":43400000,"f":{"g3":1.5}},{"n":"Chant immortel","ic":"🎶","c":53800000,"f":{"m":1.8}},{"n":"Trône béni","ic":"🪑","c":56700000,"f":{"g4":4}},{"n":"Panthéon omniscient","ic":"🏛️","c":228000000,"f":{"m":1.3}},{"n":"Sceptre éternel","ic":"🔱","c":235000000,"f":{"g4":1.8}},{"n":"Destin immortel","ic":"🧭","c":429000000,"f":{"m":1.25}},{"n":"Prière souveraine","ic":"🙏","c":438000000,"f":{"g4":1.4}},{"n":"Offrande sacrée","ic":"🕯️","c":620000000,"f":{"m":1.6}},{"n":"Aura suprême","ic":"😇","c":648000000,"f":{"g4":1.3}},{"n":"Éternité originelle","ic":"♾️","c":848000000,"f":{"m":2.5}},{"n":"Révélation souveraine","ic":"👁️","c":906000000,"f":{"g4":1.5}},{"n":"Couronne sacrée (voie annexe)","ic":"👑","c":1360000000,"f":{"m":1.3},"b":1},{"n":"Bénédiction suprême","ic":"✝️","c":1400000000,"f":{"m":1.8}},{"n":"Harpe originelle","ic":"🎼","c":1460000000,"f":{"g4":4}},{"n":"Flamme souveraine","ic":"🔥","c":5920000000,"f":{"m":1.3}},{"n":"Splendeur sacrée","ic":"🌟","c":6100000000,"f":{"g4":1.8}},{"n":"Autel suprême","ic":"🏛️","c":11000000000,"f":{"m":1.25}},{"n":"Oracle originel","ic":"🔮","c":11400000000,"f":{"g4":1.4}},{"n":"Halo souverain","ic":"😇","c":16100000000,"f":{"m":1.6}},{"n":"Miracle sacré","ic":"✨","c":16600000000,"f":{"g4":1.3}},{"n":"Temple suprême","ic":"⛩️","c":22000000000,"f":{"m":2.5}},{"n":"Chant originel","ic":"🎶","c":23400000000,"f":{"g4":1.5}},{"n":"Trône souverain","ic":"🪑","c":35400000000,"f":{"m":1.8}},{"n":"Panthéon sacré","ic":"🏛️","c":37200000000,"f":{"g3":4}},{"n":"Sceptre suprême","ic":"🔱","c":74900000000,"f":{"m":1.3}},{"n":"Destin originel","ic":"🧭","c":76700000000,"f":{"g3":1.8}},{"n":"Prière glorieuse","ic":"🙏","c":104000000000,"f":{"m":1000000}},{"n":"Offrande rayonnante","ic":"🕯️","c":249000000000,"f":{"m":1.25}},{"n":"Aura sainte (voie annexe)","ic":"😇","c":252000000000,"f":{"m":1.3},"b":1},{"n":"Éternité divine","ic":"♾️","c":261000000000,"f":{"g3":1.4}},{"n":"Révélation glorieuse","ic":"👁️","c":309000000000,"f":{"m":1.6}},{"n":"Couronne rayonnante","ic":"👑","c":321000000000,"f":{"g3":1.3}},{"n":"Bénédiction sainte","ic":"✝️","c":371000000000,"f":{"m":2.5}},{"n":"Harpe divine","ic":"🎼","c":396000000000,"f":{"g3":1.5}},{"n":"Flamme glorieuse","ic":"🔥","c":487000000000,"f":{"m":1.8}},{"n":"Splendeur rayonnante","ic":"🌟","c":512000000000,"f":{"g4":4}},{"n":"Autel saint","ic":"🏛️","c":2060000000000,"f":{"m":1.3}},{"n":"Oracle divin","ic":"🔮","c":2100000000000,"f":{"g4":1.8}},{"n":"Halo glorieux","ic":"😇","c":3840000000000,"f":{"m":1.25}},{"n":"Miracle rayonnant","ic":"✨","c":3920000000000,"f":{"g4":1.4}},{"n":"Temple saint","ic":"⛩️","c":5520000000000,"f":{"m":1.6}},{"n":"Chant divin","ic":"🎶","c":5750000000000,"f":{"g4":1.3}},{"n":"Trône glorieux","ic":"🪑","c":7520000000000,"f":{"m":2.5}},{"n":"Panthéon rayonnant","ic":"🏛️","c":8050000000000,"f":{"g4":1.5}},{"n":"Sceptre saint","ic":"🔱","c":12100000000000,"f":{"m":1.8}},{"n":"Destin divin (voie annexe)","ic":"🧭","c":12600000000000,"f":{"m":1.3},"b":1},{"n":"Prière omnisciente","ic":"🙏","c":12800000000000,"f":{"g4":4}},{"n":"Offrande éternelle","ic":"🕯️","c":52200000000000,"f":{"m":1.3}},{"n":"Aura immortelle","ic":"😇","c":53300000000000,"f":{"g4":1000000}},{"n":"Éternité bénie","ic":"♾️","c":53600000000000000000,"f":{"g4":1.8}},{"n":"Révélation omnisciente","ic":"👁️","c":97600000000000000000,"f":{"m":1.25}},{"n":"Couronne éternelle","ic":"👑","c":99600000000000000000,"f":{"g4":1.4}},{"n":"Bénédiction immortelle","ic":"✝️","c":140000000000000000000,"f":{"m":1.6}},{"n":"Harpe bénie","ic":"🎼","c":146000000000000000000,"f":{"g4":1.3}},{"n":"Flamme omnisciente","ic":"🔥","c":190000000000000000000,"f":{"m":2.5}},{"n":"Splendeur éternelle","ic":"🌟","c":205000000000000000000,"f":{"g4":1.5}},{"n":"Autel immortel","ic":"🏛️","c":308000000000000000000,"f":{"m":1.8}},{"n":"Oracle béni","ic":"🔮","c":321000000000000000000,"f":{"g3":4}},{"n":"Halo omniscient","ic":"😇","c":649000000000000000000,"f":{"m":1.3}},{"n":"Miracle éternel","ic":"✨","c":664000000000000000000,"f":{"g3":1.8}},{"n":"Temple immortel","ic":"⛩️","c":894000000000000000000,"f":{"m":1.25}},{"n":"Chant béni","ic":"🎶","c":917000000000000000000,"f":{"g3":1.4}},{"n":"Trône omniscient (voie annexe)","ic":"🪑","c":1.08e+21,"f":{"m":1.3},"b":1},{"n":"Panthéon éternel","ic":"🏛️","c":1.11e+21,"f":{"m":1.6}},{"n":"Sceptre immortel","ic":"🔱","c":1.15e+21,"f":{"g3":1.3}},{"n":"Destin béni","ic":"🧭","c":1.32e+21,"f":{"m":2.5}},{"n":"Apothéose","ic":"🌟","c":1.12e+22,"f":{},"e":1}]]};
+
+</script>
+<script>
+/* Filon Infini · moteur du jeu (sans interface). Les arbres viennent de DATA (calibrés par simulation). */
 const G=(function(){
 'use strict';
+const KEY='filon-infini-v2';
+const TICK=0.25;                 // pas de temps fixe (identique en simulation et en jeu)
+const REVEAL=0.5, PASSIVE=0.1;
+const OFFLINE_MAX=3*3600;
 
-/* =====================================================================
-   PARAMÈTRES D'ÉQUILIBRAGE
-   ===================================================================== */
-const P={
-  grow:1.15,            // coût ×1.15 par achat
-  reveal:0.5,           // un palier apparaît à 50 % de son coût
-  passive:0.1,          // 10 % du gain en attente par seconde
-  seuil:[0,1e9,3000,120,600],
-  guF:0.8,              // facteur de coût des jalons de générateurs
-  clicksPerSec:8,       // auto-clic
-  relic:[0,300,200,200],  // monnaie de départ offerte par les reliques (palier inférieur)
-  apo:800,              // coût de l'Apothéose (en DP)
-  base:[0,3,3,3,3],     // multiplicateur de base du gain de prestige de chaque palier
-  cs:[0,1,1,1,1],       // échelle des coûts des arbres (par palier)
-  start:1e6,            // capital de départ (arbre Renaissance)
-  q:10,                 // rapport de coût entre deux générateurs successifs
-  rho0:0.06,            // rendement/s du 1er générateur (production ÷ coût)
-  rhoD:0.75,            // décroissance du rendement d'un générateur au suivant
-};
-const KEY='filon-infini-v1';
-
-/* =====================================================================
-   FORMATAGE
-   ===================================================================== */
+/* ---------- formatage ---------- */
 const SUF=['','K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','Dc','Ud','Dd','Td','Qad','Qid','Sxd','Spd','Ocd','Nod','Vg'];
 function fmt(n){
   if(n===Infinity) return '∞';
@@ -700,7 +274,7 @@ function fmt(n){
   }
   let e=Math.floor(Math.log10(n)/3), m=n/Math.pow(10,e*3);
   if(m>=999.5){m/=1000;e++;}
-  if(e>=SUF.length){return n.toExponential(2).replace('e+','e');}
+  if(e>=SUF.length) return n.toExponential(2).replace('e+','e').replace(/\.?0+e/,'e');
   let s=m<10?m.toFixed(2):m<100?m.toFixed(1):m.toFixed(0);
   if(s.indexOf('.')>=0) s=s.replace(/\.?0+$/,'');
   return s+SUF[e];
@@ -712,365 +286,162 @@ function fmtTime(s){
   if(m>0) return m+'m '+String(x).padStart(2,'0')+'s';
   return x+'s';
 }
-function sig(x,d){ return Number(x.toPrecision(d||2)); }
 
-/* =====================================================================
-   PALIERS
-   ===================================================================== */
+/* ---------- paliers ---------- */
 const TIERS=[
   {key:'pieces',name:'Pièces',cur:'pièces',css:'c0',icon:'🪙'},
-  {key:'ren',name:'Renaissance',cur:'RP',css:'c1',icon:'🌱',earnLabel:'pièces gagnées',unit:'pièces'},
-  {key:'asc',name:'Ascension',cur:'AP',css:'c2',icon:'🚀',earnLabel:'RP gagnés',unit:'RP'},
-  {key:'tra',name:'Transcendance',cur:'TP',css:'c3',icon:'🌌',earnLabel:'AP gagnés',unit:'AP'},
-  {key:'div',name:'Divinité',cur:'DP',css:'c4',icon:'👑',earnLabel:'TP gagnés',unit:'TP'},
+  {key:'ren',name:'Renaissance',cur:'RP',css:'c1',icon:'🌱',earnLabel:'pièces gagnées'},
+  {key:'asc',name:'Ascension',cur:'AP',css:'c2',icon:'🚀',earnLabel:'RP gagnés'},
+  {key:'tra',name:'Transcendance',cur:'TP',css:'c3',icon:'🌌',earnLabel:'AP gagnés'},
+  {key:'div',name:'Divinité',cur:'DP',css:'c4',icon:'👑',earnLabel:'TP gagnés'},
 ];
-
-/* échelle des seuils d'auto-prestige : 1, 2, 5, 10, 20, 50 ... */
-const THR=[]; for(let e=0;e<=40;e++){[1,2,5].forEach(m=>THR.push(m*Math.pow(10,e)));}
+const THR=[]; for(let e=0;e<=60;e++){[1,2,5].forEach(m=>THR.push(m*Math.pow(10,e)));}
 function thrIndex(v){ for(let i=0;i<THR.length;i++) if(THR[i]>=v) return i; return THR.length-1; }
 
-/* =====================================================================
-   GÉNÉRATEURS (phase 1)
-   ===================================================================== */
-const GEN_DEF=[
-  ['Mineur','Mineurs','⛏️','Gratte la roche, un caillou à la fois.'],
-  ['Foreuse','Foreuses','🕳️','Troue la montagne sans rechigner.'],
-  ['Wagon','Wagons','🚃','Remonte le minerai à pleine vitesse.'],
-  ['Excavatrice','Excavatrices','🚜','Avale des tonnes de terre à l’heure.'],
-  ['Usine','Usines','🏭','Transforme le minerai en lingots.'],
-  ['Laser','Lasers','⚡','Découpe la roche comme du beurre.'],
-  ['Réacteur','Réacteurs','☢️','Une énergie folle pour des pépites folles.'],
-  ['Portail','Portails','🌀','Pioche dans les mines d’autres mondes.'],
-];
-const GENS=GEN_DEF.map((d,i)=>{
-  const base=sig(15*Math.pow(P.q,i),2);
-  return {n:d[0],pl:d[1],ic:d[2],txt:d[3],base:base,cps:sig(base*P.rho0*Math.pow(P.rhoD,i),2)};
-});
+/* ---------- données ---------- */
+let D=null, NODES=[], NODE={}, TREE=[[],[],[],[],[]], KEEP=[null,null,null,null,null], AUTO={}, GOALS=[], SEUIL=[0,1,1,1,1], BASE=[0,1,1,1,1];
+let S=null, A=null, EV=[];
 
-/* =====================================================================
-   OBJECTIFS (chaîne ; un seul visible à la fois)
-   ===================================================================== */
-const GOALS=[];
-function goal(kind,t,v,txt){GOALS.push({kind:kind,t:t,v:v,txt:txt});}
-[100,1e3,1e4,1e5,1e6,1e7,1e8,5e8].forEach(v=>goal('tot',0,v,'Gagne '+fmt(v)+' pièces'));
-goal('tot',0,1e9,'Atteins 1B de pièces');
-[10,150,1000,P.seuil[2]].forEach(v=>goal('earn',1,v,'Gagne '+fmt(v)+' RP en un seul run'));
-[10,40,P.seuil[3]].forEach(v=>goal('earn',2,v,'Gagne '+fmt(v)+' AP en un seul run'));
-[10,30,P.seuil[4]].forEach(v=>goal('earn',3,v,'Gagne '+fmt(v)+' TP en un seul run'));
-[100,1000,P.apo].forEach(v=>goal('earn',4,v,'Gagne '+fmt(v)+' DP en un seul run'));
-
-/* =====================================================================
-   AMÉLIORATIONS DE PIÈCES (palier 0)
-   ===================================================================== */
-const UPGS=[], UPG={};
-function addUpg(o){UPGS.push(o);UPG[o.id]=o;}
-let S; // état (défini plus bas)
-
-const GU_NAMES=[
-  ['Pioches renforcées','Lampes frontales','Syndicat des mineurs','Casques en titane','Vétérans du filon','Roi de la galerie'],
-  ['Mèches au carbure','Refroidissement par eau','Forage rotatif','Têtes en diamant','Turbo-couple','Forage infini'],
-  ['Rails graissés','Moteur diesel','Convois doublés','Freinage magnétique','Trains blindés','Réseau ferré mondial'],
-  ['Godets renforcés','Chenilles larges','Pilotage assisté','Bras hydrauliques','Excavation de nuit','Titan d’acier'],
-  ['Chaîne de montage','Robots soudeurs','Équipes de nuit','Ligne automatisée','Usine intelligente','Mégacomplexe'],
-  ['Lentilles polies','Faisceau cohérent','Refroidisseur cryo','Laser pulsé','Prisme multiple','Rayon solaire'],
-  ['Barres de contrôle','Cœur enrichi','Turbines doubles','Fusion tiède','Plasma stable','Étoile en bouteille'],
-  ['Cadre en antimatière','Faille stabilisée','Fenêtre dimensionnelle','Mines parallèles','Convergence des mondes','Porte du multivers'],
-];
-const GU_N=[10,25,50,100,150,200];
-const GU_M=[2,2,2,2,2,2];
-GENS.forEach((g,i)=>{
-  let prev=null;
-  GU_N.forEach((N,k)=>{
-    const id='g'+i+'_'+k;
-    addUpg({id:id,name:GU_NAMES[i][k],cost:sig(g.base*Math.pow(P.grow,N)*N*P.guF,2),prev:prev,gen:i,need:N,
-      fx:{gen:i,m:GU_M[k]},
-      head:k===0?(function(ii){return function(){return S.gens[ii]>=1;};})(i):null,
-      desc:g.pl+' ×'+GU_M[k]});
-    prev=id;
+function init(data){
+  D=data; SEUIL=data.seuil.slice(); BASE=data.base.slice();
+  NODES=[]; NODE={}; TREE=[[],[],[],[],[]]; KEEP=[null,null,null,null,null]; AUTO={};
+  data.trees.forEach(function(list,t){
+    let lastMain=null;
+    list.forEach(function(d,k){
+      const n={id:t+'.'+k,t:t,k:k,n:d.n,ic:d.ic,cost:d.c,fx:d.f||{},a:d.a||null,rate:d.r||0,keep:!!d.h,branch:!!d.b,final:!!d.e,desc:d.d||'',par:null};
+      n.par=lastMain; if(!n.branch) lastMain=n.id;
+      NODES.push(n); NODE[n.id]=n; TREE[t].push(n);
+      if(n.keep) KEEP[t]=n.id;
+      if(n.a) AUTO[n.a+t]=n;
+    });
   });
-});
-[
- ['Pioche renforcée',100,{click:2},'Clic ×2'],
- ['Pioche d’acier',700,{click:2},'Clic ×2'],
- ['Marteau-piqueur',6e3,{pct:0.01},'Chaque clic rapporte +1 % de ta production/s'],
- ['Pioche en diamant',8e4,{click:2},'Clic ×2'],
- ['Marteau pneumatique',1e6,{pct:0.02},'Chaque clic rapporte +2 % de ta production/s'],
- ['Pioche de légende',2e7,{click:3},'Clic ×3'],
- ['Gantelet de titan',4e8,{pct:0.03},'Chaque clic rapporte +3 % de ta production/s'],
- ['Main du destin',1e10,{click:5},'Clic ×5'],
-].forEach((a,k,arr)=>addUpg({id:'c'+k,name:a[0],cost:a[1],prev:k?'c'+(k-1):null,gen:null,need:null,fx:a[2],desc:a[3],
-  head:k===0?function(){return S.gens[0]>=1;}:null}));
-[
- ['Casques à LED',8e3,1.25],
- ['Convoyeurs',4e5,1.5],
- ['Assurance mineurs',2e7,2],
- ['Contrat municipal',1e9,2],
- ['Subvention d’État',5e10,3],
- ['Monopole minier',2.5e12,3],
- ['Cartel des métaux',1e14,4],
-].forEach((a,k)=>addUpg({id:'p'+k,name:a[0],cost:a[1],prev:k?'p'+(k-1):null,gen:null,need:null,fx:{glob:a[2]},
-  desc:'Production globale ×'+a[2],head:k===0?function(){return S.goal>=2;}:null}));
-
-/* =====================================================================
-   ARBRES DE PRESTIGE
-   ===================================================================== */
-const NODES=[], NODE={}, AUTO={}, KEEP=[null,'r_keep','a_keep','t_keep','d_keep'];
-function N(tier,id,name,icon,cost,req,row,col,o){
-  const n=Object.assign({tier:tier,id:id,name:name,icon:icon,cost:Math.max(1,Math.round(sig(cost*P.cs[tier],2))),req:req,row:row,col:col},o||{});
-  NODES.push(n);NODE[id]=n; if(n.a) AUTO[n.a+tier]=n; return n;
+  buildGoals();
+  S=newState(); recalc(); discover(true);
 }
-const TX=[null,'pièces','RP','AP','TP'];
-function describe(n){
-  if(n.desc) return n.desc;
-  const f=n.fx||{}, out=[];
-  if(f.coin) out.push('Pièces ×'+f.coin);
-  if(f.click) out.push('Clic ×'+f.click);
-  for(let k=1;k<=4;k++) if(f['g'+k]) out.push('Gain de '+TIERS[k].cur+' ×'+f['g'+k]);
-  if(f.cost) out.push('Générateurs '+Math.round((1-f.cost)*100)+' % moins chers');
-  if(f.start) out.push('Démarre chaque run avec '+fmt(f.start)+' pièces');
-  for(let k=1;k<=3;k++) if(f['s'+k]) out.push('Offre '+fmt(f['s'+k])+' '+TIERS[k].cur+' maintenant et au début de chaque run');
-  return out.join(' · ');
+function buildGoals(){
+  GOALS=[];
+  const g=function(kind,t,v,txt){GOALS.push({kind:kind,t:t,v:v,txt:txt});};
+  for(let e=3;e<Math.log10(SEUIL[1]);e+=3) g('tot',0,Math.pow(10,e),'Gagne '+fmt(Math.pow(10,e))+' pièces');
+  g('earn',0,SEUIL[1],'Gagne '+fmt(SEUIL[1])+' pièces en un seul run');
+  for(let t=2;t<=4;t++) g('earn',t-1,SEUIL[t],'Gagne '+fmt(SEUIL[t])+' '+TIERS[t-1].cur+' en un seul run');
 }
-
-/* --- Tier 1 : Renaissance (RP) --- */
-N(1,'r1','Pioche dorée','⛏️',1,[],0,0,{fx:{coin:3}});
-N(1,'r2','Capital de départ','💰',2,['r1'],1,0,{fx:{start:P.start}});
-N(1,'r3','Mémoire du filon','📜',3,['r1'],1,1,{fx:{g1:1.5}});
-N(1,'r4','Apprentis','🧒',5,['r2'],2,0,{a:'click',desc:'⚙ Clique tout seul, 8 fois par seconde.'});
-N(1,'r5','Veines profondes','💎',8,['r3'],2,1,{fx:{coin:4}});
-N(1,'r6','Contremaître','🧑‍💼',12,['r4'],3,0,{a:'gens',desc:'⚙ Achète automatiquement les générateurs.'});
-N(1,'r7','Négociateur','🤝',20,['r5'],3,1,{fx:{cost:0.85}});
-N(1,'r8','Ingénieur en chef','🧑‍🔬',35,['r6'],4,0,{a:'upg',desc:'⚙ Achète automatiquement les améliorations de pièces.'});
-N(1,'r_keep','Coffre de la mine','🔒',60,['r8'],5,0,{keep:true,desc:'🔒 Garde les améliorations de pièces après une Renaissance.'});
-N(1,'r10','Rayon de Renaissance','🌟',80,['r7'],5,1,{fx:{g1:2}});
-N(1,'r11','Fusion des âges','🔥',200,['r_keep','r10'],6,0,{fx:{coin:10}});
-
-/* --- Tier 2 : Ascension (AP) --- */
-N(2,'a1','Reliques de renaissance','🏺',1,[],0,0,{fx:{s1:P.relic[1]}});
-N(2,'a_keep','Mémoire des cimes','🔒',2,['a1'],1,0,{keep:true,desc:'🔒 Garde l’arbre Renaissance après une Ascension.'});
-N(2,'a2','Air pur','☁️',3,['a1'],1,1,{fx:{coin:5}});
-N(2,'a3','Ascenseur automatique','🛗',5,['a_keep'],2,0,{a:'pres',desc:'⚙ Lance la Renaissance tout seul, selon ta condition.'});
-N(2,'a4','Vents porteurs','🌬️',7,['a2'],2,1,{fx:{g1:3}});
-N(2,'a5','Source céleste','⛲',12,['a3'],3,0,{a:'pass',desc:'⚙ Gagne 10 % des RP en attente chaque seconde.'});
-N(2,'a6','Maître des arbres','🧙',20,['a5'],4,0,{a:'tree',desc:'⚙ Achète tout seul l’arbre Renaissance.'});
-N(2,'a7','Brume dorée','🌫️',28,['a4'],3,1,{fx:{coin:10}});
-N(2,'a8','Marée de lumière','🌊',45,['a7'],4,1,{fx:{g2:2}});
-N(2,'a9','Couronne des nuages','👑',80,['a6','a8'],5,0,{fx:{g1:5}});
-N(2,'a10','Zénith','☀️',160,['a9'],6,0,{fx:{coin:100}});
-
-/* --- Tier 3 : Transcendance (TP) --- */
-N(3,'t1','Reliques d’ascension','🏺',1,[],0,0,{fx:{s2:P.relic[2]}});
-N(3,'t_keep','Écho des sommets','🔒',2,['t1'],1,0,{keep:true,desc:'🔒 Garde l’arbre Ascension après une Transcendance.'});
-N(3,'t2','Énergie noire','🕳️',3,['t1'],1,1,{fx:{coin:20}});
-N(3,'t3','Portail automatique','🌀',5,['t_keep'],2,0,{a:'pres',desc:'⚙ Lance l’Ascension toute seule, selon ta condition.'});
-N(3,'t4','Constellations','✨',7,['t2'],2,1,{fx:{g2:3}});
-N(3,'t5','Pluie d’étoiles','🌠',12,['t3'],3,0,{a:'pass',desc:'⚙ Gagne 10 % des AP en attente chaque seconde.'});
-N(3,'t6','Cartographe du vide','🗺️',20,['t5'],4,0,{a:'tree',desc:'⚙ Achète tout seul l’arbre Ascension.'});
-N(3,'t7','Trou de ver','🪐',28,['t4'],3,1,{fx:{coin:50}});
-N(3,'t8','Résonance','🎼',45,['t7'],4,1,{fx:{g3:2}});
-N(3,'t9','Singularité','⚫',80,['t6','t8'],5,0,{fx:{g2:5}});
-N(3,'t10','Au-delà de tout','🌌',160,['t9'],6,0,{fx:{coin:1000}});
-
-/* --- Tier 4 : Divinité (DP) --- */
-N(4,'d1','Reliques de transcendance','🏺',1,[],0,0,{fx:{s3:P.relic[3]}});
-N(4,'d_keep','Mémoire éternelle','🔒',2,['d1'],1,0,{keep:true,desc:'🔒 Garde l’arbre Transcendance après une Divinité.'});
-N(4,'d2','Souffle sacré','🕊️',3,['d1'],1,1,{fx:{coin:100}});
-N(4,'d3','Rituel automatique','🕯️',5,['d_keep'],2,0,{a:'pres',desc:'⚙ Lance la Transcendance toute seule, selon ta condition.'});
-N(4,'d4','Chœur céleste','🎶',7,['d2'],2,1,{fx:{g3:3}});
-N(4,'d5','Fontaine d’éternité','⛲',12,['d3'],3,0,{a:'pass',desc:'⚙ Gagne 10 % des TP en attente chaque seconde.'});
-N(4,'d6','Grand architecte','📐',20,['d5'],4,0,{a:'tree',desc:'⚙ Achète tout seul l’arbre Transcendance.'});
-N(4,'d7','Autel doré','🏛️',28,['d4'],3,1,{fx:{coin:500}});
-N(4,'d8','Ferveur des mondes','🔥',45,['d7'],4,1,{fx:{g4:2}});
-N(4,'d9','Trône des dieux','🪑',80,['d6','d8'],5,0,{fx:{g3:5}});
-N(4,'d_end','Apothéose','🌟',P.apo,['d9'],6,0,{final:true,desc:'Ascension finale : tu deviens la mine elle-même. Termine le jeu.'});
-
-/* =====================================================================
-   ÉTAT
-   ===================================================================== */
-let A=null;                 // agrégats (multiplicateurs)
-let EV=[];                  // événements pour l'interface
 function newState(){
-  return {
-    v:1,
-    res:[0,0,0,0,0], earn:[0,0,0,0,0], tot:[0,0,0,0,0],
-    gens:GENS.map(()=>0),
-    upg:{}, nodes:{}, disc:{g0:1}, goal:0,
-    auto:{}, thr:[0,thrIndex(5),thrIndex(5),thrIndex(5),0],
-    n:[0,0,0,0,0], last:[0,0,0,0,0], runT:[0,0,0,0,0],
-    clicks:0, played:0, buy:1, speed:1,
-    ended:false, endAt:0, saved:Date.now(), created:Date.now(),
-  };
+  return {v:2,res:[0,0,0,0,0],earn:[0,0,0,0,0],tot:[0,0,0,0,0],nodes:{},disc:{},stash:{},goal:0,
+    auto:{},thr:[0,0,0,0,0],n:[0,0,0,0,0],last:[0,0,0,0,0],runT:[0,0,0,0,0],
+    clicks:0,played:0,ended:false,endAt:0,saved:Date.now(),acc:0,ui:{}};
 }
-S=newState();
 
+/* ---------- effets ---------- */
 function recalc(){
-  const a={gm:GENS.map(()=>1),glob:1,click:1,pct:0,cost:1,start:0,startK:[0,0,0,0,0],gain:P.base.slice()};
-  for(const u of UPGS){
-    if(!S.upg[u.id]) continue; const f=u.fx;
-    if(f.gen!==undefined) a.gm[f.gen]*=f.m;
-    if(f.glob) a.glob*=f.glob;
-    if(f.click) a.click*=f.click;
-    if(f.pct) a.pct+=f.pct;
-  }
+  const a={pass:0,c:0,k:1,q:0,mul:1,gain:BASE.slice()};
   for(const n of NODES){
-    if(!S.nodes[n.id]||!n.fx) continue; const f=n.fx;
-    if(f.coin) a.glob*=f.coin;
-    if(f.click) a.click*=f.click;
-    if(f.cost) a.cost*=f.cost;
-    if(f.start) a.start+=f.start;
-    for(let k=1;k<=4;k++){ if(f['g'+k]) a.gain[k]*=f['g'+k]; if(f['s'+k]) a.startK[k]+=f['s'+k]; }
+    if(!S.nodes[n.id]) continue; const f=n.fx;
+    if(f.p) a.pass+=f.p; if(f.c) a.c+=f.c; if(f.k) a.k*=f.k; if(f.q) a.q+=f.q; if(f.m) a.mul*=f.m;
+    for(let t=1;t<=4;t++) if(f['g'+t]) a.gain[t]*=f['g'+t];
   }
   A=a;
 }
-recalc();
-
-/* =====================================================================
-   PRODUCTION
-   ===================================================================== */
-function genCps(i){ return GENS[i].cps*A.gm[i]*A.glob; }          // production d'une unité
-function cps(){ let s=0; for(let i=0;i<GENS.length;i++) s+=S.gens[i]*genCps(i); return s; }
-function clickValue(){ return A.click*A.glob + A.pct*cps(); }
+function cps(){ return A.pass*A.mul; }
+function clickValue(){ return (1+A.c)*A.k*A.mul+A.q*cps(); }
 function addCur(k,x){ S.res[k]+=x; S.earn[k]+=x; S.tot[k]+=x; }
 function click(){ S.clicks++; const v=clickValue(); addCur(0,v); return v; }
 
-/* coûts */
-function genCostK(i,n,k){
-  const r=P.grow, base=GENS[i].base*A.cost;
-  return base*Math.pow(r,n)*(Math.pow(r,k)-1)/(r-1);
+/* ---------- description des effets ---------- */
+function describe(n){
+  if(n.desc) return n.desc;
+  const f=n.fx||{}, o=[];
+  if(f.p) o.push('+'+fmt(f.p)+' pièces /s');
+  if(f.c) o.push('+'+fmt(f.c)+' par clic');
+  if(f.k) o.push('Clic ×'+fmt(f.k));
+  if(f.q) o.push('Chaque clic rapporte +'+(Math.round(f.q*1000)/10)+' % de la production /s');
+  if(f.m) o.push('Pièces ×'+fmt(f.m));
+  for(let t=1;t<=4;t++) if(f['g'+t]) o.push('Gain de '+TIERS[t].cur+' ×'+fmt(f['g'+t]));
+  return o.join(' · ');
 }
-function genCost(i){ return genCostK(i,S.gens[i],1); }
-function maxAfford(i,cap){
-  const n=S.gens[i], c=S.res[0], r=P.grow, first=GENS[i].base*A.cost*Math.pow(r,n);
-  if(c<first) return 0;
-  let k=Math.floor(Math.log(c*(r-1)/first+1)/Math.log(r));
-  k=Math.max(0,Math.min(k,cap));
-  while(k>0&&genCostK(i,n,k)>c) k--;
-  while(k<cap&&genCostK(i,n,k+1)<=c) k++;
-  return k;
-}
-function buyGen(i,amount){
-  if(!S.disc['g'+i]) return 0;
-  const cap=amount==='max'?1e6:amount;
-  const k=maxAfford(i,cap); if(k<=0) return 0;
-  S.res[0]-=genCostK(i,S.gens[i],k); S.gens[i]+=k; return k;
-}
-function paybackGen(i){ return genCost(i)/genCps(i); }
+function setSeuil(t,v){ SEUIL[t]=v; buildGoals(); }
 
-/* =====================================================================
-   AMÉLIORATIONS
-   ===================================================================== */
-function upgVisible(u){ return !!S.disc['u:'+u.id]; }
-function upgReveal(u){
-  if(u.prev&&!S.upg[u.prev]) return false;
-  if(u.head&&!u.head()) return false;
-  return true;
-}
-function upgInfo(u){
-  const owned=!!S.upg[u.id];
-  const prevOk=!u.prev||!!S.upg[u.prev];
-  const needOk=u.need==null||S.gens[u.gen]>=u.need;
-  return {owned:owned,prevOk:prevOk,needOk:needOk,afford:S.res[0]>=u.cost,
-    can:!owned&&prevOk&&needOk&&S.res[0]>=u.cost};
-}
-function buyUpg(id){
-  const u=UPG[id]; if(!u||!upgVisible(u)) return false;
-  const i=upgInfo(u); if(!i.can) return false;
-  S.res[0]-=u.cost; S.upg[id]=1; recalc(); return true;
-}
-function visibleUpgs(){ return UPGS.filter(u=>upgVisible(u)&&!S.upg[u.id]); }
-
-/* =====================================================================
-   NŒUDS DES ARBRES
-   ===================================================================== */
-function nodeVisible(n){ return !!S.disc['n:'+n.id]; }
+/* ---------- nœuds ---------- */
 function nodeInfo(n){
-  const owned=!!S.nodes[n.id];
-  const locked=!n.req.every(r=>S.nodes[r]);
-  const afford=S.res[n.tier]>=n.cost;
+  const owned=!!S.nodes[n.id], locked=!!n.par&&!S.nodes[n.par], afford=S.res[n.t]>=n.cost;
   return {owned:owned,locked:locked,afford:afford,can:!owned&&!locked&&afford};
 }
+function nodeVisible(n){ return !!S.disc[n.id]; }
+function visibleNodes(t){ return TREE[t].filter(nodeVisible); }
+function ownedCount(t){ let c=0; for(const n of TREE[t]) if(S.nodes[n.id]) c++; return c; }
 function buyNode(id){
   const n=NODE[id]; if(!n||!nodeVisible(n)) return false;
   const i=nodeInfo(n); if(!i.can) return false;
-  S.res[n.tier]-=n.cost; S.nodes[id]=1; recalc();
-  if(n.fx){ for(let k=1;k<=3;k++) if(n.fx['s'+k]) S.res[k]+=n.fx['s'+k]; }
-  if(n.a==='pres') S.thr[n.tier-1]=thrIndex(Math.max(5,S.last[n.tier-1]));
+  S.res[n.t]-=n.cost; S.nodes[id]=1;
+  if(n.a==='pres'||n.a==='self') S.thr[n.a==='self'?n.t:n.t-1]=0;
+  if(n.keep) restoreStash();
+  recalc();
   if(n.final){S.ended=true;S.endAt=S.played;EV.push({kind:'win'});}
   discover(); return true;
 }
-function treeNodes(t){ return NODES.filter(n=>n.tier===t); }
-function visibleNodes(t){ return NODES.filter(n=>n.tier===t&&nodeVisible(n)); }
+function buyAll(t){            // achète en chaîne tout ce qui est abordable dans un arbre
+  let c=0;
+  for(let g=0;g<400;g++){
+    let pick=null;
+    for(const n of TREE[t]){ if(!nodeVisible(n)||S.nodes[n.id]) continue; if(!nodeInfo(n).can) continue; if(!pick||n.k<pick.k) pick=n; }
+    if(!pick) break; buyNode(pick.id); c++;
+  }
+  return c;
+}
 
-/* =====================================================================
-   AUTOMATISATIONS
-   ===================================================================== */
+/* ---------- automatisations ---------- */
 function autoOwned(type,tier){ const n=AUTO[type+tier]; return !!(n&&S.nodes[n.id]); }
 function autoOn(type,tier){ const n=AUTO[type+tier]; return !!(n&&S.nodes[n.id]&&S.auto[n.id]!==false); }
-function toggleAuto(id){ if(!S.nodes[id]) return; S.auto[id]=S.auto[id]===false; }
+function toggleAuto(id){ if(S.nodes[id]) S.auto[id]=S.auto[id]===false; }
 function setThr(t,idx){ S.thr[t]=Math.max(0,Math.min(THR.length-1,idx)); }
 function thrValue(t){ return THR[S.thr[t]]; }
+function autoClickRate(){ const n=AUTO.click1; return n&&S.nodes[n.id]&&S.auto[n.id]!==false?n.rate:0; }
 
-/* =====================================================================
-   PRESTIGE
-   ===================================================================== */
+/* ---------- prestige ---------- */
 function rawPending(t){
-  const e=S.earn[t-1], s=P.seuil[t];
-  if(e<s) return 0;
+  const e=S.earn[t-1], s=SEUIL[t]; if(e<s) return 0;
   return Math.sqrt(e/s)*A.gain[t];
 }
 function pending(t){ return Math.floor(rawPending(t)); }
-function canPrestige(t){ return S.earn[t-1]>=P.seuil[t]&&pending(t)>=1; }
-/* gain de l'arbre k conservé lors du reset du palier t ? (logique en chaîne) */
-function keepTree(k,t){
-  for(let j=k+1;j<=t;j++) if(!S.nodes[KEEP[j]]) return false;
-  return true;
-}
-function clearTree(k){
-  if(k===0){S.upg={};return;}
-  for(const n of NODES) if(n.tier===k) delete S.nodes[n.id];
-}
-function nextAt(t){            // monnaie gagnée nécessaire pour obtenir 1 de plus
-  const g=pending(t)+1, m=A.gain[t];
-  return P.seuil[t]*Math.pow(g/m,2);
-}
+function canPrestige(t){ return S.earn[t-1]>=SEUIL[t]&&pending(t)>=1; }
+function keepTree(k,t){ for(let j=k+1;j<=t;j++) if(!(KEEP[j]&&S.nodes[KEEP[j]])) return false; return true; }
+function nextAt(t){ return SEUIL[t]*Math.pow((pending(t)+1)/A.gain[t],2); }
 function prestige(t){
   if(!canPrestige(t)) return 0;
-  const gain=pending(t);
-  const keep=[]; for(let k=0;k<t;k++) keep[k]=keepTree(k,t);
+  const gain=pending(t), keep=[];
+  for(let k=0;k<t;k++) keep[k]=keepTree(k,t);
   addCur(t,gain); S.last[t]=gain; S.n[t]++;
   for(let k=0;k<t;k++){
     S.res[k]=0; S.earn[k]=0; S.runT[k]=0;
-    if(!keep[k]) clearTree(k);
+    if(keep[k]){ delete S.stash[k]; continue; }
+    const ids=[]; for(const n of TREE[k]) if(S.nodes[n.id]){ ids.push(n.id); delete S.nodes[n.id]; }
+    if(ids.length) S.stash[k]={ids:ids,t:t};
   }
-  S.runT[t]=0;
-  S.gens=GENS.map(()=>0);
-  recalc();
-  S.res[0]+=A.start;
-  for(let k=1;k<t;k++) S.res[k]+=A.startK[k];
+  S.runT[t]=0; recalc();
   EV.push({kind:'prestige',t:t,gain:gain});
-  discover();
-  return gain;
+  discover(); return gain;
+}
+/* Acheter un nœud « garder » rend aussitôt ce qui vient d'être perdu au dernier reset (si la chaîne est complète). */
+function restoreStash(){
+  let again=true, any=false;
+  while(again){
+    again=false;
+    for(const k in S.stash){
+      const e=S.stash[k];
+      if(keepTree(+k,e.t)){ for(const id of e.ids) S.nodes[id]=1; delete S.stash[k]; again=true; any=true; }
+    }
+  }
+  if(any){ recalc(); EV.push({kind:'restore'}); }
 }
 
-/* =====================================================================
-   DÉCOUVERTE
-   ===================================================================== */
+/* ---------- découverte ---------- */
 function discover(silent){
   const found=[];
-  const add=(id,kind,label)=>{ if(!S.disc[id]){S.disc[id]=1; if(!silent) found.push({id:id,kind:kind,label:label});} };
-  for(let t=1;t<=4;t++){
-    if(!S.disc['T'+t]&&(S.earn[t-1]>=P.reveal*P.seuil[t]||S.tot[t]>0)) add('T'+t,'tier',TIERS[t].name);
-  }
-  for(let i=1;i<GENS.length;i++) if(S.goal>=i) add('g'+i,'gen',GENS[i].n);
-  let anyUpg=false;
-  for(const u of UPGS){
-    if(S.disc['u:'+u.id]){anyUpg=true;continue;}
-    if(upgReveal(u)){add('u:'+u.id,'upg',u.name);anyUpg=true;}
-  }
-  if(anyUpg) add('tab0','tab0','');
+  const add=function(id,kind,label){ if(!S.disc[id]){S.disc[id]=1; if(!silent) found.push({id:id,kind:kind,label:label});} };
+  for(let t=1;t<=4;t++) if(!S.disc['T'+t]&&(S.earn[t-1]>=REVEAL*SEUIL[t]||S.tot[t]>0)) add('T'+t,'tier',TIERS[t].name);
   for(const n of NODES){
-    if(S.disc['n:'+n.id]) continue;
-    if(S.disc['T'+n.tier]&&n.req.every(r=>S.nodes[r])) add('n:'+n.id,'node',n.name);
+    if(S.disc[n.id]) continue;
+    if(n.t>0&&!S.disc['T'+n.t]) continue;
+    if(!n.par||S.nodes[n.par]) add(n.id,'node',n.n);
   }
   if(found.length) EV.push({kind:'found',items:found});
 }
@@ -1083,109 +454,61 @@ function checkGoals(){
   let g;
   while((g=GOALS[S.goal])){
     const cur=g.kind==='earn'?S.earn[g.t]:S.tot[g.t];
-    if(cur<g.v) break;
-    S.goal++; EV.push({kind:'goal',txt:g.txt});
+    if(cur<g.v) break; S.goal++; EV.push({kind:'goal',txt:g.txt});
   }
 }
 
-/* =====================================================================
-   AUTOMATISME & BOUCLE
-   ===================================================================== */
-function bestGenIndex(){
-  let best=-1,bp=Infinity;
-  for(let i=0;i<GENS.length;i++){
-    if(!S.disc['g'+i]) continue;
-    const p=paybackGen(i); if(p<bp){bp=p;best=i;}
-  }
-  return best;
-}
-function autoBuyGens(){
-  for(let g=0;g<200;g++){
-    const i=bestGenIndex(); if(i<0) break;
-    if(!buyGen(i,1)) break;
-  }
-}
-function autoBuyUpgs(){
-  for(let g=0;g<40;g++){
-    let pick=null;
-    for(const u of UPGS){
-      if(!upgVisible(u)||S.upg[u.id]) continue;
-      if(!upgInfo(u).can) continue;
-      if(!pick||u.cost<pick.cost) pick=u;
-    }
-    if(!pick) break;
-    buyUpg(pick.id);
-  }
-}
+/* ---------- boucle ---------- */
 function autoBuyTree(t){
-  for(let g=0;g<40;g++){
+  for(let g=0;g<60;g++){
     let pick=null;
-    for(const n of NODES){
-      if(n.tier!==t||!nodeVisible(n)) continue;
-      if(!nodeInfo(n).can) continue;
-      if(!pick||n.cost<pick.cost) pick=n;
-    }
-    if(!pick) break;
-    buyNode(pick.id);
+    for(const n of TREE[t]){ if(!nodeVisible(n)||S.nodes[n.id]) continue; if(!nodeInfo(n).can) continue; if(!pick||n.cost<pick.cost) pick=n; }
+    if(!pick) break; buyNode(pick.id);
   }
 }
-function autoClickRate(){ return autoOn('click',1)?P.clicksPerSec:0; }
-
 function tick(dt){
-  S.played+=dt;
-  for(let k=0;k<5;k++) S.runT[k]+=dt;
+  S.played+=dt; for(let k=0;k<5;k++) S.runT[k]+=dt;
   const c=cps(); if(c>0) addCur(0,c*dt);
   const ac=autoClickRate(); if(ac>0) addCur(0,clickValue()*ac*dt);
-  for(let h=2;h<=4;h++){
-    if(autoOn('pass',h)){ const r=rawPending(h-1); if(r>0) addCur(h-1,r*P.passive*dt); }
-  }
-  if(autoOn('upg',1)) autoBuyUpgs();
-  if(autoOn('gens',1)) autoBuyGens();
-  for(let h=2;h<=4;h++) if(autoOn('tree',h)) autoBuyTree(h-1);
-  for(let t=3;t>=1;t--){
-    if(autoOn('pres',t+1)&&canPrestige(t)&&pending(t)>=THR[S.thr[t]]) prestige(t);
+  for(let h=2;h<=4;h++) if(autoOn('pass',h)){ const r=rawPending(h-1); if(r>0) addCur(h-1,r*PASSIVE*dt); }
+  for(let h=1;h<=4;h++) if(autoOn('tree',h)) autoBuyTree(h-1);
+  for(let t=4;t>=1;t--){
+    const auto=(t<4&&autoOn('pres',t+1))||(t===4&&autoOn('self',4));
+    if(auto&&canPrestige(t)&&pending(t)>=THR[S.thr[t]]) prestige(t);
   }
   discover(); checkGoals();
 }
-function advance(dt){           // avance de dt secondes de jeu (sous-pas ≤ 0.25 s)
-  let left=dt;
-  while(left>1e-9){ const d=Math.min(0.25,left); tick(d); left-=d; }
-}
-function catchUp(sec){          // progression hors-ligne
-  const steps=Math.min(300,Math.max(1,Math.ceil(sec/2))), d=sec/steps;
-  for(let i=0;i<steps;i++) tick(d);
-}
+function advance(dt){ S.acc+=dt; let n=0; while(S.acc>=TICK-1e-9&&n<4000){ tick(TICK); S.acc-=TICK; n++; } if(n>=4000) S.acc=0; }
+function catchUp(sec){ sec=Math.min(sec,OFFLINE_MAX); const d=sec>1800?1:TICK, n=Math.floor(sec/d); for(let i=0;i<n;i++) tick(d); }
 
-/* =====================================================================
-   SAUVEGARDE
-   ===================================================================== */
-function save(){ try{S.saved=Date.now();localStorage.setItem(KEY,JSON.stringify(S));return true;}catch(e){return false;} }
+/* ---------- sauvegarde ---------- */
+function save(){ try{S.saved=Date.now();S.nt=NODES.length;localStorage.setItem(KEY,JSON.stringify(S));return true;}catch(e){return false;} }
 function load(){
   try{
     const raw=localStorage.getItem(KEY); if(!raw) return false;
     const o=JSON.parse(raw), b=newState();
     for(const k in b) if(o[k]!==undefined) b[k]=o[k];
-    while(b.gens.length<GENS.length) b.gens.push(0);
     ['res','earn','tot','n','last','runT','thr'].forEach(k=>{ while(b[k].length<5) b[k].push(0); });
     S=b; recalc(); discover(true); return true;
   }catch(e){return false;}
 }
 function wipe(){ try{localStorage.removeItem(KEY);}catch(e){} S=newState(); EV=[]; recalc(); discover(true); }
-function reset(){ S=newState(); EV=[]; recalc(); discover(true); }
+function getState(){ return JSON.stringify(S); }
+function setState(j){ S=JSON.parse(j); recalc(); }
 
 return {
-  P:P,TIERS:TIERS,GENS:GENS,UPGS:UPGS,UPG:UPG,NODES:NODES,NODE:NODE,GOALS:GOALS,THR:THR,KEEP:KEEP,AUTO:AUTO,
-  get S(){return S;}, get A(){return A;},
-  fmt:fmt,fmtTime:fmtTime,thrIndex:thrIndex,describe:describe,
-  recalc:recalc,cps:cps,genCps:genCps,clickValue:clickValue,click:click,addCur:addCur,
-  genCost:genCost,genCostK:genCostK,maxAfford:maxAfford,buyGen:buyGen,paybackGen:paybackGen,
-  upgInfo:upgInfo,upgVisible:upgVisible,buyUpg:buyUpg,visibleUpgs:visibleUpgs,
-  nodeInfo:nodeInfo,nodeVisible:nodeVisible,buyNode:buyNode,treeNodes:treeNodes,visibleNodes:visibleNodes,
-  autoOwned:autoOwned,autoOn:autoOn,toggleAuto:toggleAuto,setThr:setThr,thrValue:thrValue,
+  init:init,TIERS:TIERS,THR:THR,
+  get S(){return S;}, get A(){return A;}, get NODES(){return NODES;}, get TREE(){return TREE;}, get GOALS(){return GOALS;}, get SEUIL(){return SEUIL;}, get KEEP(){return KEEP;}, get AUTO(){return AUTO;},
+  NODE:function(id){return NODE[id];},
+  fmt:fmt,fmtTime:fmtTime,thrIndex:thrIndex,describe:describe,setSeuil:setSeuil,
+  recalc:recalc,cps:cps,clickValue:clickValue,click:click,addCur:addCur,
+  nodeInfo:nodeInfo,nodeVisible:nodeVisible,visibleNodes:visibleNodes,ownedCount:ownedCount,buyNode:buyNode,buyAll:buyAll,
+  autoOwned:autoOwned,autoOn:autoOn,toggleAuto:toggleAuto,setThr:setThr,thrValue:thrValue,autoClickRate:autoClickRate,
   rawPending:rawPending,pending:pending,canPrestige:canPrestige,keepTree:keepTree,nextAt:nextAt,prestige:prestige,
-  goalInfo:goalInfo,discover:discover,tick:tick,advance:advance,catchUp:catchUp,
+  goalInfo:goalInfo,discover:discover,tick:tick,advance:advance,catchUp:catchUp,TICK:TICK,
   popEvents:function(){const e=EV;EV=[];return e;},
-  save:save,load:load,wipe:wipe,reset:reset,
+  save:save,load:load,wipe:wipe,getState:getState,setState:setState,newState:newState,
+  setCost:function(id,c){NODE[id].cost=c;},
 };
 })();
 
@@ -1193,68 +516,55 @@ return {
 <script>
 (function(){
 'use strict';
-const fmt=G.fmt, TIERS=G.TIERS, GENS=G.GENS;
+const fmt=G.fmt, TIERS=G.TIERS;
 const $=(s,r)=>(r||document).querySelector(s);
 const $$=(s,r)=>Array.prototype.slice.call((r||document).querySelectorAll(s));
 const SV=()=>G.S;
-const UI={tab:-1,sig:{},fresh:{},gen:{},res:{},tabEls:{},manual:false,lastToastAt:{},saveAt:0,savedFlash:0,wipeArmed:0};
-const FRESH_MS=9000;
-
+const UI={sig:{},fresh:{},sec:{},manual:false,lastToast:{},savedFlash:0,wipeArmed:0,mi:{}};
+const FRESH_MS=9000, KEEP_OWNED=7;
+const TCOL=t=>'var(--c'+t+')';
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function setText(el,t){ if(el&&el._t!==t){el._t=t;el.textContent=t;} }
 function setCls(el,c,on){ if(el&&el.classList.contains(c)!==!!on) el.classList.toggle(c,!!on); }
 function isFresh(id){ return UI.fresh[id]&&UI.fresh[id]>Date.now(); }
 function markFresh(id){ UI.fresh[id]=Date.now()+FRESH_MS; }
-function tcol(t){ return 'var(--c'+t+')'; }
+function uiState(){ const s=SV(); if(!s.ui) s.ui={}; if(!s.ui.shut) s.ui.shut={}; if(!s.ui.all) s.ui.all={}; return s.ui; }
 
-/* ================= notifications ================= */
+/* ---------- notifications ---------- */
 function toast(title,sub,icon,tier){
   const box=$('#toasts'); if(!box) return;
-  const el=document.createElement('div'); el.className='toast';
-  el.style.setProperty('--tc',tcol(tier||0));
+  const el=document.createElement('div'); el.className='toast'; el.style.setProperty('--tc',TCOL(tier||0));
   el.innerHTML='<span class="ti">'+(icon||'✨')+'</span><span><b>'+esc(title)+'</b>'+(sub?'<small>'+esc(sub)+'</small>':'')+'</span>';
-  box.appendChild(el);
-  while(box.children.length>3) box.removeChild(box.firstChild);
+  box.appendChild(el); while(box.children.length>3) box.removeChild(box.firstChild);
   setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); },3700);
 }
 function handleEvents(){
-  const evs=G.popEvents();
-  for(const e of evs){
+  for(const e of G.popEvents()){
     if(e.kind==='found'){
-      const tiers=e.items.filter(i=>i.kind==='tier'), others=e.items.filter(i=>i.kind!=='tier'&&i.kind!=='tab0');
       for(const it of e.items) markFresh(it.id);
-      for(const t of tiers){
-        const ti=TIERS.findIndex(x=>x.name===t.label);
-        toast('Nouveau palier découvert !',t.label,TIERS[ti].icon,ti);
+      const tiers=e.items.filter(i=>i.kind==='tier'), others=e.items.filter(i=>i.kind==='node');
+      for(const t of tiers){ const ti=TIERS.findIndex(x=>x.name===t.label); toast('Nouveau palier découvert !',t.label,TIERS[ti].icon,ti); }
+      if(others.length&&!tiers.length){
+        const n0=G.NODE(others[0].id);
+        toast('Nouvelle amélioration découverte !',others.slice(0,2).map(i=>i.label).join(', ')+(others.length>2?' +'+(others.length-2):''),'🔍',n0.t);
       }
-      if(others.length){
-        const names=others.slice(0,2).map(i=>i.label).join(', ')+(others.length>2?' +'+(others.length-2):'');
-        const tier=others[0].kind==='node'?G.NODE[others[0].id.slice(2)].tier:0;
-        toast('Nouvelle amélioration découverte !',names,'🔍',tier);
-      }
-    } else if(e.kind==='goal'){
-      toast('Objectif accompli !',e.txt,'🎯',0);
-    } else if(e.kind==='prestige'){
+    } else if(e.kind==='goal'){ toast('Objectif accompli !',e.txt,'🎯',0); }
+    else if(e.kind==='restore'){ toast('Arbre récupéré','Le nœud « garder » te rend ce que tu avais perdu','🔒',0); }
+    else if(e.kind==='prestige'){
       const now=Date.now();
-      if(UI.manual||SV().n[e.t]===1||now-(UI.lastToastAt[e.t]||0)>15000){
-        toast(TIERS[e.t].name+' !','+'+fmt(e.gain)+' '+TIERS[e.t].cur,TIERS[e.t].icon,e.t);
-        UI.lastToastAt[e.t]=now;
-      }
+      if(UI.manual||SV().n[e.t]===1||now-(UI.lastToast[e.t]||0)>20000){ toast(TIERS[e.t].name+' !','+'+fmt(e.gain)+' '+TIERS[e.t].cur,TIERS[e.t].icon,e.t); UI.lastToast[e.t]=now; }
       UI.manual=false;
-    } else if(e.kind==='win'){
-      showWin();
-    }
+    } else if(e.kind==='win'){ showWin(); }
   }
 }
 
-/* ================= barre de ressources ================= */
+/* ---------- ressources ---------- */
 function buildRes(){
-  const s=SV(), list=[0,1,2,3,4].filter(t=>t===0||s.disc['T'+t]);
-  const key=list.join(',');
+  const s=SV(), list=[0,1,2,3,4].filter(t=>t===0||s.disc['T'+t]), key=list.join();
   if(UI.sig.res===key) return; UI.sig.res=key;
   const box=$('#res'); box.innerHTML=''; UI.res={};
   for(const t of list){
-    const el=document.createElement('div'); el.className='chip'+(isFresh('T'+t)?' fresh':''); el.style.setProperty('--tc',tcol(t));
+    const el=document.createElement('div'); el.className='chip'; el.style.setProperty('--tc',TCOL(t));
     el.innerHTML='<span class="ico">'+TIERS[t].icon+'</span><span><b class="mono v"></b><small class="mono r"></small></span>';
     box.appendChild(el); UI.res[t]={v:$('.v',el),r:$('.r',el)};
   }
@@ -1272,16 +582,9 @@ function updateRes(){
     }
   }
 }
-
-/* ================= objectif ================= */
 function updateGoal(){
   const s=SV(), gi=G.goalInfo(), box=$('#goal');
-  if(!gi){
-    box.classList.add('done');
-    setText($('.gt',box),'Tous les objectifs sont accomplis');
-    setText($('.gn span:first-child',box),''); setText($('.gn span:last-child',box),'');
-    $('.bar i',box).style.width='100%'; return;
-  }
+  if(!gi){ box.classList.add('done'); setText($('.gt',box),'Tous les objectifs sont accomplis'); setText($('.gn span:first-child',box),''); setText($('.gn span:last-child',box),''); $('.bar i',box).style.width='100%'; return; }
   setText($('.gt',box),gi.g.txt);
   $('.bar i',box).style.width=(gi.frac*100).toFixed(1)+'%';
   setText($('.gn span:first-child',box),fmt(gi.cur)+' / '+fmt(gi.g.v));
@@ -1289,263 +592,150 @@ function updateGoal(){
   setText($('.gl span:last-child',box),s.goal+' accompli'+(s.goal>1?'s':''));
 }
 
-/* ================= générateurs ================= */
-function syncGens(){
-  const s=SV(), list=$('#gens');
-  if(UI.gensOwner!==s){ list.innerHTML=''; UI.gen={}; UI.gensOwner=s; }
-  GENS.forEach(function(g,i){
-    if(!s.disc['g'+i]||UI.gen[i]) return;
-    const el=document.createElement('div'); el.className='gen'+(isFresh('g'+i)?' fresh':'');
-    el.innerHTML='<div class="gico">'+g.ic+'</div>'+
-      '<div class="ginfo"><div class="gname"><b>'+esc(g.n)+'</b><span class="cnt mono"></span></div>'+
-      '<div class="gdesc">'+esc(g.txt)+'</div><div class="gprod mono"></div></div>'+
-      '<button class="buy" data-act="buygen" data-i="'+i+'"><span class="bq mono"></span><span class="bc mono"></span></button>';
-    list.appendChild(el);
-    UI.gen[i]={el:el,cnt:$('.cnt',el),prod:$('.gprod',el),btn:$('.buy',el),bq:$('.bq',el),bc:$('.bc',el)};
-  });
-}
-function updateGens(){
-  const s=SV(), mode=s.buy, cap=mode==='max'?1e6:mode;
-  for(const i in UI.gen){
-    const u=UI.gen[i], n=s.gens[i];
-    setText(u.cnt,'×'+fmt(n));
-    const per=G.genCps(+i);
-    u.prod.innerHTML=fmt(n*per)+' /s <em>· '+fmt(per)+' chacun'+(G.A.gm[i]>1?' · bonus ×'+fmt(G.A.gm[i]):'')+'</em>';
-    const k=G.maxAfford(+i,cap);
-    setText(u.bq,k>0?'×'+fmt(k):'×1');
-    setText(u.bc,fmt(k>0?G.genCostK(+i,n,k):G.genCost(+i)));
-    setCls(u.btn,'off',k<=0);
+/* ---------- sections ---------- */
+function secList(){ const s=SV(), l=[0]; for(let t=1;t<=4;t++) if(s.disc['T'+t]) l.push(t); return l; }
+function ensureSections(){
+  const list=secList(), key=list.join(), host=$('#sections');
+  if(UI.sig.secs===key) return; UI.sig.secs=key;
+  for(const t of list){
+    if(UI.sec[t]) continue;
+    const el=document.createElement('section'); el.className='sec'+(isFresh('T'+t)?' fresh':''); el.style.setProperty('--tc',TCOL(t));
+    el.innerHTML='<button class="sec-head" data-act="sec" data-t="'+t+'" aria-expanded="true"><span class="ico">'+TIERS[t].icon+'</span><span class="st"><b>'+(t===0?'Arbre des pièces':TIERS[t].name)+'</b><small class="cnt"></small></span><i class="dot"></i><span class="cur mono"></span><span class="chev">▾</span></button><div class="sec-body"></div>';
+    host.appendChild(el);
+    UI.sec[t]={el:el,body:$('.sec-body',el),cnt:$('.cnt',el),cur:$('.cur',el),head:$('.sec-head',el),sig:null};
   }
 }
-
-/* ================= améliorations de pièces (onglet 0) ================= */
-function sigUpg(){
-  const s=SV(); let k='';
-  for(const u of G.UPGS){ if(G.upgVisible(u)){ k+=u.id+(s.upg[u.id]?'o':(u.prev&&!s.upg[u.prev]?'l':'a')); } }
-  return k;
-}
-function buildUpg(){
-  const s=SV(), body=$('#tabbody');
-  const avail=[], locked=[]; let owned=0;
-  for(const u of G.UPGS){
-    if(!G.upgVisible(u)) continue;
-    if(s.upg[u.id]){owned++;continue;}
-    if(u.prev&&!s.upg[u.prev]) locked.push(u); else avail.push(u);
-  }
-  avail.sort(function(a,b){return a.cost-b.cost;});
-  let h='<div class="uphead"><h2>Améliorations</h2><small>'+owned+' achetée'+(owned>1?'s':'')+'</small></div><div class="uplist">';
-  for(const u of avail){
-    const ic=u.gen!=null?GENS[u.gen].ic:(u.fx.glob?'📈':'👆');
-    h+='<button class="upg'+(isFresh('u:'+u.id)?' fresh':'')+'" data-act="buyupg" data-id="'+u.id+'"><span class="uico">'+ic+'</span>'+
-      '<span><b>'+esc(u.name)+'</b><small>'+esc(u.desc)+'</small>'+(u.need!=null?'<small class="need"></small>':'')+'</span>'+
-      '<span class="ucost mono">'+fmt(u.cost)+'</span></button>';
-  }
-  h+='</div>';
-  if(!avail.length) h+='<div class="empty" style="padding:18px">Rien à acheter pour l’instant.</div>';
-  if(locked.length){
-    h+='<details class="lockedlist"><summary>'+locked.length+' amélioration'+(locked.length>1?'s':'')+' à débloquer à nouveau</summary><ul>';
-    for(const u of locked) h+='<li><span>'+esc(u.name)+'</span><span>après '+esc(G.UPG[u.prev].name)+'</span></li>';
-    h+='</ul></details>';
-  }
-  body.innerHTML=h;
-}
-function updateUpg(){
-  const s=SV();
-  $$('.upg',$('#tabbody')).forEach(function(el){
-    const u=G.UPG[el.dataset.id], inf=G.upgInfo(u);
-    setCls(el,'can',inf.can);
-    if(u.need!=null){
-      const n=$('.need',el);
-      if(n){ const have=s.gens[u.gen]; setText(n,inf.needOk?'✓ '+fmt(u.need)+' '+GENS[u.gen].pl+' possédés':'Requiert '+fmt(u.need)+' '+GENS[u.gen].pl+' ('+fmt(have)+'/'+fmt(u.need)+')'); setCls(n,'ok',inf.needOk); }
-    }
-  });
-}
-
-/* ================= paliers de prestige ================= */
-function visibleNodeIds(t){ return G.visibleNodes(t); }
-function sigTier(t){
-  const s=SV(); let k='t'+t+':';
-  for(const n of visibleNodeIds(t)) k+=n.id+(s.nodes[n.id]?'o':'')+(s.nodes[n.id]&&n.a&&s.auto[n.id]===false?'x':'')+(isFresh('n:'+n.id)?'f':'');
+function sigSec(t){
+  const s=SV(), u=uiState(); let k=(u.shut[t]?'S':'O')+(u.all[t]?'A':'a');
+  for(const n of G.visibleNodes(t)) k+=n.id+(s.nodes[n.id]?'o':'')+(s.nodes[n.id]&&n.a&&s.auto[n.id]===false?'x':'')+(isFresh(n.id)?'f':'');
   return k;
 }
 function autoLabel(n){
-  const low=TIERS[n.tier-1];
-  if(n.a==='click') return 'Auto-clic';
-  if(n.a==='gens') return 'Auto-achat des générateurs';
-  if(n.a==='upg') return 'Auto-achat des améliorations';
-  if(n.a==='pres') return 'Auto-'+low.name;
-  if(n.a==='pass') return 'Gain passif de '+low.cur+' (10 %/s)';
-  if(n.a==='tree') return 'Auto-achat de l’arbre '+low.name;
-  return n.name;
+  const low=TIERS[n.t-1];
+  return ({click:'Auto-clic',tree:'Auto-achat de l’arbre '+(n.t===1?'des pièces':low.name),pres:'Auto-'+low.name,pass:'Gain passif de '+(low?low.cur:'')+' (10 %/s)',self:'Auto-'+TIERS[n.t].name})[n.a]||n.n;
 }
 function resetNote(t){
-  const names=[];
-  for(let k=0;k<t;k++) names.push(k===0?'pièces':TIERS[k].cur);
-  return 'Remet à zéro : '+names.join(', ')+', générateurs, améliorations et arbres inférieurs, sauf ce que tes nœuds 🔒 gardent.';
+  const names=[]; for(let k=0;k<t;k++) names.push(k===0?'pièces':TIERS[k].cur);
+  return 'Remet à zéro : '+names.join(', ')+' et les arbres inférieurs, sauf ce que tes nœuds 🔒 gardent (et ils te rendent aussitôt ce que tu viens de perdre).';
 }
-function buildTier(t){
-  const s=SV(), T=TIERS[t], body=$('#tabbody');
-  let h='<div class="pcard" style="--tc:'+tcol(t)+'" data-t="'+t+'">'+
-    '<div class="pc-head"><div class="pc-title"><span class="ico">'+T.icon+'</span><div><h2>'+T.name+'</h2><small class="runt"></small></div></div>'+
-    '<div class="pc-cur"><b class="mono cur"></b><small>'+T.cur+' en réserve</small></div></div>'+
-    '<div class="pc-formula">Gain = ⌊ √( '+T.earnLabel+' ÷ <span class="mono">'+fmt(G.P.seuil[t])+'</span> ) × multiplicateurs ⌋<span class="f2 mono"></span></div>'+
-    '<div><div class="bar" style="--tc:'+tcol(t)+'"><i></i></div><div class="pc-sub mono"><span class="s1"></span><span class="s2"></span></div></div>'+
-    '<button class="pbtn" data-act="prestige" data-t="'+t+'"><span class="pb-main">'+T.name+'</span><span class="pb-gain mono"></span><span class="pb-f mono"></span></button>'+
-    '<div class="pc-note">'+esc(resetNote(t))+'</div></div>';
-  // automatisations possédées
-  const autos=visibleNodeIds(t).filter(n=>n.a&&s.nodes[n.id]);
-  if(autos.length){
-    h+='<div class="autos" style="--tc:'+tcol(t)+'"><h3>⚙ Automatisations</h3>';
-    for(const n of autos){
-      const on=s.auto[n.id]!==false;
-      h+='<button class="tog'+(on?' on':'')+'" data-act="toggle" data-id="'+n.id+'"><span class="sw"></span><span>'+esc(autoLabel(n))+'</span><small>'+(on?'ACTIF':'PAUSE')+'</small></button>';
-      if(n.a==='pres'){
-        h+='<div class="thr"><span>Dès que le gain en attente ≥</span><span class="st"><button data-act="thr" data-t="'+(t-1)+'" data-d="-3" aria-label="Seuil beaucoup plus bas">«</button><button data-act="thr" data-t="'+(t-1)+'" data-d="-1" aria-label="Seuil plus bas">‹</button>'+
-          '<b class="mono thrv" data-t="'+(t-1)+'"></b><button data-act="thr" data-t="'+(t-1)+'" data-d="1" aria-label="Seuil plus haut">›</button><button data-act="thr" data-t="'+(t-1)+'" data-d="3" aria-label="Seuil beaucoup plus haut">»</button></span><span>'+TIERS[t-1].cur+'</span></div>';
+function mainIndex(n){ if(UI.mi[n.id]===undefined){ let c=0; for(const m of G.TREE[n.t]){ if(m.id===n.id) break; if(!m.branch) c++; } UI.mi[n.id]=c; } return UI.mi[n.id]; }
+function nodeHTML(n,s){
+  const own=!!s.nodes[n.id], inf=G.nodeInfo(n);
+  let sgn=Math.sin(mainIndex(n)*0.78);
+  if(n.branch){ const p=G.NODE(n.par); sgn=Math.sin(mainIndex(p)*0.78)>=0?-0.95:0.95; }
+  const tag=n.final?'<span class="ntag">★ Final</span>':n.keep?'<span class="ntag">🔒 Garde</span>':n.a?'<span class="ntag">⚙ Automatisation</span>':n.branch?'<span class="ntag">Voie annexe</span>':'';
+  const cur=n.t===0?'pièces':TIERS[n.t].cur;
+  return '<button class="n'+(own?' own':'')+(inf.can?' can':'')+(inf.locked&&!own?' lock':'')+(n.final?' final':'')+(isFresh(n.id)?' fresh':'')+'" style="--s:'+sgn.toFixed(3)+';--tc:'+TCOL(n.t)+'" data-act="buy" data-id="'+n.id+'" id="nd-'+n.id+'">'+
+    '<span class="nico">'+n.ic+'</span><span class="nname">'+esc(n.n)+'</span>'+(tag&&!own?tag:'')+'<span class="ndesc">'+esc(G.describe(n))+'</span><span class="ncost mono" data-cost="'+n.cost+'">'+fmt(n.cost)+' '+cur+'</span></button>';
+}
+function buildSec(t){
+  const s=SV(), u=uiState(), rec=UI.sec[t], shut=!!u.shut[t];
+  setCls(rec.el,'shut',shut); rec.head.setAttribute('aria-expanded',String(!shut));
+  if(shut){ rec.body.innerHTML=''; return; }
+  let h='';
+  if(t>0){
+    const T=TIERS[t];
+    h+='<div class="pcard" data-t="'+t+'"><div class="pc-formula">Gain = ⌊ √( '+T.earnLabel+' ÷ <span class="mono">'+fmt(G.SEUIL[t])+'</span> ) × multiplicateurs ⌋<span class="f2 mono"></span></div>'+
+      '<div><div class="bar" style="--tc:'+TCOL(t)+'"><i></i></div><div class="pc-sub mono"><span class="s1"></span><span class="s2"></span></div></div>'+
+      '<button class="pbtn" data-act="prestige" data-t="'+t+'"><span class="pb-main">'+T.name+'</span><span class="pb-gain mono"></span><span class="pb-f mono"></span></button>'+
+      '<div class="pc-note">'+esc(resetNote(t))+'</div></div>';
+    const lowerAuto=t<4?G.TREE[t+1].filter(n=>n.a==='pres'&&s.nodes[n.id]):[];
+    const own=G.TREE[t].filter(n=>n.a&&s.nodes[n.id]);
+    const list=own.concat(lowerAuto);
+    if(list.length){
+      h+='<div class="autos" style="--tc:'+TCOL(t)+'"><h3>⚙ Automatisations</h3>';
+      for(const n of list){
+        const on=s.auto[n.id]!==false, target=n.a==='pres'?n.t-1:(n.a==='self'?n.t:-1);
+        h+='<button class="tog'+(on?' on':'')+'" data-act="toggle" data-id="'+n.id+'"><span class="sw"></span><span>'+esc(autoLabel(n))+'</span><small>'+(on?'ACTIF':'PAUSE')+'</small></button>';
+        if(target>=1) h+='<div class="thr"><span>Dès que le gain en attente ≥</span><span class="st"><button data-act="thr" data-t="'+target+'" data-d="-3" aria-label="Seuil beaucoup plus bas">«</button><button data-act="thr" data-t="'+target+'" data-d="-1" aria-label="Seuil plus bas">‹</button><b class="mono thrv" data-t="'+target+'"></b><button data-act="thr" data-t="'+target+'" data-d="1" aria-label="Seuil plus haut">›</button><button data-act="thr" data-t="'+target+'" data-d="3" aria-label="Seuil beaucoup plus haut">»</button></span><span>'+TIERS[target].cur+'</span></div>';
       }
+      h+='</div>';
     }
-    h+='</div>';
   }
-  // arbre : uniquement les nœuds découverts, lignes seulement entre nœuds visibles
-  const vis=visibleNodeIds(t), rows={};
-  for(const n of vis){ (rows[n.row]=rows[n.row]||[]).push(n); }
-  const keys=Object.keys(rows).map(Number).sort(function(a,b){return a-b;});
-  h+='<div class="tree" id="tree" style="--tc:'+tcol(t)+'"><svg aria-hidden="true"></svg>';
-  for(const r of keys){
-    h+='<div class="trow">';
-    rows[r].sort(function(a,b){return a.col-b.col;});
-    for(const n of rows[r]){
-      const tag=n.final?'<span class="ntag">★ Final</span>':n.keep?'<span class="ntag">🔒 Garde</span>':n.a?'<span class="ntag">⚙ Auto</span>':'';
-      const d=G.describe(n).replace(/^(⚙|🔒)\s*/,'');
-      h+='<button class="node'+(n.final?' final':'')+(isFresh('n:'+n.id)?' fresh':'')+'" data-act="buynode" data-id="'+n.id+'" id="nd-'+n.id+'">'+
-        '<span class="nico">'+n.icon+'</span><span class="nname">'+esc(n.name)+'</span>'+tag+'<span class="ndesc">'+esc(d)+'</span><span class="ncost mono"></span></button>';
-    }
-    h+='</div>';
-  }
+  const vis=G.visibleNodes(t), ownedAll=vis.filter(n=>s.nodes[n.id]);
+  h+='<div class="tbar"><small>'+G.ownedCount(t)+' compétence'+(G.ownedCount(t)>1?'s':'')+' acquise'+(G.ownedCount(t)>1?'s':'')+'</small><button class="mini buyall" data-act="buyall" data-t="'+t+'" style="--tc:'+TCOL(t)+'">Tout acheter</button></div>';
+  h+='<div class="tree" style="--tc:'+TCOL(t)+'"><svg aria-hidden="true"></svg>';
+  // les nœuds achetés anciens sont repliés ; on garde les derniers, plus ce qui reste à acheter
+  const ownedMain=ownedAll.filter(n=>!n.branch);
+  const cut=ownedMain.length>KEEP_OWNED?ownedMain[ownedMain.length-KEEP_OWNED].k:-1;
+  const hidden=u.all[t]?0:ownedAll.filter(n=>n.k<cut).length;
+  if(hidden>0||(u.all[t]&&ownedMain.length>KEEP_OWNED)) h+='<button class="more" data-act="more" data-t="'+t+'">'+(u.all[t]?'▴ Replier les anciennes compétences':'▾ Afficher les '+hidden+' compétences précédentes')+'</button>';
+  for(const n of vis){ if(!u.all[t]&&s.nodes[n.id]&&n.k<cut) continue; h+=nodeHTML(n,s); }
   h+='</div>';
-  body.innerHTML=h;
-  requestAnimationFrame(drawLines);
+  rec.body.innerHTML=h;
+  fitTrees(); requestAnimationFrame(drawLines);
+}
+function fitTrees(){
+  $$('.tree').forEach(function(tr){ const w=tr.clientWidth, cw=Math.min(330,w-8); tr.style.setProperty('--amp',Math.max(0,(w-cw)/2-4)+'px'); });
 }
 function drawLines(){
-  const tree=$('#tree'); if(!tree) return;
-  const svg=$('svg',tree), s=SV(), box=tree.getBoundingClientRect();
-  const t=+$('.pcard').dataset.t; let h='';
-  for(const n of G.visibleNodes(t)){
-    const c=document.getElementById('nd-'+n.id); if(!c) continue;
-    for(const rid of n.req){
-      const p=document.getElementById('nd-'+rid); if(!p) continue;
+  const s=SV();
+  for(const k in UI.sec){
+    const t=+k, rec=UI.sec[t], tree=$('.tree',rec.body); if(!tree) continue;
+    const svg=$('svg',tree), box=tree.getBoundingClientRect(); let h='';
+    for(const n of G.visibleNodes(t)){
+      if(!n.par) continue;
+      const c=document.getElementById('nd-'+n.id), p=document.getElementById('nd-'+n.par); if(!c||!p) continue;
       const a=p.getBoundingClientRect(), b=c.getBoundingClientRect();
-      const x1=a.left+a.width/2-box.left, y1=a.bottom-box.top-2, x2=b.left+b.width/2-box.left, y2=b.top-box.top+2, m=(y2-y1)*0.55;
-      const cls='ln'+(s.nodes[rid]?(s.nodes[n.id]?' own':' act'):'');
+      const x1=a.left+a.width/2-box.left, y1=a.bottom-box.top-1, x2=b.left+b.width/2-box.left, y2=b.top-box.top+1, m=Math.max(14,(y2-y1)*0.5);
+      const cls='ln'+(s.nodes[n.par]?(s.nodes[n.id]?' own':' act'):'');
       h+='<path class="'+cls+'" d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' C'+x1.toFixed(1)+' '+(y1+m).toFixed(1)+' '+x2.toFixed(1)+' '+(y2-m).toFixed(1)+' '+x2.toFixed(1)+' '+y2.toFixed(1)+'"/>';
     }
+    svg.innerHTML=h;
   }
-  svg.innerHTML=h;
 }
-function updateTier(t){
-  const s=SV(), T=TIERS[t], body=$('#tabbody'), card=$('.pcard',body); if(!card) return;
-  const e=s.earn[t-1], seuil=G.P.seuil[t], m=G.A.gain[t], g=G.pending(t), can=G.canPrestige(t);
-  setText($('.cur',card),fmt(s.res[t]));
-  setText($('.runt',card),'Run en cours : '+G.fmtTime(s.runT[t])+(s.n[t]?' · '+s.n[t]+' fois':''));
+function updateSec(t){
+  const s=SV(), rec=UI.sec[t], u=uiState();
+  setText(rec.cur,t===0?'':fmt(s.res[t])+' '+TIERS[t].cur);
+  setText(rec.cnt,G.ownedCount(t)+' compétence'+(G.ownedCount(t)>1?'s':'')+(t>0&&s.n[t]?' · '+fmt(s.n[t])+' prestige'+(s.n[t]>1?'s':''):''));
+  let has=G.visibleNodes(t).some(n=>G.nodeInfo(n).can)||(t>0&&G.canPrestige(t));
+  setCls(rec.el,'has',has&&!!u.shut[t]);
+  if(u.shut[t]) return;
+  const T=TIERS[t], body=rec.body;
+  $$('.n',body).forEach(function(el){
+    const n=G.NODE(el.dataset.id), inf=G.nodeInfo(n);
+    setCls(el,'can',inf.can); setCls(el,'lock',inf.locked&&!inf.owned);
+  });
+  const ba=$('.buyall',body); if(ba) setCls(ba,'on',G.visibleNodes(t).some(n=>G.nodeInfo(n).can));
+  if(t===0) return;
+  const card=$('.pcard',body); if(!card) return;
+  const e=s.earn[t-1], seuil=G.SEUIL[t], m=G.A.gain[t], g=G.pending(t), can=G.canPrestige(t);
   setText($('.f2',card),'⌊ √( '+fmt(e)+' ÷ '+fmt(seuil)+' ) × '+fmt(m)+' ⌋ = '+fmt(g));
   const bar=$('.bar i',card);
-  if(e<seuil){
-    bar.style.width=(e/seuil*100).toFixed(1)+'%';
-    setText($('.s1',card),fmt(e)+' / '+fmt(seuil)+' '+T.earnLabel.replace(' gagnées','').replace(' gagnés',''));
-    setText($('.s2',card),(e/seuil*100).toFixed(1)+' %');
-  }else{
+  if(e<seuil){ bar.style.width=(e/seuil*100).toFixed(1)+'%'; setText($('.s1',card),fmt(e)+' / '+fmt(seuil)); setText($('.s2',card),(e/seuil*100).toFixed(1)+' %'); }
+  else{
     const lo=seuil*Math.pow(g/m,2), hi=G.nextAt(t);
     bar.style.width=Math.max(0,Math.min(100,(e-lo)/(hi-lo)*100)).toFixed(1)+'%';
-    setText($('.s1',card),'Prochain +1 '+T.cur+' à '+fmt(hi));
-    setText($('.s2',card),'reste '+fmt(Math.max(0,hi-e)));
+    setText($('.s1',card),'Prochain +1 '+T.cur+' à '+fmt(hi)); setText($('.s2',card),'reste '+fmt(Math.max(0,hi-e)));
   }
-  const btn=$('.pbtn',card);
-  setCls(btn,'off',!can); setCls(btn,'ready',can);
+  const btn=$('.pbtn',card); setCls(btn,'off',!can); setCls(btn,'ready',can);
   setText($('.pb-gain',btn),can?'+'+fmt(g)+' '+T.cur:(e<seuil?(e/seuil*100).toFixed(0)+' %':'—'));
   setText($('.pb-main',btn),can?T.name:'Objectif : '+fmt(seuil)+' '+T.earnLabel.split(' ')[0]);
   setText($('.pb-f',btn),'⌊ √( '+fmt(e)+' ÷ '+fmt(seuil)+' ) × '+fmt(m)+' ⌋ = '+fmt(g)+' '+T.cur);
   $$('.thrv',body).forEach(function(el){ setText(el,fmt(G.thrValue(+el.dataset.t))); });
-  $$('.node',body).forEach(function(el){
-    const n=G.NODE[el.dataset.id], inf=G.nodeInfo(n);
-    setCls(el,'own',inf.owned); setCls(el,'can',inf.can); setCls(el,'lock',inf.locked&&!inf.owned);
-    setText($('.ncost',el),inf.owned?'✓ Acheté':(inf.locked?'Prérequis manquant':fmt(n.cost)+' '+T.cur));
-  });
 }
 
-/* ================= onglets ================= */
-function tabList(){
-  const s=SV(), l=[];
-  if(s.disc.tab0) l.push(0);
-  for(let t=1;t<=4;t++) if(s.disc['T'+t]) l.push(t);
-  return l;
-}
-function buildTabs(){
-  const l=tabList(), key=l.join(',')+'|'+UI.tab;
-  if(UI.sig.tabs===key) return; UI.sig.tabs=key;
-  if(l.length&&l.indexOf(UI.tab)<0) UI.tab=l[0];
-  if(!l.length) UI.tab=-1;
-  const box=$('#tabs'); box.innerHTML=''; UI.tabEls={};
-  for(const t of l){
-    const b=document.createElement('button'); b.className='tab'+(isFresh(t===0?'tab0':'T'+t)?' fresh':'');
-    b.style.setProperty('--tc',tcol(t)); b.setAttribute('role','tab'); b.setAttribute('aria-selected',t===UI.tab?'true':'false');
-    b.dataset.act='tab'; b.dataset.t=t;
-    b.innerHTML='<span>'+(t===0?'⛏️':TIERS[t].icon)+'</span><span>'+(t===0?'Améliorations':TIERS[t].name)+'</span><i class="dot"></i>';
-    box.appendChild(b); UI.tabEls[t]=b;
-  }
-}
-function updateTabs(){
-  const s=SV();
-  for(const k in UI.tabEls){
-    const t=+k, el=UI.tabEls[t]; let has=false, ready=false;
-    if(t===0){ has=G.visibleUpgs().some(u=>G.upgInfo(u).can); }
-    else{ has=G.visibleNodes(t).some(n=>G.nodeInfo(n).can); ready=G.canPrestige(t); }
-    setCls(el,'has',has&&t!==UI.tab); setCls(el,'ready',ready);
-  }
-}
-function renderBody(){
-  const body=$('#tabbody'), t=UI.tab;
-  if(t<0){
-    body.innerHTML='<div class="empty"><span class="big">🪨</span><b>Continue de miner…</b>Les améliorations apparaîtront ici dès que tu en auras découvert une.</div>'; UI.sig.body='empty'; return;
-  }
-  const sig=t===0?'u:'+sigUpg():sigTier(t);
-  if(UI.sig.body===sig) return;
-  UI.sig.body=sig;
-  const keep=window.scrollY;
-  if(t===0) buildUpg(); else buildTier(t);
-  if(Math.abs(window.scrollY-keep)>2) window.scrollTo(0,keep);
-}
-function updateBody(){
-  if(UI.tab===0) updateUpg(); else if(UI.tab>0) updateTier(UI.tab);
-}
-
-/* ================= chaîne d'automatisation ================= */
-const CHIP_ORDER=['click','gens','upg','pres','pass','tree'];
-function sigChain(){
-  const s=SV(); let k='';
-  for(let t=0;t<5;t++) k+=(t===0||s.disc['T'+t]?'1':'0');
-  for(const n of G.NODES){ if((n.a||n.keep)&&s.disc['n:'+n.id]) k+=n.id+(s.nodes[n.id]?(n.a&&s.auto[n.id]===false?'x':'o'):'-'); }
-  return k;
-}
+/* ---------- chaîne d'automatisation ---------- */
 function chipLabel(n){
-  if(n.keep) return n.tier===1?'Garde les améliorations':'Garde l’arbre '+TIERS[n.tier-1].name;
-  const low=TIERS[n.tier-1];
-  return ({click:'Auto-clic',gens:'Auto-achat générateurs',upg:'Auto-achat améliorations',pres:'Auto-'+low.name,pass:low.cur+' passifs',tree:'Auto-achat de l’arbre'})[n.a];
+  if(n.keep) return n.t===1?'Garde l’arbre des pièces':'Garde l’arbre '+TIERS[n.t-1].name;
+  const low=TIERS[n.t-1];
+  return ({click:'Auto-clic',tree:'Auto-achat de l’arbre',pres:'Auto-'+low.name,pass:low.cur+' passifs',self:'Auto-'+TIERS[n.t].name})[n.a];
 }
 function renderChain(){
-  const sig=sigChain(); if(UI.sig.chain===sig) return; UI.sig.chain=sig;
-  const s=SV(), box=$('#chain'); let h='', any=false, prevLit=false;
-  const shown=[0,1,2,3,4].filter(t=>t===0||s.disc['T'+t]);
+  const s=SV(); let sig='';
+  for(let t=0;t<5;t++) sig+=(t===0||s.disc['T'+t]?'1':'0');
+  for(const n of G.NODES) if((n.a||n.keep)&&s.disc[n.id]) sig+=n.id+(s.nodes[n.id]?(n.a&&s.auto[n.id]===false?'x':'o'):'-');
+  if(UI.sig.chain===sig) return; UI.sig.chain=sig;
+  const shown=[0,1,2,3,4].filter(t=>t===0||s.disc['T'+t]); let h='', any=false;
   shown.forEach(function(t,idx){
-    // boîte t : automatisée par l'arbre t+1
-    const nodes=G.NODES.filter(n=>n.tier===t+1&&(n.a||n.keep)&&s.disc['n:'+n.id]);
-    nodes.sort(function(a,b){ const ka=a.keep?9:CHIP_ORDER.indexOf(a.a), kb=b.keep?9:CHIP_ORDER.indexOf(b.a); return ka-kb; });
-    let lit=false;
-    h+='<div class="cbox" style="--tc:'+tcol(t)+'"><div class="cnode"><span>'+TIERS[t].icon+'</span><span>'+TIERS[t].name+'</span></div>';
-    if(nodes.length){
-      h+='<div class="cchips"><small>géré par '+TIERS[t+1].name+'</small>';
-      for(const n of nodes){
-        const own=!!s.nodes[n.id], on=own&&(!n.a||s.auto[n.id]!==false);
-        if(on) lit=true; if(own) any=true;
+    const nodes=G.NODES.filter(n=>n.t===t+1&&(n.a||n.keep)&&n.a!=='self'&&s.disc[n.id]);
+    const self=t===4?G.NODES.filter(n=>n.t===4&&n.a==='self'&&s.disc[n.id]):[];
+    const all=nodes.concat(self); let lit=false;
+    h+='<div class="cbox" style="--tc:'+TCOL(t)+'"><div class="cnode"><span>'+TIERS[t].icon+'</span><span>'+TIERS[t].name+'</span></div>';
+    if(all.length){
+      h+='<div class="cchips"><small>'+(t<4?'géré par '+TIERS[t+1].name:'')+'</small>';
+      for(const n of all){
+        const own=!!s.nodes[n.id], on=own&&(!n.a||s.auto[n.id]!==false); if(on) lit=true; if(own) any=true;
         h+='<button class="cchip'+(own?' own':'')+(own&&!on?' off':'')+(own&&n.a?' tg':'')+'" '+(own&&n.a?'data-act="toggle" data-id="'+n.id+'" title="Activer / désactiver"':'tabindex="-1"')+'>'+(n.keep?'🔒':'⚙')+' '+esc(chipLabel(n))+'</button>';
       }
       h+='</div>';
@@ -1553,117 +743,103 @@ function renderChain(){
     h+='</div>';
     if(idx<shown.length-1) h+='<div class="carrow'+(lit?' lit':'')+'">➜</div>';
   });
-  box.innerHTML=h;
-  $('#chainnone').hidden=any;
+  $('#chain').innerHTML=h; $('#chainnone').hidden=any;
 }
 
-/* ================= victoire ================= */
+/* ---------- victoire ---------- */
 function showWin(){
-  const s=SV(), w=$('#win');
+  const s=SV();
   $('#winstats').innerHTML='<div>Temps de jeu<b class="mono">'+G.fmtTime(s.endAt)+'</b></div><div>Clics<b class="mono">'+fmt(s.clicks)+'</b></div>'+
     '<div>Renaissances<b class="mono">'+fmt(s.n[1])+'</b></div><div>Ascensions<b class="mono">'+fmt(s.n[2])+'</b></div>'+
     '<div>Transcendances<b class="mono">'+fmt(s.n[3])+'</b></div><div>Divinités<b class="mono">'+fmt(s.n[4])+'</b></div>';
-  w.hidden=false;
+  $('#win').hidden=false;
 }
 
-/* ================= actions ================= */
+/* ---------- actions ---------- */
 function floatText(x,y,txt){
-  const fx=$('#fx'); if(!fx) return;
-  if(fx.children.length>14) fx.removeChild(fx.firstChild);
+  const fx=$('#fx'); if(!fx) return; if(fx.children.length>12) fx.removeChild(fx.firstChild);
   const el=document.createElement('span'); el.className='fl'; el.textContent=txt;
   const r=fx.getBoundingClientRect();
   el.style.left=Math.max(30,Math.min(r.width-30,x-r.left))+'px'; el.style.top=Math.max(20,Math.min(r.height-10,y-r.top))+'px';
   fx.appendChild(el); setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); },950);
 }
 function doClick(x,y){
-  const v=G.click();
-  floatText(x,y,'+'+fmt(v));
+  const v=G.click(); floatText(x,y,'+'+fmt(v));
   const ore=$('#ore'); ore.classList.add('hit'); clearTimeout(UI.hitT); UI.hitT=setTimeout(function(){ore.classList.remove('hit');},70);
 }
-function onAct(el,ev){
-  const a=el.dataset.act, s=SV();
-  if(a==='buygen'){ G.buyGen(+el.dataset.i,s.buy); }
-  else if(a==='buyupg'){ G.buyUpg(el.dataset.id); }
-  else if(a==='buynode'){ G.buyNode(el.dataset.id); }
-  else if(a==='prestige'){ UI.manual=true; if(!G.prestige(+el.dataset.t)) UI.manual=false; UI.sig={}; }
-  else if(a==='tab'){ UI.tab=+el.dataset.t; UI.sig.body=null; UI.sig.tabs=null; }
-  else if(a==='toggle'){ G.toggleAuto(el.dataset.id); UI.sig.body=null; UI.sig.chain=null; }
+function onAct(el){
+  const a=el.dataset.act, s=SV(), u=uiState();
+  if(a==='buy'){ G.buyNode(el.dataset.id); }
+  else if(a==='buyall'){ G.buyAll(+el.dataset.t); }
+  else if(a==='prestige'){ UI.manual=true; if(!G.prestige(+el.dataset.t)) UI.manual=false; UI.sig.secBody={}; }
+  else if(a==='toggle'){ G.toggleAuto(el.dataset.id); UI.sig.chain=null; }
   else if(a==='thr'){ const t=+el.dataset.t; G.setThr(t,s.thr[t]+(+el.dataset.d)); }
-  else if(a==='mode'){ const v=el.dataset.v; s.buy=v==='max'?'max':+v; syncModeBtns(); }
-  else if(a==='speed'){ s.speed=+el.dataset.v; syncSpeedBtns(); }
+  else if(a==='sec'){ const t=+el.dataset.t; u.shut[t]=!u.shut[t]; }
+  else if(a==='more'){ const t=+el.dataset.t; u.all[t]=!u.all[t]; }
   else if(a==='save'){ doSave(true); }
   else if(a==='wipe'){ onWipe(); }
   else if(a==='closewin'){ $('#win').hidden=true; }
   refresh();
 }
-function syncModeBtns(){ const s=SV(); $$('#buymode button').forEach(function(b){ b.setAttribute('aria-pressed',String(String(s.buy)===b.dataset.v)); }); }
-function syncSpeedBtns(){ const s=SV(); $$('#speed button').forEach(function(b){ b.setAttribute('aria-pressed',String(+b.dataset.v===s.speed)); }); }
-function doSave(manual){
-  const ok=G.save(); UI.savedFlash=Date.now()+2200;
-  if(manual) toast(ok?'Partie sauvegardée':'Sauvegarde impossible',ok?'Dans ce navigateur':'Le stockage local est bloqué','💾',0);
-}
+function doSave(manual){ const ok=G.save(); UI.savedFlash=Date.now()+2200; if(manual) toast(ok?'Partie sauvegardée':'Sauvegarde impossible',ok?'Dans ce navigateur':'Le stockage local est bloqué','💾',0); }
 function onWipe(){
   const b=$('#wipe');
-  if(!UI.wipeArmed||Date.now()>UI.wipeArmed){
-    UI.wipeArmed=Date.now()+4000; b.classList.add('armed'); b.textContent='Sûr ? Clique encore';
-    clearTimeout(UI.wipeT); UI.wipeT=setTimeout(disarm,4000); return;
-  }
-  disarm(); G.wipe(); UI.sig={}; UI.tab=-1; UI.fresh={}; UI.gensOwner=null; $('#toasts').innerHTML='';
-  $('#win').hidden=true; syncModeBtns(); syncSpeedBtns();
+  if(!UI.wipeArmed||Date.now()>UI.wipeArmed){ UI.wipeArmed=Date.now()+4000; b.classList.add('armed'); b.textContent='Sûr ? Clique encore'; clearTimeout(UI.wipeT); UI.wipeT=setTimeout(disarm,4000); return; }
+  disarm(); G.wipe(); UI.sig={}; UI.fresh={}; UI.sec={}; UI.mi={}; $('#sections').innerHTML=''; $('#toasts').innerHTML=''; $('#win').hidden=true;
   toast('Partie effacée','Tout repart de zéro','🗑️',0);
 }
 function disarm(){ const b=$('#wipe'); UI.wipeArmed=0; b.classList.remove('armed'); b.textContent='Tout effacer'; }
 
-/* ================= boucle ================= */
+/* ---------- boucle ---------- */
 function refresh(){
-  buildRes(); syncGens(); buildTabs(); renderBody(); renderChain();
-  updateRes(); updateGoal(); updateGens(); updateTabs(); updateBody();
-  const st=$('#savestate'); setText(st,UI.savedFlash>Date.now()?'💾 sauvegardé':'');
-  $('#clickval').textContent=fmt(G.clickValue());
-  const ww=$('#endbanner'); if(ww) ww.hidden=!SV().ended;
+  buildRes(); ensureSections();
+  UI.sig.secBody=UI.sig.secBody||{};
+  for(const t of secList()){
+    const sg=sigSec(t);
+    if(UI.sig.secBody[t]!==sg){ UI.sig.secBody[t]=sg; buildSec(t); }
+    updateSec(t);
+  }
+  renderChain(); updateRes(); updateGoal();
+  setText($('#savestate'),UI.savedFlash>Date.now()?'sauvegardé':'');
+  setText($('#clickval'),fmt(G.clickValue())); setText($('#psec'),fmt(G.cps()));
+  $('#endbanner').hidden=!SV().ended;
 }
 function cleanFresh(){
   const now=Date.now(); let any=false;
-  for(const k in UI.fresh){ if(UI.fresh[k]<=now){ delete UI.fresh[k]; any=true; } }
-  if(any) $$('.fresh').forEach(function(e){ e.classList.remove('fresh'); });
+  for(const k in UI.fresh) if(UI.fresh[k]<=now){ delete UI.fresh[k]; any=true; }
+  if(any){ $$('.fresh').forEach(function(e){ e.classList.remove('fresh'); }); UI.sig.secBody={}; }
 }
 function init(){
-  const had=G.load(); const s=SV();
+  G.init(DATA);
+  const had=G.load(), s=SV();
   if(had){
     const away=(Date.now()-s.saved)/1000;
-    if(away>20){
-      const before=s.res[0]+0, tb=s.tot[0];
-      G.catchUp(Math.min(away,8*3600)); G.popEvents();
-      toast('Bon retour !','Absent '+G.fmtTime(away)+' · +'+fmt(SV().tot[0]-tb)+' pièces','👋',0);
-    }
+    if(away>30){ const tb=s.tot[0]; G.catchUp(away); G.popEvents(); toast('Bon retour !','Absent '+G.fmtTime(Math.min(away,3*3600))+(away>3*3600?' (limité à 3 h)':'')+' · +'+fmt(SV().tot[0]-tb)+' pièces','👋',0); }
   }
-  syncModeBtns(); syncSpeedBtns(); refresh();
+  uiState(); refresh();
   document.addEventListener('click',function(ev){
     const el=ev.target.closest&&ev.target.closest('[data-act]'); if(!el) return;
     if(el.id==='ore'){ if(ev.detail===0){ const r=el.getBoundingClientRect(); doClick(r.left+r.width/2,r.top+r.height/2); refresh(); } return; }
-    onAct(el,ev);
+    onAct(el);
   });
   const ore=$('#ore');
   ore.addEventListener('pointerdown',function(ev){ ev.preventDefault(); doClick(ev.clientX,ev.clientY); });
   ore.addEventListener('contextmenu',function(ev){ ev.preventDefault(); });
-  window.addEventListener('resize',function(){ drawLines(); });
-  if(window.ResizeObserver) new ResizeObserver(function(){ drawLines(); }).observe($('#side'));
+  window.addEventListener('resize',function(){ fitTrees(); drawLines(); });
   document.addEventListener('visibilitychange',function(){ if(document.hidden) G.save(); });
   window.addEventListener('pagehide',function(){ G.save(); });
-  try{ if(window.claude&&window.claude.hot&&window.claude.hot.snapshot) window.claude.hot.snapshot(function(){ G.save(); return {}; }); }catch(e){}
   let last=performance.now(), acc=0;
   setInterval(function(){
     const now=performance.now(); let dt=(now-last)/1000; last=now;
-    if(dt>3){ G.catchUp(Math.min(dt,8*3600)); G.popEvents(); }
-    else G.advance(dt*SV().speed);
+    if(dt>3){ G.catchUp(dt); G.popEvents(); } else G.advance(dt);
     handleEvents(); refresh(); cleanFresh();
     acc+=dt; if(acc>12){ acc=0; doSave(false); }
   },100);
-  window.__game=G; window.__ui=UI;   // pratique pour tester dans la console
+  window.__jeu=G;
 }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
 })();
 
 </script>
-
-</body></html>
+</body>
+</html>
