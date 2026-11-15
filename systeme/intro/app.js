@@ -445,14 +445,14 @@ function pageMemo() {
   <h2>Les pièges classiques</h2><ul class="pieges">${PIEGES.map(p => `<li><strong>${p[0]}</strong><span>${p[1]}</span></li>`).join('')}</ul></article>`;
 }
 /* Fiche recto verso : une feuille A4 très dense, à imprimer pour le contrôle */
-const FICHE_TAILLES = [8, 8.5, 9, 9.5, 10, 10.5, 11, 11.5];
-const ficheTaille = () => { let t = 11; try { t = +localStorage.getItem('intro-systeme-fiche') || 11; } catch (e) { /* indisponible */ } return FICHE_TAILLES.includes(t) ? t : 11; };
+const FICHE_TAILLES = [10, 11, 12, 13, 14];
+const ficheTaille = () => { let t = 13; try { t = +localStorage.getItem('intro-systeme-fiche') || 13; } catch (e) { /* indisponible */ } return FICHE_TAILLES.includes(t) ? t : 13; };
 function pageFiche() {
   return `<article class="page wide fiche-page"><div class="fiche-tools"><p class="kicker">Pour le contrôle</p><h1>Fiche recto verso</h1>
-  <p class="lead">Toutes les commandes, une par ligne : <code>cmd [-option : effet, …] : ce qu'elle fait</code>, avec les options vues en TD, plus les petits tableaux utiles (jokers, redirections, droits, UTF-8, erreurs). Imprimée, elle tient sur <strong>une feuille A4 recto verso</strong>.</p>
+  <p class="lead">L'essentiel du cours, une commande par ligne : <code>cmd [-option : effet, …] : ce qu'elle fait</code>. Recto : les fichiers (se déplacer, créer, copier, déplacer, lire, modifier, rediriger). Verso : les permissions. Imprimée, elle tient sur <strong>une feuille A4 recto verso</strong>.</p>
   <div class="at-bar"><button type="button" class="btn" data-app="fiche-print">⎙ Imprimer / PDF</button>
   <span class="fiche-size">Taille du texte : <button type="button" class="btn ghost mini" data-app="fiche-size" data-d="-1" aria-label="Texte plus petit">A−</button> <strong id="fiche-pt">${String(ficheTaille()).replace('.', ',')} pt</strong> <button type="button" class="btn ghost mini" data-app="fiche-size" data-d="1" aria-label="Texte plus grand">A+</button></span></div>
-  <p class="note-line">Réglages d'impression : papier A4, recto verso (bord long), échelle 100 %, marges « Aucune » ou « Minimales », cocher « Graphiques d'arrière-plan ». Le recto et le verso tiennent chacun sur une page jusqu'à 11,5 pt ; si l'aperçu en annonce plus de 2, baisse d'un cran. Vérifie dans l'aperçu avant d'imprimer, et que ton enseignant accepte une fiche imprimée.</p></div>
+  <p class="note-line">Réglages d'impression : papier A4, recto verso (bord long), échelle 100 %, marges « Aucune » ou « Minimales », cocher « Graphiques d'arrière-plan ». Le recto et le verso tiennent chacun sur une page jusqu'à 14 pt ; si l'aperçu en annonce plus de 2, baisse d'un cran. Vérifie dans l'aperçu avant d'imprimer, et que ton enseignant accepte une fiche imprimée.</p></div>
   <div class="fiche-wrap" id="fiche-feuille" style="--fiche-pt:${ficheTaille()}pt">
   <div class="fiche"><header class="fiche-h"><strong>R1.04 · Aide-mémoire Linux · recto</strong><span>Nom : ……………………………</span></header>${FICHE().slice(0, FICHE_RECTO).join('')}</div>
   <div class="fiche fiche-verso"><header class="fiche-h"><strong>R1.04 · Aide-mémoire Linux · verso</strong></header>${FICHE().slice(FICHE_RECTO).join('')}</div></div></article>`;

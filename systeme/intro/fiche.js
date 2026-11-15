@@ -1,8 +1,9 @@
 /* Intro système : la fiche recto verso autorisée au contrôle (une feuille A4).
-   Une commande = une ligne : F('ls', [['-l', 'détails'], ['-a', 'cachés']], 'liste le dossier')
-   s'affiche « ls [-l : détails, -a : cachés] : liste le dossier ». Seulement les options vues en TD, pas d'exemples.
-   Les FICHE_RECTO premières parties vont au recto, les autres au verso (chaque face a ses propres colonnes). */
-const FICHE_RECTO = 10;
+   Volontairement basique : le recto pour les fichiers (se déplacer, créer, copier, lire, modifier, rediriger),
+   le verso pour les permissions. Une commande = une ligne :
+   F('ls', [['-l', 'détails'], ['-a', 'cachés']], 'liste le dossier') → « ls [-l : détails, -a : cachés] : liste le dossier ».
+   Les FICHE_RECTO premières parties vont au recto, les autres au verso. */
+const FICHE_RECTO = 7;
 const F = (cmd, opts, desc) => `<p class="fc"><b>${esc(cmd)}</b>${opts.length ? ' <span class="fo">[' + opts.map(o => `<code>${esc(o[0])}</code> : ${o[1]}`).join(', ') + ']</span>' : ''} : ${desc}</p>`;
 const FT = (head, rows, w) => `<table class="ft">${w ? '<colgroup>' + w.map(x => `<col style="width:${x}%">`).join('') + '</colgroup>' : ''}<thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
 const FS = (titre, html) => `<section class="fs"><h3>${titre}</h3>${html}</section>`;
@@ -10,130 +11,72 @@ const FP = html => `<p class="fc">${html}</p>`;
 const k = s => `<code>${esc(s)}</code>`;
 
 const FICHE = () => [
-  FS('Le shell', `
-${FP(`<b>commande -options arguments</b> · ${k('-l -a')} = ${k('-la')}`)}
-${FP(`${k('Tab')} compléter · ${k('↑')} historique · ${k('Ctrl+C')} arrêter · ${k('Ctrl+Z')} suspendre · ${k('Ctrl+D')} quitter · ${k('Ctrl+L')} effacer · ${k('Ctrl+R')} chercher`)}
-${FP(`${k('a ; b')} l'un puis l'autre · ${k('a && b')} b si a réussit · ${k('a || b')} b si a échoue`)}
-${FP(`${k('$USER')} · ${k('$HOME')} · ${k('$?')} code retour, 0 = ok · ${k('$PATH')}`)}`),
-  FS('Aide', `
-${F('man', [['-k', 'chercher']], 'manuel ; /mot chercher, q quitter')}
-${F('apropos', [], 'chercher une commande par mot-clé')}
-${F('help', [], 'aide des commandes internes : cd, echo…')}
-${F('type', [], 'interne ou programme ?')}
-${FP(`Synopsis : ${k('[ ]')} facultatif · MAJUSCULE à remplacer · ${k('...')} répétable · ${k('|')} au choix`)}`),
+  /* ---------------------------------------------------------------- RECTO : les fichiers */
   FS('Se déplacer', `
-${FP(`${k('/')} racine · ${k('~')} accueil · ${k('.')} ici · ${k('..')} parent · absolu = commence par /`)}
+${FP(`${k('/')} racine · ${k('~')} mon dossier perso · ${k('.')} ici · ${k('..')} dossier parent`)}
+${FP('Chemin absolu = commence par / · relatif = depuis le dossier courant')}
 ${F('pwd', [], 'affiche où je suis')}
-${F('cd', [['-', 'précédent'], ['..', 'parent']], 'change de dossier ; seul : accueil')}
-${F('ls', [['-l', 'détails'], ['-a', 'cachés'], ['-t', 'par date'], ['-r', 'inverse'], ['-R', 'récursif'], ['-d', 'le dossier lui-même']], 'liste le dossier')}
-${F('tree', [], 'arborescence')}
-${F('du', [['-s', 'total'], ['-h', 'lisible']], 'taille d\'un dossier')}
-${F('quota', [['-s', 'lisible']], 'espace utilisé du compte')}`),
-  FS('Fichiers et dossiers', `
-${F('mkdir', [['-p', 'avec les parents']], 'crée un dossier')}
+${F('cd', [['..', 'remonter'], ['-', 'dossier précédent']], 'va dans un dossier ; seul : retour au dossier perso')}
+${F('ls', [['-l', 'détails et droits'], ['-a', 'fichiers cachés'], ['-R', 'sous-dossiers']], 'liste le dossier')}
+${F('tree', [], 'affiche l\'arborescence')}`),
+  FS('Créer et supprimer', `
+${F('mkdir', [['-p', 'avec les dossiers parents']], 'crée un dossier')}
+${F('touch', [], 'crée un fichier vide')}
 ${F('rmdir', [], 'supprime un dossier vide')}
-${F('touch', [], 'crée un fichier vide / met à jour la date')}
-${F('cp', [['-r', 'dossier'], ['-i', 'demander'], ['-v', 'afficher']], 'copie')}
-${F('mv', [['-i', 'demander']], 'déplace ou renomme')}
-${F('rm', [['-r', 'dossier'], ['-i', 'demander'], ['-f', 'forcer']], 'supprime, définitif')}
-${F('ln', [['-s', 'symbolique']], 'crée un lien')}
-${F('file', [], 'type d\'après le contenu')}
-${FP('cp, mv : destination = dossier existant → dedans, sinon → nouveau nom')}`),
-  FS('Afficher', `
-${F('cat', [['-n', 'numéroter']], 'affiche tout')}
-${F('less / more', [], 'page par page ; q quitter')}
-${F('head', [['-n X', 'X lignes']], 'début, 10 lignes')}
-${F('tail', [['-n X', 'X lignes']], 'fin, 10 lignes')}
-${F('wc', [['-l', 'lignes'], ['-w', 'mots'], ['-c', 'octets']], 'compte')}
-${F('echo', [['-n', 'sans retour ligne']], 'affiche le texte')}
-${F('clear', [], 'efface l\'écran')}
-${F('date', [['-d', 'autre date']], 'date et heure')}
-${F('cal', [], 'calendrier ; cal mois année')}
-${F('history', [], 'commandes tapées')}
-${F('exit', [], 'ferme le shell')}`),
-  FS('Éditer et ouvrir', `
-${F('code', [], 'VS Code ; code . = dossier courant')}
-${F('gedit', [], 'éditeur simple, fenêtre')}
-${F('nano', [], 'éditeur terminal ; ^O enregistrer, ^X quitter')}
-${F('vim', [], 'éditeur terminal ; i écrire, Échap :wq enregistrer et quitter')}
-${F('evince', [], 'ouvre un PDF')}
-${F('xdg-open', [], 'ouvre avec le programme par défaut')}`),
+${F('rm', [['-r', 'dossier et son contenu'], ['-i', 'demander avant'], ['-f', 'forcer']], 'supprime, définitif, pas de corbeille')}`),
+  FS('Copier, déplacer, renommer', `
+${F('cp', [['-r', 'copier un dossier']], 'copie')}
+${F('mv', [], 'déplace ou renomme')}
+${FP(`${k('mv a.txt b.txt')} renomme · ${k('mv a.txt Docs/')} déplace dans Docs`)}
+${FP('Si la destination est un dossier existant, le fichier va dedans ; sinon, c\'est le nouveau nom')}`),
+  FS('Lire et modifier un fichier', `
+${F('cat', [['-n', 'numéroter les lignes']], 'affiche tout le fichier')}
+${F('less', [], 'affiche page par page ; q pour quitter')}
+${F('head', [['-n X', 'X lignes']], 'affiche le début, 10 lignes')}
+${F('tail', [['-n X', 'X lignes']], 'affiche la fin, 10 lignes')}
+${F('nano', [], 'modifie le fichier dans le terminal ; Ctrl+O enregistrer, Ctrl+X quitter')}
+${F('echo', [], 'affiche un texte')}
+${F('wc', [['-l', 'lignes'], ['-w', 'mots']], 'compte')}`),
+  FS('Rediriger et joindre', `
+${FT(['Écriture', 'Effet'], [[k('cmd > f'), 'écrit le résultat dans f, écrase'], [k('cmd >> f'), 'ajoute à la fin de f'], [k('cmd < f'), 'lit f au lieu du clavier'], [k('cmd 2> f'), 'erreurs dans f'], [k('cmd1 | cmd2'), 'résultat de cmd1 → cmd2']], [32, 68])}
+${FP(`${k('echo "texte" > f')} écrit dans f · ${k('cat a b > c')} joint a et b dans c`)}
+${F('grep', [['-i', 'sans majuscules'], ['-v', 'lignes sans le mot'], ['-c', 'compter']], 'garde les lignes qui contiennent un mot')}
+${F('sort', [['-n', 'nombres'], ['-r', 'inverse']], 'trie les lignes')}`),
   FS('Jokers', `
-${FT(['Motif', 'Sens'], [[k('*'), 'n\'importe quelle suite'], [k('?'), '1 caractère'], [k('[abc]'), '1 parmi a, b, c'], [k('[a-e]'), '1 de a à e'], [k('[!abc]'), '1 sauf a, b, c']], [30, 70])}
-${FP(`Remplacés par le shell · ${k('"…"')} ${k("'…'")} ${k('\\')} protègent · aucun résultat → motif inchangé`)}`),
-  FS('Archiver, compresser', `
-${F('gzip', [['-k', 'garder l\'original'], ['-v', 'gain'], ['-9', 'fort']], 'compresse en .gz')}
-${F('gunzip', [], 'décompresse un .gz')}
-${F('zcat / zless', [], 'lit un .gz sans décompresser')}
-${F('bzip2 / bunzip2', [], 'idem en .bz2')}
-${F('tar', [['-c', 'créer'], ['-t', 'lister'], ['-x', 'extraire'], ['-f', 'nom archive'], ['-v', 'afficher'], ['-z', 'gzip'], ['-j', 'bzip2']], 'archive ; tar -cvf a.tar dossier')}`),
-  FS('Redirections', `
-${FT(['', 'Effet'], [[k('> f'), 'sortie dans f, écrase'], [k('>> f'), 'sortie à la fin de f'], [k('< f'), 'entrée depuis f'], [k('2> f'), 'erreurs dans f'], [k('> f 2>&1'), 'sortie + erreurs dans f'], [k('2> /dev/null'), 'jeter les erreurs'], [k('a | b'), 'sortie de a → entrée de b'], [k('a &'), 'arrière-plan']], [38, 62])}
-${FP('0 stdin clavier · 1 stdout écran · 2 stderr écran')}`),
-  FS('Filtres', `
-${F('grep', [['-i', 'sans casse'], ['-v', 'inverse'], ['-c', 'compter'], ['-n', 'n° ligne']], 'garde les lignes avec le motif')}
-${F('sort', [['-n', 'numérique'], ['-r', 'inverse'], ['-t:', 'séparateur'], ['-k N', 'champ N'], ['-u', 'sans doublon']], 'trie')}
-${F('uniq', [['-c', 'compter']], 'fusionne les lignes voisines, après sort')}
-${F('cut', [['-d:', 'séparateur'], ['-f N', 'champ N'], ['-c N-M', 'caractères']], 'extrait des colonnes')}
-${F('join', [], 'joint 2 fichiers triés sur le 1er champ')}
-${F('tr', [['-d', 'supprimer']], 'remplace des caractères, lit l\'entrée')}
-${F('diff', [], 'différences, rien = identiques')}
-${FP(`Regex : ${k('^')} début · ${k('$')} fin · ${k('.')} 1 caractère · ${k('*')} répété`)}`),
-  FS('Codage', `
-${FP('ASCII 7 bits, 128 car. · Latin-1 8 bits, é = E9 · Unicode U+xxxx · UTF-8 1 à 4 octets, é = C3 A9')}
-${FT(['n', 'Jusqu\'à', 'Bits'], [['1', 'U+7F', k('0xxxxxxx')], ['2', 'U+7FF', k('110xxxxx 10xxxxxx')], ['3', 'U+FFFF', k('1110xxxx') + ' + 2 × ' + k('10xxxxxx')], ['4', 'U+10FFFF', k('11110xxx') + ' + 3 × ' + k('10xxxxxx')]], [11, 25, 64])}
-${FP('UTF-8 lu en Latin-1 → Ã© · Latin-1 lu en UTF-8 → �')}
-${F('od', [['-c', 'caractères'], ['-t x1', 'hexa'], ['-t u1', 'décimal']], 'affiche les octets')}
-${F('iconv', [['-f', 'codage source'], ['-t', 'codage cible'], ['-o', 'fichier sortie']], 'convertit l\'encodage')}`),
-  FS('Utilisateurs', `
-${F('whoami', [], 'mon nom')}
-${F('id', [], 'UID, groupes')}
-${F('groups', [], 'mes groupes')}
-${F('su', [], 'devenir un autre utilisateur ; exit revient')}
-${F('sudo', [], 'lancer en root')}
-${F('passwd', [], 'changer de mot de passe')}
-${F('chown', [['-R', 'récursif']], 'change le propriétaire, root seulement')}
-${F('chgrp', [['-R', 'récursif']], 'change le groupe')}
-${FP(`/etc/passwd ${k('nom:x:UID:GID:info:accueil:shell')} · root = UID 0`)}`),
-  FS('Droits', `
-${FT(['', 'Fichier', 'Dossier'], [[k('r') + ' 4', 'lire', 'lister'], [k('w') + ' 2', 'modifier', 'créer, supprimer dedans'], [k('x') + ' 1', 'exécuter', 'entrer, cd']], [17, 33, 50])}
-${FP(`${k('-rwxr-x---')} = type + u propriétaire + g groupe + o autres · d dossier, l lien`)}
-${F('chmod', [['-R', 'récursif']], 'change les droits ; u g o a, + - =, r w x')}
-${FP(['---', '--x', '-w-', '-wx', 'r--', 'r-x', 'rw-', 'rwx'].map((s, i) => `${k(s)} ${i}`).join(' · '))}
-${FP('644 fichier · 600 privé · 755 programme/dossier · 700 dossier privé · 750 groupe')}`),
+${FT(['Joker', 'Remplace'], [[k('*'), 'n\'importe quoi'], [k('?'), 'un seul caractère'], [k('[abc]'), 'a, b ou c']], [30, 70])}
+${FP(`${k('ls *.txt')} tous les .txt · ${k('rm tp?')} tp1, tp2…`)}`),
+  FS('Aide et clavier', `
+${F('man', [], 'manuel d\'une commande ; q pour quitter')}
+${FP(`${k('Tab')} compléter un nom · ${k('↑')} commande précédente · ${k('Ctrl+C')} arrêter · ${k('clear')} effacer`)}`),
+
+  /* ---------------------------------------------------------------- VERSO : les permissions */
+  FS('Lire ls -l', `
+${FP(`${k('-rwxr-x---')} : 1 caractère de type, puis 3 blocs de 3`)}
+${FT(['Partie', 'Exemple', 'Sens'], [['type', k('-') + ' ' + k('d'), 'fichier, dossier'], [k('u'), k('rwx'), 'propriétaire'], [k('g'), k('r-x'), 'groupe'], [k('o'), k('---'), 'les autres']], [20, 30, 50])}
+${FP('Colonnes : droits, liens, propriétaire, groupe, taille, date, nom · un tiret = droit refusé')}`),
+  FS('Les droits r w x', `
+${FT(['Droit', 'Sur un fichier', 'Sur un dossier'], [[k('r') + ' 4', 'lire', 'lister le contenu'], [k('w') + ' 2', 'modifier', 'créer, supprimer dedans'], [k('x') + ' 1', 'exécuter', 'entrer avec cd']], [18, 34, 48])}
+${FP('Supprimer un fichier : il faut w sur le <b>dossier</b> · entrer dans un dossier : il faut x · lancer ./script : il faut x')}`),
+  FS('chmod symbolique', `
+${F('chmod', [['-R', 'dossier et contenu']], 'change les droits')}
+${FP(`Qui : ${k('u')} propriétaire · ${k('g')} groupe · ${k('o')} autres · ${k('a')} tous`)}
+${FP(`Opération : ${k('+')} ajoute · ${k('-')} retire · ${k('=')} remplace`)}
+${FT(['Commande', 'Effet'], [[k('chmod u+x f'), 'propriétaire peut exécuter'], [k('chmod go-rw f'), 'groupe et autres ne lisent ni n\'écrivent'], [k('chmod a=r f'), 'lecture seule pour tous'], [k('chmod u+x,g-w f'), 'deux changements']], [42, 58])}`),
+  FS('chmod octal', `
+${FP('r = 4, w = 2, x = 1 : on additionne pour u, puis g, puis o')}
+${FP(['rwx', 'rw-', 'r-x', 'r--', '-wx', '-w-', '--x', '---'].map((s, i) => `${k(s)} = ${7 - i}`).join(' · '))}
+${FT(['Octal', 'Droits', 'Pour'], [[k('755'), k('rwxr-xr-x'), 'dossier, programme'], [k('644'), k('rw-r--r--'), 'fichier normal'], [k('700'), k('rwx------'), 'dossier privé'], [k('600'), k('rw-------'), 'fichier privé'], [k('750'), k('rwxr-x---'), 'partagé avec le groupe']], [18, 40, 42])}
+${FP(`${k('chmod 754 f')} = rwx r-x r-- · octal = tout fixer d'un coup`)}`),
   FS('umask', `
-${F('umask', [['-S', 'symbolique']], 'droits retirés aux nouveaux fichiers')}
-${FP('Fichier 666, dossier 777, moins les bits du masque : 022 → 644 / 755 · 077 → 600 / 700 · 027 → 640 / 750 · 037 → 640 / 740')}`),
-  FS('ACL', `
-${F('getfacl', [], 'affiche les ACL')}
-${F('setfacl', [['-m u:nom:rwx', 'ajouter'], ['-x u:nom', 'retirer'], ['-b', 'tout retirer'], ['-R', 'récursif'], ['-m d:…', 'par défaut']], 'modifie les ACL')}
-${FP(`${k('+')} dans ls -l = ACL · 2e bloc = masque · effectif = entrée ∩ masque`)}`),
-  FS('À distance', `
-${F('ssh', [], 'session sur une autre machine ; ssh compte@machine')}
-${F('ssh-keygen', [['-t rsa', 'type']], 'crée id_rsa privée + id_rsa.pub publique')}
-${F('ssh-copy-id', [], 'installe ma clé publique sur la machine')}
-${F('scp', [['-r', 'dossier']], 'copie par ssh ; compte@machine:chemin')}
-${F('sftp', [], 'transfert interactif ; get, put')}
-${F('rsync', [['-a', 'archive'], ['-v', 'afficher'], ['-z', 'compresser'], ['--delete', 'supprimer en trop']], 'synchronise ; src/ = contenu')}
-${F('sshfs', [], 'monte un dossier distant')}
-${F('rwho', [], 'utilisateurs du réseau')}
-${FP('tmux : Ctrl+b d détacher · tmux a rattacher')}`),
-  FS('Chiffrement', `
-${FP('Symétrique : une clé · Asymétrique : chiffrer avec la publique du destinataire, déchiffrer avec sa privée · signer = avec sa privée')}
-${F('ccrypt', [['-e', 'chiffrer'], ['-d', 'déchiffrer']], 'chiffre avec un mot de passe')}
-${F('openssl enc', [['-aes-128-cbc', 'algo'], ['-d', 'déchiffrer'], ['-in', 'entrée'], ['-out', 'sortie']], 'chiffre avec un mot de passe')}`),
-  FS('Compiler', `
-${F('javac', [], 'compile F.java en F.class')}
-${F('java', [], 'lance une classe, sans .class')}
-${F('g++', [['-o nom', 'nom exécutable'], ['-Wall', 'avertissements']], 'compile du C++ en a.out')}
-${FP(`Lancer : ${k('./prog')} · script : ${k('#!/bin/bash')} + ${k('chmod u+x')}`)}`),
-  FS('Processus', `
-${F('ps', [['-ef', 'tous']], 'liste les processus')}
-${F('jobs', [], 'tâches du terminal')}
-${F('fg', [], 'tâche au premier plan')}
-${F('bg', [], 'tâche en arrière-plan')}
-${F('kill', [['-9', 'forcer']], 'arrête un processus ; PID ou %N')}
-${F('sleep', [], 'attend N secondes')}`),
+${F('umask', [], 'affiche ou règle les droits retirés aux nouveaux fichiers')}
+${FP('On part de 666 pour un fichier, de 777 pour un dossier, et on enlève les droits du masque')}
+${FT(['umask', 'Nouveau fichier', 'Nouveau dossier'], [[k('022'), '644', '755'], [k('077'), '600', '700'], [k('027'), '640', '750'], [k('002'), '664', '775']], [26, 37, 37])}`),
+  FS('Propriétaire', `
+${F('whoami', [], 'mon nom d\'utilisateur')}
+${F('id', [], 'mon numéro et mes groupes')}
+${F('chown', [], 'change le propriétaire ; il faut sudo')}
+${F('chgrp', [], 'change le groupe')}
+${F('sudo', [], 'lance une commande en administrateur')}`),
   FS('Erreurs', `
-${FT(['Message', 'Cause'], [[k('No such file or directory'), 'chemin faux'], [k('Permission denied'), 'droit manquant'], [k('Is a directory'), 'il faut -r'], [k('omitting directory'), 'cp sans -r'], [k('Directory not empty'), 'rmdir non vide'], [k('command not found'), 'faute ou ./ oublié'], [k('Operation not permitted'), 'réservé au propriétaire ou root']], [55, 45])}`)
+${FT(['Message', 'Cause'], [[k('Permission denied'), 'il manque un droit : regarder ls -l'], [k('No such file or directory'), 'mauvais nom ou chemin'], [k('Is a directory'), 'il faut -r'], [k('Operation not permitted'), 'pas le propriétaire']], [52, 48])}`)
 ];

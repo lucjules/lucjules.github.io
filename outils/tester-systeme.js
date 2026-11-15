@@ -132,11 +132,11 @@ console.log(`${LESSONS.length} leçons, ${n} exercices vérifiés sans navigateu
   await sec.locator('.term-input').fill('pwd'); await sec.locator('.term-input').press('Enter');
   await sec.locator('[data-act="sh-check"]').click();
   if (!(await sec.locator('.ex-fb.ok').count())) ko('l3-t1 : la vérification dans la page échoue');
-  /* La fiche : le recto et le verso doivent chacun tenir sur une page A4 (marges de 6 mm), de 8 à 11,5 pt */
+  /* La fiche : le recto et le verso doivent chacun tenir sur une page A4 (marges de 6 mm), de 10 à 14 pt */
   await page.evaluate(() => { location.hash = '#fiche'; }); await page.waitForTimeout(150);
   await page.emulateMedia({ media: 'print' });
   await page.addStyleTag({ content: '.fiche{width:198mm!important;box-sizing:border-box}' });
-  for (const t of [8, 11, 11.5]) {
+  for (const t of [10, 13, 14]) {
     await page.evaluate(x => document.getElementById('fiche-feuille').style.setProperty('--fiche-pt', x + 'pt'), t);
     await page.waitForTimeout(80);
     const h = await page.$$eval('.fiche', es => es.map(e => e.getBoundingClientRect().height));
