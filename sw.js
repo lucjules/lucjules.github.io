@@ -3,7 +3,7 @@
    essayé d'abord (pour avoir la dernière version) et le cache sert de secours.
    VERSION et FICHIERS sont générés par outils/construire.js : ne pas les modifier à la main. */
 // <généré>
-const VERSION = 'ce0d904be5';
+const VERSION = '3f4e170b27';
 const FICHIERS = [
   './',
   '404.html',
@@ -92,8 +92,15 @@ const FICHIERS = [
   'manifest.webmanifest',
   'maths/app.js',
   'maths/arithmetique.html',
+  'maths/cours-arith.js',
+  'maths/cours-logique.js',
+  'maths/cours-recurrence.js',
+  'maths/cours-revision.js',
+  'maths/cours-second.js',
   'maths/index.html',
+  'maths/lib.js',
   'maths/logique.html',
+  'maths/outils.js',
   'maths/recurrence.html',
   'maths/revision.html',
   'maths/second-degre.html',

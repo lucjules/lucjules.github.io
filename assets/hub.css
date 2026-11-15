@@ -88,3 +88,6 @@ html[data-theme="light"] .s-jeux{--accent:#306230;--accent-soft:#e6f0d0;--accent
 .resume-k{font:700 .74rem var(--f-body);text-transform:uppercase;letter-spacing:.1em;color:var(--accent)}
 .resume-t{grid-column:1;font:700 1.08rem var(--f-head);overflow-wrap:anywhere}
 .resume-go{grid-column:2;grid-row:1/span 2;font:700 1.4rem var(--f-head);color:var(--accent)}
+
+/* Liste des chapitres dans une carte de matière */
+.chl{margin:.3em 0;padding-left:1.4em;font-size:.88rem;color:var(--ink2)}.chl li{margin:.1em 0}.comptes{font-size:.8rem;margin:.2em 0}

@@ -13,9 +13,6 @@ const RACINE = path.resolve(__dirname, '..');
 const url = f => 'file://' + path.join(RACINE, f);
 const propre = s => String(s || '').replace(/\s+/g, ' ').trim();
 
-// Pages de maths : un chapitre par thème des données communes (maths/app.js)
-const MATHS_PAGES = { logique: 'logique.html', arith: 'arithmetique.html', recurrence: 'recurrence.html', second: 'second-degre.html' };
-
 async function indexer(page) {
   const entrees = [];
   await page.goto(url('cours.html')); // accueil des cours : une carte par matière
@@ -29,19 +26,14 @@ async function indexer(page) {
       await page.goto(url(f));
       await page.waitForTimeout(150);
       const base = { m: m.nom, c: ch.nom };
-      const estMaths = await page.evaluate(() => typeof FICHES !== 'undefined' && typeof CH !== 'undefined');
+      // Pages de maths (maths/app.js) : une entrée par chapitre, avec ses parties, son « à retenir » et ses énoncés d'exercices
+      const estMaths = await page.evaluate(() => typeof COURS !== 'undefined' && typeof MATHS !== 'undefined');
       if (estMaths) {
-        const d = await page.evaluate(() => {
-          const txt = h => { const e = document.createElement('div'); e.innerHTML = h; const w = document.createTreeWalker(e, NodeFilter.SHOW_TEXT), r = []; while (w.nextNode()) r.push(w.currentNode.nodeValue); return r.join(' '); };
-          return { ch: CH, fiches: (FICHES[CH] || []).map(x => ({ t: x.t, x: txt(x.h) })),
-            exos: EXOS.map(g => ({ g: g.g, x: g.items.map(i => i.n + ' ' + i.q + ' ' + txt(i.s)).join(' ') })),
-            cartes: CARDS.map(c => c.f + ' ' + c.v).join(' '), outils: TOOLS.map(t => t.name || t.t || t.title || '').join(', ') };
-        });
-        if (d.ch === 'all') continue; // la révision reprend le contenu des autres chapitres
-        for (const x of d.fiches) entrees.push({ ...base, s: 'Fiche · ' + x.t, u: f + '#fiches', t: propre(x.x) });
-        for (const g of d.exos) entrees.push({ ...base, s: 'Exercices · ' + g.g, u: f + '#exos', t: propre(g.x) });
-        entrees.push({ ...base, s: 'Cartes mémoire', u: f + '#cartes', t: propre(d.cartes) });
-        if (d.outils) entrees.push({ ...base, s: 'Calculateurs', u: f + '#outils', t: propre(d.outils) });
+        const chap = await page.evaluate(() => MATHS.OWN.map(c => ({
+          id: c.id, n: c.idx + 1, titre: brut(c.titre),
+          t: brut([c.intro].concat(c.sections.map(x => x.t + ' ' + x.h), c.retenir, c.exos.map(x => x.n + ' ' + x.q)).join(' '))
+        })));
+        for (const c of chap) entrees.push({ ...base, s: 'Chapitre ' + c.n + ' · ' + c.titre, u: f + '#' + c.id, t: propre(c.t) });
         continue;
       }
       const sections = await page.$$eval('.nav a[href^="#"]', as => as.map(a => ({ id: a.getAttribute('href'), titre: a.querySelector('.nav-t') ? a.querySelector('.nav-t').innerText : a.innerText })));
