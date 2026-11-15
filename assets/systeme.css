@@ -94,3 +94,29 @@ kbd{font:600 .8em var(--f-mono);padding:.1em .45em;border:1.5px solid var(--ink2
 .rev-meter{margin:14px 0 0;width:100%;max-width:none}
 .memo-tbl td:first-child{white-space:nowrap}
 @media print{.keybar{display:none}.t-hit{color:#b42318}.fl-cmd{color:#fff}}
+/* ===== Fiche recto verso (contrôle) ===== */
+.fiche{--fiche-pt:7.5pt;font-size:var(--fiche-pt);line-height:1.28;column-count:3;column-gap:3.2mm;column-rule:.5px solid var(--line);background:var(--paper);color:var(--ink);border:2px solid var(--ink);border-radius:var(--r);padding:4mm;margin-top:14px}
+.fiche-h{column-span:all;display:flex;justify-content:space-between;gap:8px;border-bottom:1.5px solid var(--ink);padding-bottom:1mm;margin-bottom:1.2mm;font-size:1.15em}
+.fiche .fs{margin:0 0 1.4mm}
+.fiche h3{font:800 1.12em var(--f-body);margin:1.2mm 0 .6mm;padding:.25mm 1.2mm;background:var(--accent);color:var(--accent-ink);border-radius:2px;break-after:avoid}
+.fiche .fc{margin:0 0 .7mm;break-inside:avoid}
+.fiche b{font-family:var(--f-mono);font-weight:800}
+.fiche i{font-family:var(--f-mono);font-style:normal;color:var(--ink2)}
+.fiche code{font-size:.94em;padding:0 .15em;background:none;border:0;font-weight:600;color:var(--accent)}
+.fiche .fo{color:var(--ink)}
+.fiche .fx{color:var(--ink2)}
+.fiche u{text-decoration-thickness:1px}
+.fiche .ft{width:100%;table-layout:fixed;border-collapse:collapse;margin:.4mm 0 .9mm;font-size:.97em;break-inside:avoid}
+.fiche .ft th,.fiche .ft td{border:.5px solid var(--line);padding:.2mm .8mm;text-align:left;vertical-align:top;overflow-wrap:anywhere}
+.fiche .ft th{background:var(--accent-soft)}
+@media (max-width:900px){.fiche{column-count:2;--fiche-pt:8pt}}
+@media (max-width:560px){.fiche{column-count:1;font-size:9.5pt}}
+@media print{
+  @page{size:A4;margin:6mm 6mm}
+  body.fiche-mode{font-size:var(--fiche-pt,7.5pt);margin:0}
+  body.fiche-mode .fiche-tools,body.fiche-mode .pager{display:none!important}
+  body.fiche-mode .fiche{column-count:3;border:0;padding:0;margin:0;font-size:var(--fiche-pt);color:#000;background:#fff}
+  body.fiche-mode .fiche code{color:#0b5a40}
+  body.fiche-mode .fiche h3{background:#0b6e4f;color:#fff}
+  body.fiche-mode .fiche .ft th{background:#dcf3ea}
+}

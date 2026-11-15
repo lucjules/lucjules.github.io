@@ -13,7 +13,7 @@ const pick = a => a[rnd(a.length)];
 const LESSON = id => LESSONS.find(l => l.id === id);
 const ORDER = LESSONS.map(l => l.id);
 const NAV = PARTS.map(p => ({ group: `${p.td} · ${p.title}`, items: LESSONS.filter(l => l.part === p.id).map(l => ({ id: l.id, label: l.title, n: ORDER.indexOf(l.id) + 1 })) }))
-  .concat([{ group: 'Outils', items: [{ id: 'terminal', label: 'Terminal', n: '$' }, { id: 'memo', label: 'Aide-mémoire', n: '≡' }, { id: 'revision', label: 'Interro blanche (TD 5)', n: '?' }] }]);
+  .concat([{ group: 'Outils', items: [{ id: 'terminal', label: 'Terminal', n: '$' }, { id: 'memo', label: 'Aide-mémoire', n: '≡' }, { id: 'fiche', label: 'Fiche recto verso (contrôle)', n: '⎙' }, { id: 'revision', label: 'Interro blanche (TD 5)', n: '?' }] }]);
 const ALL_IDS = ['accueil', ...NAV.flatMap(g => g.items.map(i => i.id))];
 
 /* ================================================================== TERMINAL */
@@ -415,7 +415,7 @@ function pageAccueil() {
   <h2>Comment travailler</h2>
   <ol class="numbered"><li>Lis la leçon et clique sur <strong>▶ Essayer ici</strong> sous les exemples : un terminal s'ouvre, tu peux modifier les commandes.</li><li>Fais les exercices <strong>S'entraîner</strong> : questions, commandes à taper dans un terminal (avec Vérifier, Indice, Solution) et séries sans fin.</li><li>Marque la leçon comme terminée : sa compétence se coche ci-dessous.</li><li>Avant l'évaluation : l'<a href="#revision">interro blanche</a> et l'<a href="#memo">aide-mémoire</a>.</li></ol>
   ${PARTS.map(p => `<h2>${esc(p.td)} · ${esc(p.title)}</h2><ul class="skills">${LESSONS.filter(l => l.part === p.id).map(l => `<li class="skill${Store.data.lessons[l.id] ? ' is-done' : ''}" data-l="${l.id}"><a href="#${l.id}"><span class="sk-n">${ORDER.indexOf(l.id) + 1}</span><span class="sk-t">${esc(l.skill)}</span><span class="sk-l">${esc(l.title)}</span></a></li>`).join('')}</ul>`).join('')}
-  <p><a class="btn ghost" href="#terminal">Ouvrir le terminal</a> <a class="btn ghost" href="#memo">Aide-mémoire</a> <a class="btn ghost" href="#revision">Interro blanche</a></p>
+  <p><a class="btn ghost" href="#terminal">Ouvrir le terminal</a> <a class="btn ghost" href="#memo">Aide-mémoire</a> <a class="btn ghost" href="#revision">Interro blanche</a> <a class="btn ghost" href="#fiche">Fiche recto verso pour le contrôle</a></p>
   <p class="note-line muted">Sources : supports de TD M1101 (R. Giot, IUT de Bordeaux) et aide-mémoire des commandes Unix R1.04.</p></div>`;
 }
 function pageLesson(l, idx) {
@@ -444,6 +444,18 @@ function pageMemo() {
   <h2>Messages d'erreur</h2>${tbl(['Message', 'Signification'], [[c('No such file or directory'), 'le chemin n\'existe pas (vérifie avec ls, utilise TAB)'], [c('Permission denied'), 'il manque un droit r, w ou x : regarde ls -l'], [c('Is a directory'), 'rm ou cat sur un répertoire (rm -r ?)'], [c('omitting directory'), 'cp d\'un répertoire sans -r'], [c('Directory not empty'), 'rmdir sur un répertoire non vide'], [c('File exists'), 'mkdir d\'un répertoire qui existe'], [c('command not found'), 'faute de frappe, ou programme hors du PATH (./prog)'], [c('Not a directory'), 'un fichier utilisé comme un répertoire'], [c('Operation not permitted'), 'action réservée au propriétaire ou à root']])}
   <h2>Les pièges classiques</h2><ul class="pieges">${PIEGES.map(p => `<li><strong>${p[0]}</strong><span>${p[1]}</span></li>`).join('')}</ul></article>`;
 }
+/* Fiche recto verso : une feuille A4 très dense, à imprimer pour le contrôle */
+const FICHE_TAILLES = [6, 6.5, 7, 7.5, 8, 8.5, 9];
+const ficheTaille = () => { let t = 7.5; try { t = +localStorage.getItem('intro-systeme-fiche') || 7.5; } catch (e) { /* indisponible */ } return FICHE_TAILLES.includes(t) ? t : 7.5; };
+function pageFiche() {
+  return `<article class="page wide fiche-page"><div class="fiche-tools"><p class="kicker">Pour le contrôle</p><h1>Fiche recto verso</h1>
+  <p class="lead">Toutes les commandes au format <code>cmd [-option : effet, …] : ce qu'elle fait sans option</code>, plus les tableaux (droits, octal, umask, UTF-8, redirections, jokers, ACL, erreurs). Imprimée, elle tient sur <strong>une feuille A4 recto verso</strong>.</p>
+  <div class="at-bar"><button type="button" class="btn" data-app="fiche-print">⎙ Imprimer / PDF</button>
+  <span class="fiche-size">Taille du texte : <button type="button" class="btn ghost mini" data-app="fiche-size" data-d="-1" aria-label="Texte plus petit">A−</button> <strong id="fiche-pt">${String(ficheTaille()).replace('.', ',')} pt</strong> <button type="button" class="btn ghost mini" data-app="fiche-size" data-d="1" aria-label="Texte plus grand">A+</button></span></div>
+  <p class="note-line">Réglages d'impression : papier A4, recto verso (bord long), échelle 100 %, marges « Aucune » ou « Minimales », cocher « Graphiques d'arrière-plan ». De 6 à 8 pt, la fiche tient sur 2 pages (8 pt = la plus lisible) ; si l'aperçu en annonce 3, baisse d'un cran. Vérifie dans l'aperçu avant d'imprimer, et que ton enseignant accepte une fiche imprimée.</p></div>
+  <div class="fiche" id="fiche-feuille" style="--fiche-pt:${ficheTaille()}pt"><header class="fiche-h"><strong>R1.04 · Aide-mémoire Linux</strong><span>Nom : ……………………………</span></header>${FICHE().join('')}</div></article>`;
+}
+
 /* Interro blanche : 20 questions tirées au hasard dans tout le cours */
 const Rev = { qs: [], i: 0, score: 0, answers: [] };
 function newRevision() {
@@ -482,11 +494,13 @@ function route() {
   else if (li >= 0) html = pageLesson(LESSONS[li], li);
   else if (id === 'terminal') html = pageTerminal();
   else if (id === 'revision') html = pageRevision();
+  else if (id === 'fiche') html = pageFiche();
   else html = pageMemo();
   const m = main(); m.innerHTML = html;
   $$('.nav a').forEach(a => a.setAttribute('aria-current', a.dataset.id === id ? 'page' : 'false'));
-  const label = li >= 0 ? LESSONS[li].title : { terminal: 'Terminal', memo: 'Aide-mémoire', revision: 'Interro blanche' }[id];
+  const label = li >= 0 ? LESSONS[li].title : { terminal: 'Terminal', memo: 'Aide-mémoire', revision: 'Interro blanche', fiche: 'Fiche recto verso' }[id];
   document.title = id === 'accueil' ? 'Intro Système' : label + ' · Intro Système';
+  document.body.classList.toggle('fiche-mode', id === 'fiche');
   mountWidgets(m);
   if (id === 'terminal') mountTerminal();
   if (id === 'revision') drawRevision();
@@ -540,6 +554,12 @@ function init() {
       const q = Rev.qs[Rev.i], i = +b.dataset.i, ok = i === EX[q.id].answer;
       Rev.answers.push({ id: q.id, got: i, ok }); if (ok) Rev.score++; Rev.i++; drawRevision();
     } else if (k === 'rev-new') { newRevision(); drawRevision(); }
+    else if (k === 'fiche-print') window.print();
+    else if (k === 'fiche-size') {
+      const i = Math.max(0, Math.min(FICHE_TAILLES.length - 1, FICHE_TAILLES.indexOf(ficheTaille()) + +b.dataset.d)), t = FICHE_TAILLES[i];
+      try { localStorage.setItem('intro-systeme-fiche', String(t)); } catch (e) { /* indisponible */ }
+      $('#fiche-feuille').style.setProperty('--fiche-pt', t + 'pt'); $('#fiche-pt').textContent = String(t).replace('.', ',') + ' pt';
+    }
   });
   document.addEventListener('submit', e => {
     const f = e.target.closest('[data-act-form="cmd"]');

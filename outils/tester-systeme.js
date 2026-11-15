@@ -5,8 +5,8 @@
       - chaque « Écris la commande » : la solution donnée est acceptée ;
       - chaque QCM a au moins 3 choix distincts et une explication ; chaque leçon ne cite que des exercices qui existent ;
       - quelques comportements du terminal (tubes, redirections, jokers, droits, umask, ACL, archives, codage, javac).
-   2. Dans Chromium : chaque page du cours s'affiche sans erreur JavaScript, et chaque exemple exécuté
-      ne contient pas de « command not found » inattendu. */
+   2. Dans Chromium : chaque page du cours s'affiche sans erreur JavaScript, chaque exemple exécuté
+      ne contient pas de « command not found » inattendu, et la fiche recto verso tient sur 2 pages A4. */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -132,6 +132,17 @@ console.log(`${LESSONS.length} leçons, ${n} exercices vérifiés sans navigateu
   await sec.locator('.term-input').fill('pwd'); await sec.locator('.term-input').press('Enter');
   await sec.locator('[data-act="sh-check"]').click();
   if (!(await sec.locator('.ex-fb.ok').count())) ko('l3-t1 : la vérification dans la page échoue');
+  /* La fiche recto verso doit tenir sur une feuille A4 (2 pages), de 6 à 8 pt */
+  for (const t of [6, 7.5, 8]) {
+    await page.evaluate(x => localStorage.setItem('intro-systeme-fiche', String(x)), t);
+    await page.evaluate(() => { location.hash = '#accueil'; }); await page.waitForTimeout(50);
+    await page.evaluate(() => { location.hash = '#fiche'; }); await page.waitForTimeout(150);
+    await page.emulateMedia({ media: 'print' });
+    const pdf = await page.pdf({ format: 'A4', printBackground: true, preferCSSPageSize: true });
+    await page.emulateMedia({ media: 'screen' });
+    const pages = (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
+    if (pages !== 2) ko(`fiche à ${t} pt : ${pages} page(s) au lieu de 2`);
+  }
   await page.setViewportSize({ width: 380, height: 800 });
   const deborde = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   if (deborde) ko('la page déborde horizontalement sur téléphone');
