@@ -14,7 +14,7 @@ jeux/filon-infini/index.html    jeu Filon Infini (jeu incrémental à arbre de c
 jeux/mine-clic/index.html       jeu Mine Clic (jeu de clic dans un monde de blocs) : s'ouvre aussi en double-cliquant
 algo/index.html                 Algorithmique : cycle1.html, cycle2.html, cycle3.html
 algo/ressources-cycle3/         projets NetBeans du cycle 3 (Cycle3.zip, analyseTableaux.zip)
-systeme/index.html              Système : intro-systeme.html, sae-103.html (guide de la SAE 1.03 : installer un poste)
+systeme/index.html              Système : intro-systeme.html (cours R1.04, scripts dans systeme/intro/), sae-103.html (guide de la SAE 1.03 : installer un poste)
 sql/index.html                  Bases de données : sql-requetes-simples.html, exercices-requetes.html (+ .js), acsi-mcd.html
 management/index.html           Management : introduction.html, chapitre1.html
 maths/index.html                Mathématiques : logique (4 chapitres), arithmetique (7), recurrence (2), second-degre (3), revision
