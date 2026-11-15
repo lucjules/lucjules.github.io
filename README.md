@@ -16,7 +16,7 @@ Mon site, en deux espaces choisis depuis l'accueil (`index.html`) :
 | Matière | Chapitres |
 | --- | --- |
 | [Algorithmique](algo/index.html) (ExAlgo · Java) | Cycle 1 (les bases), Cycle 2 (les boucles), Cycle 3 (les tableaux : cours, mémo Java du TP, ExosTP, entraînement chronométré, projet de gestion de notes, un outil « Vérifier mon projet » qui teste ton code phase par phase, et un outil « Comparer avec un code » qui montre les différences fonction par fonction ; le mémo propose le projet Java en 3 fichiers avec leurs tests JUnit) |
-| [Système](systeme/index.html) (Linux) | Le terminal et les permissions ; **SAE 1.03** : guide complet pour installer la VM BUTGAMES (Debian ou Xubuntu, XFCE, Go, VS Code, comptes alice et bob), avec scripts, vérifications, rapport et soutenance |
+| [Système](systeme/index.html) (R1.04 · Linux) | **Intro système** (23 leçons alignées sur les TD 1 à 5 et l'aide-mémoire R1.04 : terminal et manuel, chemins, fichiers, jokers, archives, ssh et transferts, redirections et filtres, codage des caractères, utilisateurs, droits, chmod, umask, ACL, chiffrement, compilation, processus ; terminal simulé, 161 exercices, aide-mémoire, interro blanche) ; **SAE 1.03** : guide complet pour installer la VM BUTGAMES (Debian ou Xubuntu, XFCE, Go, VS Code, comptes alice et bob), avec scripts, vérifications, rapport et soutenance |
 | [Bases de données](sql/index.html) (R1.05 · SQL) | Modèle relationnel et requêtes simples, 1 bis : exercices de requêtes simples, ACSI : le modèle conceptuel des données (MCD) |
 | [Management](management/index.html) (R1.08) | Introduction à la gestion, Stratégie |
 | [Mathématiques](maths/index.html) (maths discrètes) | **Logique** (4 chapitres : propositions et quantificateurs, algèbre de Boole, implication et contraposée, circuits et additionneurs), **Arithmétique dans ℤ** (7 chapitres : division euclidienne, premiers, PGCD et PPCM, Euclide et Bézout, diophantien, congruences, restes chinois), **Récurrence et suites**, **Second degré**, **Révisions** (méthodes, TD de synthèse, sujet d'interro). Chaque chapitre : objectifs, leçon avec définitions, méthodes et démonstrations, démos interactives (crible, horloge, circuits, calculateurs), « À retenir », auto-test, exercices avec indice, méthode et correction détaillée |
@@ -51,6 +51,8 @@ jeux/mine-clic/        jeu Mine Clic : index.html, style.css, et dans js/ trois 
                        polices/ (Pixelify Sans, licence SIL OFL 1.1) et icones/
 <matière>/index.html   accueil d'une matière, avec une carte par chapitre
 <matière>/*.html       un fichier par chapitre (application complète)
+systeme/intro-systeme.html  cours Intro système : une coquille qui charge les scripts de systeme/intro/ (voir « Le cours Intro système »)
+systeme/intro/         shell.js (terminal simulé), lecons.js (leçons), exercices.js (exercices, aide-mémoire, pièges), app.js (application)
 systeme/sae-103.html   guide de la SAE 1.03 (une page-application : étapes, cases à cocher, scripts bash intégrés, générateur de rapport, minuteur) ; son style est dans assets/sae103.css
 maths/*.html           une page par partie (logique, arithmetique, recurrence, second-degre, revision) : une coquille qui charge les scripts ci-dessous
 maths/cours-*.js       le CONTENU des chapitres, un fichier par partie (voir « Ajouter ou modifier un chapitre de maths »)
@@ -69,6 +71,7 @@ sw.js, manifest.webmanifest   application installable et hors ligne
 outils/construire.js   régénère l'index de recherche et la liste hors ligne
 outils/tester-voie-libre.js   tests du jeu Voie libre (parcours franchissable, mécanismes, progression, rendu 3D)
 outils/tester-exercices-sql.js  vérifie les bases et les exercices du chapitre 1 bis
+outils/tester-systeme.js      vérifie le cours Intro système : chaque exercice (sa solution passe dans le terminal simulé), le terminal lui-même, chaque page dans un navigateur
 outils/tester-maths.js        vérifie le cours de maths : chaque chapitre, démo et mini-exercice, formules, exercices, QCM et cartes
 outils/filon-infini/         sources de Filon Infini : moteur, interface, générateur d'arbres calibré par simulation (gen.js) et build.js
 outils/tester-mine-clic.js    tests du jeu Mine Clic (clics, achats, Max, capacités, missions, coffres, dimensions, renaissance, pouvoirs, sauvegarde, téléphone)
@@ -81,7 +84,7 @@ outils/simuler-mine-clic.js   simulateur d'économie de Mine Clic : mesure la du
 1. Déposer le fichier `.html` du chapitre dans le dossier de la matière.
 2. Ajouter sa carte dans le `index.html` de la matière.
 3. Dans `cours.html`, ajouter le chapitre à l'attribut `data-prog` de la carte de la matière et mettre à jour le nombre de chapitres.
-4. C'est tout : à chaque modification de `main`, une GitHub Action (`.github/workflows/construire.yml`) régénère l'index de recherche et la liste hors ligne, puis enregistre le résultat. Elle lance aussi les tests des jeux Voie libre et Mine Clic (`outils/tester-voie-libre.js`, `outils/tester-mine-clic.js`) et la vérification du cours de maths (`outils/tester-maths.js`), sur `main` comme sur chaque demande de fusion. L'onglet **Actions** du dépôt montre son déroulement.
+4. C'est tout : à chaque modification de `main`, une GitHub Action (`.github/workflows/construire.yml`) régénère l'index de recherche et la liste hors ligne, puis enregistre le résultat. Elle lance aussi les tests des jeux Voie libre et Mine Clic (`outils/tester-voie-libre.js`, `outils/tester-mine-clic.js`), la vérification du cours de maths (`outils/tester-maths.js`) et celle du cours Intro système (`outils/tester-systeme.js`), sur `main` comme sur chaque demande de fusion. L'onglet **Actions** du dépôt montre son déroulement.
 
 ## Ajouter ou modifier un chapitre de maths
 
@@ -100,6 +103,14 @@ Le contenu des maths est dans `maths/cours-<partie>.js` (logique, arith, recurre
 Dans le texte : `$x^2 + 1$` (formule dans une phrase), `$$ … $$` (formule en bloc, `;; commentaire` en fin de ligne), `frac{a}{b}`, `sqrt{n}`, `x_{n+1}`, `\\{ \\}` pour des accolades ; boîtes `bDef`, `bProp`, `bThm`, `bMeth`, `bEx`, `bRem`, `bTrap`, `bAlgo`, `bProof` ; tableaux `tt(...)`, étapes `steps([...])`, systèmes `sys([...])` ; mini-exercice vérifié sur place `quick('Question', 'réponse', 'explication')` ; outil intégré `demo('pgcd', { pgA: '8820', pgB: '3150' })` (outils : `tv`, `adder`, `demi`, `complet`, `circf`, `div`, `fact`, `sieve`, `pgcd`, `dio`, `clock`, `cong`, `quad`, `timer`). Les détails sont en tête de `maths/lib.js`.
 
 Pour ajouter un chapitre à une page existante, l'ajouter à la liste `chapitres` du bon fichier, puis mettre à jour la carte de la partie dans `maths/index.html` (liste des chapitres). `node outils/tester-maths.js` vérifie le résultat ; la GitHub Action régénère la recherche et la liste hors ligne.
+
+## Le cours Intro système
+
+Le terminal simulé (`systeme/intro/shell.js`) est un petit Linux en mémoire : système de fichiers, utilisateurs (etudiant, alice, bob, root) et groupes, droits rwx, umask, ACL, tubes et redirections, variables, jokers, filtres, tar et gzip, od et iconv, javac/java/g++, tâches de fond. Il marche dans le navigateur et dans Node.
+
+- Une leçon est un objet de la liste `LESSONS` (`systeme/intro/lecons.js`) : `id`, `part` (la partie, liée à un TD), `title`, `skill`, `lead`, `obj` (objectifs), `body` (le HTML), `retenir`, `ex` (identifiants d'exercices). Dans `body`, ``ex(`commande\nautre commande`, { seed, cwd })`` affiche un exemple **réellement exécuté** dans un terminal neuf, avec un bouton « Essayer ici » ; `sh()` affiche un exemple statique (réseau, chiffrement).
+- Les exercices sont dans `EX` (`systeme/intro/exercices.js`) : `Q(...)` (QCM, bonne réponse en premier), `T({...})` (à taper dans un terminal, avec `solution` et `check`), `W({...})` (une commande à écrire, vérifiée en l'exécutant ou par motif), `D(type)` (série sans fin). L'aide-mémoire (`MEMO`) suit l'ordre de l'aide-mémoire R1.04.
+- `node outils/tester-systeme.js` vérifie que chaque solution passe sa vérification, que le terminal se comporte comme prévu et que chaque page s'affiche sans erreur.
 
 ## Ajouter un exercice SQL
 

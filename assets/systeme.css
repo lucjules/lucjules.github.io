@@ -44,3 +44,53 @@
 @media (max-width:700px){.term-input{font-size:16px}.drill-in{font-size:16px}.term-in .prompt{max-width:45%}}
 /* Impression : couleurs du terminal lisibles sur fond clair */
 @media print{.sh-c{color:#14161c}.ls-d{color:#1d4ed8}.ls-x{color:#0b6e4f}.t-err{color:#b42318}}
+/* ===== Intro système v2 : terminal, schémas, ateliers ===== */
+kbd{font:600 .8em var(--f-mono);padding:.1em .45em;border:1.5px solid var(--ink2);border-bottom-width:3px;border-radius:5px;background:var(--paper);white-space:nowrap}
+.t-hit{color:#ff7b72;font-weight:700}
+.t-hint{font-style:italic}
+.cb-cap{padding:8px 12px;font-size:.88rem;color:var(--ink2);border-top:1px solid var(--line)}
+.keybar{display:flex;flex-wrap:wrap;gap:6px;padding:6px 10px;border-top:1px solid #ffffff1c}
+.keybar button{font:600 .76rem var(--f-mono);padding:.35em .65em;min-height:32px;border:1px solid var(--slate-mute);border-radius:6px;background:transparent;color:var(--slate-ink);cursor:pointer}
+.keybar button:hover,.keybar button:focus-visible{border-color:var(--t);color:#fff}
+.try-box{margin-top:-6px}
+.obj ul{margin:.2em 0}
+.numbered li{margin:.3em 0}
+/* Arborescence */
+.treefig pre{margin:1em 0;padding:14px 16px;background:var(--slate);color:var(--slate-ink);border-radius:var(--r);overflow-x:auto;font:.86rem/1.5 var(--f-mono)}
+.treefig b{color:#8ab4ff}
+/* Les trois flux */
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:1.2em 0;padding:16px;border:2px solid var(--ink);border-radius:var(--r);background:var(--paper);box-shadow:5px 5px 0 var(--ink)}
+.fl-src,.fl-dst,.fl-cmd{padding:8px 12px;border:2px solid var(--ink);border-radius:8px;text-align:center;line-height:1.25}
+.fl-cmd{background:var(--accent);color:var(--accent-ink);font:700 1rem var(--f-mono)}
+.fl-src small,.fl-dst small{color:var(--ink2);font-size:.75rem}
+.fl-arr{font:700 .82rem var(--f-mono);color:var(--accent);white-space:nowrap}.fl-arr.err{color:var(--ko)}
+.fl-outs{display:grid;gap:8px}.fl-outs>div{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+/* Tube étape par étape */
+.pipefig{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin:1.2em 0}
+.pf-step{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:2px solid var(--ink);border-radius:8px;background:var(--paper);max-width:100%}
+.pf-step code{overflow-wrap:anywhere}.pf-step small{color:var(--ink2)}
+.pf-pipe{align-self:center;font:700 1.4rem var(--f-mono);color:var(--accent)}
+/* ssh */
+.netfig{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px;margin:1.2em 0}
+.nf-box{padding:12px 16px;border:2px solid var(--ink);border-radius:var(--r);background:var(--paper);text-align:center;box-shadow:4px 4px 0 var(--ink)}
+.nf-link{font:700 .85rem var(--f-mono);color:var(--accent);text-align:center}
+/* Commande à écrire */
+.cmd-pr{font:700 1rem var(--f-mono);color:var(--accent);align-self:center}
+.cmd-res{margin:8px 0 0;padding:10px 14px;background:var(--slate);color:var(--slate-ink);border-radius:8px;white-space:pre-wrap;font:.85rem/1.5 var(--f-mono);max-height:220px;overflow:auto}
+.cmd-res:empty{display:none}
+.cmdfig .ls-str{font-size:clamp(1.1rem,5vw,1.6rem)}
+/* Laboratoire des jokers */
+.glob-list{list-style:none;padding:0;margin:10px 0;display:flex;flex-wrap:wrap;gap:6px}
+.glob-list li code{display:inline-block;padding:.2em .5em;border:2px solid var(--line);border-radius:6px;background:transparent}
+.glob-list li.hit code{border-color:var(--accent);background:var(--accent-soft);font-weight:700}
+.glob-sum{min-height:1.4em}
+/* Laboratoire d'encodage */
+.enc-out .bits{font-size:.78rem;overflow-wrap:anywhere}
+.moj{font-size:1.05rem}
+/* Interro blanche */
+.rev-list{display:grid;gap:10px;padding-left:1.4em}
+.rev-list li{padding:8px 12px;border-left:5px solid var(--ok);background:var(--paper);border-radius:0 8px 8px 0}
+.rev-list li.ko{border-left-color:var(--ko)}
+.rev-meter{margin:14px 0 0;width:100%;max-width:none}
+.memo-tbl td:first-child{white-space:nowrap}
+@media print{.keybar{display:none}.t-hit{color:#b42318}.fl-cmd{color:#fff}}
