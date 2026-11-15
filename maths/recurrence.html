@@ -2,12 +2,12 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Maths · Récurrence</title>
+<title>Maths · Récurrence et suites</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Récurrence et suites : raisonnement par récurrence, sommes classiques, suites arithmétiques et géométriques, avec QCM et exercices corrigés.">
+<meta name="description" content="Récurrence et suites : le raisonnement par récurrence, les sommes classiques, les suites arithmétiques et géométriques, avec exercices corrigés pas à pas.">
 <meta name="color-scheme" content="light dark">
 <link rel="manifest" href="../manifest.webmanifest">
-<meta name="theme-color" content="#1f4fd8">
+<meta name="theme-color" content="#1f2e8a">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
 <link rel="stylesheet" href="../assets/fonts/fonts.css">
@@ -15,42 +15,11 @@
 <script src="../assets/common.js"></script>
 </head>
 <body>
-<div class="app">
-  <aside class="side">
-    <div class="toprow">
-      <a class="homebtn" href="index.html" aria-label="Retour au hub Mathématiques" title="Retour au hub Mathématiques">⌂</a>
-      <a class="brand" href="#accueil" data-view="accueil">
-        <span class="brand-mark">∀∃</span>
-        <span><b>Maths · Récurrence et suites</b><small>BUT1 Informatique · IUT de Bordeaux</small></span>
-      </a>
-      <button class="ghost mob-theme" id="themeBtn2" type="button" aria-label="Changer de thème">◐</button>
-    </div>
-    <nav class="nav" id="nav" aria-label="Sections">
-      <a href="#accueil" data-view="accueil"><span class="ic">00</span>Accueil</a>
-      <a href="#fiches" data-view="fiches"><span class="ic">∑</span>Fiches</a>
-      <a href="#qcm" data-view="qcm"><span class="ic">?</span>QCM</a>
-      <a href="#cartes" data-view="cartes"><span class="ic">↻</span>Cartes</a>
-      <a href="#outils" data-view="outils"><span class="ic">ƒ</span>Calculateurs</a>
-      <a href="#exos" data-view="exos"><span class="ic">✓</span>Exos corrigés</a>
-      <a href="#notes" data-view="notes"><span class="ic">✎</span>Notes &amp; Plan</a>
-    </nav>
-    <div class="side-foot">
-      <div class="chlinks"><b>Chapitres</b><a href="logique.html">Logique</a><a href="arithmetique.html">Arithmétique dans ℤ</a><a href="recurrence.html" aria-current="page">Récurrence et suites</a><a href="second-degre.html">Second degré</a><a href="revision.html">Révision générale</a></div>
-      <button class="ghost" id="themeBtn" type="button">Thème : automatique</button>
-      <span>Ta progression est gardée dans ce navigateur.</span>
-    </div>
-  </aside>
-  <main class="main">
-    <section class="view" id="v-accueil"></section>
-    <section class="view" id="v-fiches" hidden></section>
-    <section class="view" id="v-qcm" hidden></section>
-    <section class="view" id="v-cartes" hidden></section>
-    <section class="view" id="v-outils" hidden></section>
-    <section class="view" id="v-exos" hidden></section>
-    <section class="view" id="v-notes" hidden></section>
-  </main>
-</div>
-<script>var CH="recurrence",HUBID="recurrence",PG_OK=[5],HERO_EYEBROW="Récurrence et suites",HERO_TITLE="Récurrence et suites : écris la preuve sans oublier une étape";</script>
+<div id="app"></div>
+<script>var CH="recurrence",HUBID="recurrence";</script>
+<script src="lib.js"></script>
+<script src="cours-recurrence.js"></script>
+<script src="outils.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

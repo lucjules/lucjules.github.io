@@ -19,7 +19,7 @@ Mon site, en deux espaces choisis depuis l'accueil (`index.html`) :
 | [Système](systeme/index.html) (Linux) | Le terminal et les permissions ; **SAE 1.03** : guide complet pour installer la VM BUTGAMES (Debian ou Xubuntu, XFCE, Go, VS Code, comptes alice et bob), avec scripts, vérifications, rapport et soutenance |
 | [Bases de données](sql/index.html) (R1.05 · SQL) | Modèle relationnel et requêtes simples, 1 bis : exercices de requêtes simples, ACSI : le modèle conceptuel des données (MCD) |
 | [Management](management/index.html) (R1.08) | Introduction à la gestion, Stratégie |
-| [Mathématiques](maths/index.html) (maths discrètes) | Logique, Arithmétique dans ℤ, Récurrence, Second degré, Révision générale |
+| [Mathématiques](maths/index.html) (maths discrètes) | **Logique** (4 chapitres : propositions et quantificateurs, algèbre de Boole, implication et contraposée, circuits et additionneurs), **Arithmétique dans ℤ** (7 chapitres : division euclidienne, premiers, PGCD et PPCM, Euclide et Bézout, diophantien, congruences, restes chinois), **Récurrence et suites**, **Second degré**, **Révisions** (méthodes, TD de synthèse, sujet d'interro). Chaque chapitre : objectifs, leçon avec définitions, méthodes et démonstrations, démos interactives (crible, horloge, circuits, calculateurs), « À retenir », auto-test, exercices avec indice, méthode et correction détaillée |
 
 ## Fonctionnement
 
@@ -52,7 +52,11 @@ jeux/mine-clic/        jeu Mine Clic : index.html, style.css, et dans js/ trois 
 <matière>/index.html   accueil d'une matière, avec une carte par chapitre
 <matière>/*.html       un fichier par chapitre (application complète)
 systeme/sae-103.html   guide de la SAE 1.03 (une page-application : étapes, cases à cocher, scripts bash intégrés, générateur de rapport, minuteur) ; son style est dans assets/sae103.css
-maths/app.js           code commun aux 5 pages de maths
+maths/*.html           une page par partie (logique, arithmetique, recurrence, second-degre, revision) : une coquille qui charge les scripts ci-dessous
+maths/cours-*.js       le CONTENU des chapitres, un fichier par partie (voir « Ajouter ou modifier un chapitre de maths »)
+maths/lib.js           outils d'écriture du cours : formules ($x^2$), boîtes (définition, théorème, méthode…), tableaux, « À toi », démos
+maths/outils.js        calculateurs et démos interactives (table de vérité, additionneurs, crible, horloge, PGCD, congruences, second degré…)
+maths/app.js           l'application : parcours, chapitres, auto-tests, exercices, QCM, cartes, mémo, notes (la progression est dans le navigateur)
 sql/exercices-requetes.js   bases et exercices du chapitre 1 bis (voir « Ajouter un exercice SQL »)
 assets/sql-moteur.js   moteur SQL commun aux pages de la matière Bases de données
 assets/common.js       code commun à toutes les pages (thème, QCM, hors ligne)
@@ -65,6 +69,7 @@ sw.js, manifest.webmanifest   application installable et hors ligne
 outils/construire.js   régénère l'index de recherche et la liste hors ligne
 outils/tester-voie-libre.js   tests du jeu Voie libre (parcours franchissable, mécanismes, progression, rendu 3D)
 outils/tester-exercices-sql.js  vérifie les bases et les exercices du chapitre 1 bis
+outils/tester-maths.js        vérifie le cours de maths : chaque chapitre, démo et mini-exercice, formules, exercices, QCM et cartes
 outils/filon-infini/         sources de Filon Infini : moteur, interface, générateur d'arbres calibré par simulation (gen.js) et build.js
 outils/tester-mine-clic.js    tests du jeu Mine Clic (clics, achats, Max, capacités, missions, coffres, dimensions, renaissance, pouvoirs, sauvegarde, téléphone)
 outils/simuler-mine-clic.js   simulateur d'économie de Mine Clic : mesure la durée d'une partie complète d'un joueur « glouton » (et compare deux versions du jeu)
@@ -76,7 +81,25 @@ outils/simuler-mine-clic.js   simulateur d'économie de Mine Clic : mesure la du
 1. Déposer le fichier `.html` du chapitre dans le dossier de la matière.
 2. Ajouter sa carte dans le `index.html` de la matière.
 3. Dans `cours.html`, ajouter le chapitre à l'attribut `data-prog` de la carte de la matière et mettre à jour le nombre de chapitres.
-4. C'est tout : à chaque modification de `main`, une GitHub Action (`.github/workflows/construire.yml`) régénère l'index de recherche et la liste hors ligne, puis enregistre le résultat. Elle lance aussi les tests des jeux Voie libre et Mine Clic (`outils/tester-voie-libre.js`, `outils/tester-mine-clic.js`), sur `main` comme sur chaque demande de fusion. L'onglet **Actions** du dépôt montre son déroulement.
+4. C'est tout : à chaque modification de `main`, une GitHub Action (`.github/workflows/construire.yml`) régénère l'index de recherche et la liste hors ligne, puis enregistre le résultat. Elle lance aussi les tests des jeux Voie libre et Mine Clic (`outils/tester-voie-libre.js`, `outils/tester-mine-clic.js`) et la vérification du cours de maths (`outils/tester-maths.js`), sur `main` comme sur chaque demande de fusion. L'onglet **Actions** du dépôt montre son déroulement.
+
+## Ajouter ou modifier un chapitre de maths
+
+Le contenu des maths est dans `maths/cours-<partie>.js` (logique, arith, recurrence, second, revision) ; les pages et l'application n'ont pas à être touchées. Un chapitre est un objet de la liste `chapitres` :
+
+```js
+{ id: 'a8', court: 'Titre court', titre: 'Titre complet', duree: '1 h', resume: 'Une phrase pour le parcours.',
+  intro: 'Accroche.', objectifs: ['…'], prerequis: ['…'],
+  sections: [ { t: 'Titre de la partie', h: `…HTML…` } ],      // le cours
+  retenir: ['…'], pieges: [['Titre', 'Texte']],               // « À retenir » et pièges
+  quiz: [ Q('Question ?', ['bonne réponse', 'faux', 'faux', 'faux'], 'Explication') ],   // la bonne réponse est la 1re
+  cartes: [ C('Recto', 'Verso') ],
+  exos: [ X('Exercice 1', { id: 'a8-1', niv: 1, src: 'TD', q: `énoncé`, indice: '…', meth: '…', s: `correction` }) ] }
+```
+
+Dans le texte : `$x^2 + 1$` (formule dans une phrase), `$$ … $$` (formule en bloc, `;; commentaire` en fin de ligne), `frac{a}{b}`, `sqrt{n}`, `x_{n+1}`, `\\{ \\}` pour des accolades ; boîtes `bDef`, `bProp`, `bThm`, `bMeth`, `bEx`, `bRem`, `bTrap`, `bAlgo`, `bProof` ; tableaux `tt(...)`, étapes `steps([...])`, systèmes `sys([...])` ; mini-exercice vérifié sur place `quick('Question', 'réponse', 'explication')` ; outil intégré `demo('pgcd', { pgA: '8820', pgB: '3150' })` (outils : `tv`, `adder`, `demi`, `complet`, `circf`, `div`, `fact`, `sieve`, `pgcd`, `dio`, `clock`, `cong`, `quad`, `timer`). Les détails sont en tête de `maths/lib.js`.
+
+Pour ajouter un chapitre à une page existante, l'ajouter à la liste `chapitres` du bon fichier, puis mettre à jour la carte de la partie dans `maths/index.html` (liste des chapitres). `node outils/tester-maths.js` vérifie le résultat ; la GitHub Action régénère la recherche et la liste hors ligne.
 
 ## Ajouter un exercice SQL
 

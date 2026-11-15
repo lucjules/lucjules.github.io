@@ -17,8 +17,8 @@ algo/ressources-cycle3/         projets NetBeans du cycle 3 (Cycle3.zip, analyse
 systeme/index.html              Système : intro-systeme.html, sae-103.html (guide de la SAE 1.03 : installer un poste)
 sql/index.html                  Bases de données : sql-requetes-simples.html, exercices-requetes.html (+ .js), acsi-mcd.html
 management/index.html           Management : introduction.html, chapitre1.html
-maths/index.html                Mathématiques : logique, arithmetique, recurrence, second-degre, revision
-                                (le code commun des 5 pages est dans maths/app.js)
+maths/index.html                Mathématiques : logique (4 chapitres), arithmetique (7), recurrence (2), second-degre (3), revision
+                                (le contenu est dans maths/cours-*.js, l'application dans maths/app.js)
 assets/                         styles (un style de base + un style par matière), icône
 assets/fonts/                   polices (hébergées dans le dossier, aucune connexion nécessaire)
 sw.js, manifest.webmanifest     application installable et disponible hors ligne (site en ligne)
